@@ -33,6 +33,7 @@
 #include "AsyncComm/Comm.h"
 #include "Hyperspace/Session.h"
 #include "Hypertable/Lib/CommitLog.h"
+#include "Hypertable/Lib/MasterClient.h"
 #include "Hypertable/Lib/MetaLogWriter.h"
 #include "Hypertable/Lib/RangeServerClient.h"
 #include "Hypertable/Lib/RangeServerProtocol.h"
@@ -59,6 +60,7 @@ namespace Hypertable {
     static Hypertable::FilesystemPtr dfs;
     static Hypertable::FilesystemPtr log_dfs;
     static Hypertable::MaintenanceQueuePtr maintenance_queue;
+    static Hypertable::MasterClientPtr master_client;
     static Hypertable::RangeServerProtocol *protocol;
     static Hypertable::RangeLocatorPtr range_locator;
     static bool           verbose;
@@ -99,6 +101,7 @@ namespace Hypertable {
     static bool           ignore_clock_skew_errors;
     static ConnectionManagerPtr conn_manager;
     static std::vector<MetaLog::EntityTaskPtr> work_queue;
+    static bool on_work_queue(int64_t hash_code);
   };
 
 } // namespace Hypertable

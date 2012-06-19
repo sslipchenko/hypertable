@@ -36,6 +36,7 @@ namespace Hypertable {
   FilesystemPtr          Global::dfs;
   FilesystemPtr          Global::log_dfs;
   MaintenanceQueuePtr    Global::maintenance_queue;
+  MasterClientPtr        Global::master_client;
   RangeServerProtocol   *Global::protocol = 0;
   RangeLocatorPtr        Global::range_locator = 0;
   bool                   Global::verbose = false;
@@ -72,4 +73,14 @@ namespace Hypertable {
   bool                   Global::ignore_clock_skew_errors = false;
   ConnectionManagerPtr   Global::conn_manager;
   std::vector<MetaLog::EntityTaskPtr>  Global::work_queue;
+
+  bool Global::on_work_queue(int64_t hash_code) {
+    ScopedLock lock(Global::mutex);
+    foreach (MetaLog::EntityTaskPtr &entity, Global::work_queue) {
+      if (entity->hash_code() == hash_code)
+        return true;
+    }
+    return false;
+  }
+
 }

@@ -29,13 +29,23 @@ namespace Hypertable {
 
     class EntityTask : public Entity {
     public:
-      EntityTask(const EntityHeader &header_) : Entity(header_) { }
-      EntityTask(int32_t type) : Entity(type) { }
+      EntityTask(const EntityHeader &header_) : Entity(header_), m_hash_code(0) { }
+      EntityTask(int32_t type) : Entity(type), m_hash_code(0) { }
       virtual ~EntityTask() { }
       virtual const String name() = 0;
       virtual bool execute() = 0;
+      virtual int64_t hash_code() { return m_hash_code; }
+    protected:
+      int64_t m_hash_code;
     };
     typedef intrusive_ptr<EntityTask> EntityTaskPtr;
+
+    namespace EntityType {
+      enum {
+        TASK_REMOVE_TRANSFER_LOG    = 0x00010003,
+        TASK_ACKNOWLEDGE_RELINQUISH = 0x00010004
+      };
+    }
 
   } // namespace MetaLog
 } // namespace Hypertable
