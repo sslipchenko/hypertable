@@ -74,6 +74,7 @@ extern "C" {
 #include "MergeScannerRange.h"
 #include "MetaLogDefinitionRangeServer.h"
 #include "MetaLogEntityRange.h"
+#include "MetaLogEntityTask.h"
 #include "RangeServer.h"
 #include "RangeStatsGatherer.h"
 #include "ScanContext.h"
@@ -492,6 +493,53 @@ void RangeServer::initialize(PropertiesPtr &props) {
 }
 
 
+namespace {
+
+  struct ByFragmentNumber {
+    bool operator()(const String &x, const String &y) const {
+      int num_x = atoi(x.c_str());
+      int num_y = atoi(y.c_str());
+      return num_x < num_y;
+    }
+  };
+
+  void add_mark_file_to_commit_logs(const String &logname) {
+    vector<string> listing;
+    String logdir = Global::log_dir + "/" + logname;
+
+    try {
+      if (!Global::log_dfs->exists(logdir))
+	return;
+      Global::log_dfs->readdir(logdir, listing);
+    }
+    catch (Hypertable::Exception &e) {
+      HT_FATALF("Unable to read log directory '%s'", logdir.c_str());
+    }
+
+    if (listing.size() == 0)
+      return;
+
+    sort(listing.begin(), listing.end(), ByFragmentNumber());
+
+    char *endptr;
+    long num = strtol(listing.back().c_str(), &endptr, 10);
+    String mark_filename = logdir + "/" + num + ".mark";
+
+    try {
+      int fd = Global::log_dfs->create(mark_filename, 0, -1, -1, -1);
+      StaticBuffer buf(1);
+      *buf.base = '0';
+      Global::log_dfs->append(fd, buf);
+      Global::log_dfs->close(fd);
+    }
+    catch (Hypertable::Exception &e) {
+      HT_FATALF("Unable to create file '%s'", mark_filename.c_str());
+    }
+  }
+
+}
+
+
 void RangeServer::local_recover() {
   MetaLog::DefinitionPtr rsml_definition =
       new MetaLog::DefinitionRangeServer(Global::location_initializer->get().c_str());
@@ -518,12 +566,23 @@ void RangeServer::local_recover() {
     if (!entities.empty()) {
       HT_DEBUG_OUT <<"Found "<< Global::log_dir << "/" << rsml_definition->name() <<", start recovering"<< HT_END;
 
-      // Fix for load_acknowledge bug
-      if (rsml_reader->version() == 1) {
-        for (size_t i=0; i<entities.size(); i++) {
-          if ((range_entity = dynamic_cast<MetaLog::EntityRange *>(entities[i].get())) != 0)
-            range_entity->load_acknowledged = true;
-        }
+      // Temporary code to handle upgrade from RANGE to RANGE2
+      // Metalog entries.  Should be removed around 12/2013
+      if (MetaLog::EntityRange::encountered_upgrade) {
+	add_mark_file_to_commit_logs("root");
+	add_mark_file_to_commit_logs("metadata");
+	add_mark_file_to_commit_logs("system");
+	add_mark_file_to_commit_logs("user");
+      }
+
+      // Populated Global::work_queue
+      {
+	ScopedLock lock(Global::mutex);
+	MetaLog::EntityTask *task_entity;
+	foreach(MetaLog::EntityPtr &entity, entities) {
+	  if ((task_entity = dynamic_cast<MetaLog::EntityTask *>(entity.get())) != 0)
+	    Global::work_queue.push_back(task_entity);
+	}
       }
 
       Global::rsml_writer = new MetaLog::Writer(Global::log_dfs, rsml_definition,
@@ -544,7 +603,7 @@ void RangeServer::local_recover() {
 
       foreach(MetaLog::EntityPtr &entity, entities) {
         range_entity = dynamic_cast<MetaLog::EntityRange *>(entity.get());
-        if (range_entity->table.is_metadata() &&
+        if (range_entity && range_entity->table.is_metadata() &&
             range_entity->spec.end_row && !strcmp(range_entity->spec.end_row, Key::END_ROOT_ROW)) {
           replay_load_range(0, range_entity, false, &table_schemas);
         }
@@ -602,7 +661,7 @@ void RangeServer::local_recover() {
 
       foreach(MetaLog::EntityPtr &entity, entities) {
         range_entity = dynamic_cast<MetaLog::EntityRange *>(entity.get());
-        if (range_entity->table.is_metadata() &&
+        if (range_entity && range_entity->table.is_metadata() &&
             !(range_entity->spec.end_row &&
               !strcmp(range_entity->spec.end_row, Key::END_ROOT_ROW))) {
           replay_load_range(0, range_entity, false, &table_schemas);
@@ -666,7 +725,7 @@ void RangeServer::local_recover() {
 
       foreach(MetaLog::EntityPtr &entity, entities) {
         range_entity = dynamic_cast<MetaLog::EntityRange *>(entity.get());
-        if (range_entity->table.is_system() && !range_entity->table.is_metadata())
+        if (range_entity && range_entity->table.is_system() && !range_entity->table.is_metadata())
           replay_load_range(0, range_entity, false, &table_schemas);
       }
 
@@ -724,7 +783,7 @@ void RangeServer::local_recover() {
 
       foreach(MetaLog::EntityPtr &entity, entities) {
         range_entity = dynamic_cast<MetaLog::EntityRange *>(entity.get());
-        if (!range_entity->table.is_system())
+        if (range_entity && !range_entity->table.is_system())
           replay_load_range(0, range_entity, false, &table_schemas);
       }
 
@@ -1449,8 +1508,7 @@ RangeServer::fetch_scanblock(ResponseCallbackFetchScanblock *cb,
 
 void
 RangeServer::load_range(ResponseCallback *cb, const TableIdentifier *table,
-    const RangeSpec *range_spec, const char *transfer_log_dir,
-    const RangeState *range_state, bool needs_compaction) {
+    const RangeSpec *range_spec, const RangeState *range_state, bool needs_compaction) {
   int error = Error::OK;
   TableMutatorPtr mutator;
   KeySpec key;
@@ -1487,8 +1545,7 @@ RangeServer::load_range(ResponseCallback *cb, const TableIdentifier *table,
         && !strcmp(range_spec->end_row, Key::END_ROOT_ROW);
 
       HT_INFO_OUT <<"Loading range: "<< *table <<" "<< *range_spec << " " << *range_state
-          << " transfer_log=" << transfer_log_dir << " needs_compaction="
-          << needs_compaction << HT_END;
+          << " needs_compaction=" << needs_compaction << HT_END;
 
       if (m_dropped_table_id_cache->contains(table->id)) {
         HT_WARNF("Table %s has been dropped", table->id);
@@ -1635,9 +1692,9 @@ RangeServer::load_range(ResponseCallback *cb, const TableIdentifier *table,
        * it has not been added yet and therefore no one else can find it and
        * concurrently access it.
        */
-      if (transfer_log_dir && *transfer_log_dir) {
+      if (range_state->transfer_log && *range_state->transfer_log) {
         CommitLogReaderPtr commit_log_reader =
-          new CommitLogReader(Global::log_dfs, transfer_log_dir, true);
+          new CommitLogReader(Global::log_dfs, range_state->transfer_log, true);
         if (!commit_log_reader->empty()) {
           CommitLog *log;
           if (is_root)
@@ -1653,7 +1710,7 @@ RangeServer::load_range(ResponseCallback *cb, const TableIdentifier *table,
 
           if ((error = log->link_log(commit_log_reader.get())) != Error::OK)
             HT_THROWF(error, "Unable to link transfer log (%s) into commit log(%s)",
-                      transfer_log_dir, log->get_log_dir().c_str());
+                      range_state->transfer_log, log->get_log_dir().c_str());
 
           // transfer the in-memory log fragments
           log->stitch_in(commit_log_reader.get());
