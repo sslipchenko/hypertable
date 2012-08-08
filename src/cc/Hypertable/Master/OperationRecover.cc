@@ -280,7 +280,7 @@ bool OperationRecover::proceed_with_recovery() {
   uint64_t wait_interval = (uint64_t)m_context->props->get_i32("Hypertable.Failover.GracePeriod");
 
   boost::xtime now;
-  boost::xtime_get(&now, boost::TIME_UTC);
+  boost::xtime_get(&now, boost::TIME_UTC_);
 
   size_t current_servers_down = m_context->server_count() 
             - m_context->connected_server_count();
@@ -291,7 +291,7 @@ bool OperationRecover::proceed_with_recovery() {
         << " servers down (previously " << m_servers_down 
         << "). Waiting for grace period..." << HT_END;
     m_dhp = new DispatchHandlerTimedUnblock(m_context, m_location);
-    boost::xtime_get(&m_wait_start, boost::TIME_UTC);
+    boost::xtime_get(&m_wait_start, boost::TIME_UTC_);
     m_waiting = true;
     m_servers_down = current_servers_down;
     m_context->comm->set_timer(wait_interval, m_dhp.get());
@@ -477,7 +477,7 @@ void OperationRecover::decode_request(const uint8_t **bufp,
 
   m_location = Serialization::decode_vstr(bufp, remainp);
   m_waiting = Serialization::decode_bool(bufp, remainp);
-  boost::xtime_get(&m_wait_start, boost::TIME_UTC);
+  boost::xtime_get(&m_wait_start, boost::TIME_UTC_);
   int nn;
   QualifiedRangeStateSpec qrss;
   nn = Serialization::decode_i32(bufp, remainp);

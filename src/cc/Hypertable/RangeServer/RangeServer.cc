@@ -4207,7 +4207,7 @@ void RangeServer::phantom_commit_ranges(ResponseCallback *cb, int64_t op_id,
       m_failover_map.erase(location);
     }
     boost::xtime now;
-    boost::xtime_get(&now, boost::TIME_UTC);
+    boost::xtime_get(&now, boost::TIME_UTC_);
     int priority = 0;
     // schedule maintenance if needed
     vector<MaintenanceTask*> maintenance_tasks;
