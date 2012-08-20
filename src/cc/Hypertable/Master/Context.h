@@ -48,6 +48,8 @@
 
 #include "Monitoring.h"
 #include "RangeServerConnection.h"
+#include "RecoveryReplayCounter.h"
+#include "RecoveryCounter.h"
 
 namespace Hypertable {
 
@@ -59,13 +61,53 @@ namespace Hypertable {
   class OperationBalance;
   class ResponseManager;
   class ReferenceManager;
+  class BalancePlanAuthority;
+
+  namespace NotificationHookType {
+    enum {
+      NOTICE,
+      ERROR
+    };
+  }
 
   class Context : public ReferenceCount {
+
+    class RecoveryState {
+      public:
+        RecoveryReplayCounterPtr create_replay_counter(int64_t id,
+            uint32_t attempt);
+
+        void erase_replay_counter(int64_t id);
+
+        RecoveryCounterPtr create_prepare_counter(int64_t id,
+            uint32_t attempt);
+
+        void erase_prepare_counter(int64_t id);
+
+        RecoveryCounterPtr create_commit_counter(int64_t id,
+            uint32_t attempt);
+
+        void erase_commit_counter(int64_t id);
+
+      private:
+        friend class Context;
+
+        typedef std::map<int64_t, RecoveryReplayCounterPtr> ReplayMap;
+        typedef std::map<int64_t, RecoveryCounterPtr> CounterMap;
+        typedef std::map<String, uint64_t> HandleMap;
+
+        Mutex m_mutex;
+        ReplayMap m_replay_map;
+        CounterMap m_prepare_map;
+        CounterMap m_commit_map;
+        HandleMap m_hyperspace_handles;
+    };
+
   public:
-    Context()
-      : timer_interval(0), monitoring_interval(0), gc_interval(0),
-        next_monitoring_time(0), next_gc_time(0), conn_count(0),
-        test_mode(false), in_operation(false) {
+    Context() : timer_interval(0), monitoring_interval(0), gc_interval(0),
+                next_monitoring_time(0), next_gc_time(0), conn_count(0),
+                test_mode(false), in_operation(false),
+                m_balance_plan_authority(0) {
       m_server_list_iter = m_server_list.end();
       master_file_handle = 0;
       balancer = 0;
@@ -120,17 +162,11 @@ namespace Hypertable {
     bool disconnect_server(RangeServerConnectionPtr &rsc);
 
     void wait_for_server();
-
-    // query functions to retrieve a RangeServerConnection
-    bool find_server_by_location(const String &location,
-            RangeServerConnectionPtr &rsc);
-    bool find_server_by_hostname(const String &hostname,
-            RangeServerConnectionPtr &rsc);
-    bool find_server_by_public_addr(InetAddr addr,
-            RangeServerConnectionPtr &rsc);
-    bool find_server_by_local_addr(InetAddr addr,
-            RangeServerConnectionPtr &rsc);
-
+    void erase_server(RangeServerConnectionPtr &rsc);
+    bool find_server_by_location(const String &location, RangeServerConnectionPtr &rsc);
+    bool find_server_by_hostname(const String &hostname, RangeServerConnectionPtr &rsc);
+    bool find_server_by_public_addr(InetAddr addr, RangeServerConnectionPtr &rsc);
+    bool find_server_by_local_addr(InetAddr addr, RangeServerConnectionPtr &rsc);
     bool next_available_server(RangeServerConnectionPtr &rsc);
 
     bool reassigned(TableIdentifier *table, RangeSpec &range, String &location);
@@ -145,10 +181,34 @@ namespace Hypertable {
     size_t connection_count() { ScopedLock lock(mutex); return conn_count; }
 
     size_t server_count() { ScopedLock lock(mutex); return m_server_list.size(); }
-
+    size_t connected_server_count();
     void get_servers(std::vector<RangeServerConnectionPtr> &servers);
 
     bool can_accept_ranges(const RangeServerStatistics &stats);
+    void get_connected_servers(std::vector<RangeServerConnectionPtr> &servers);
+    void get_connected_servers(StringSet &locations);
+    void replay_complete(EventPtr &event);
+    void prepare_complete(EventPtr &event);
+    void commit_complete(EventPtr &event);
+    void install_rs_recovery_commit_counter(int64_t id,
+        RecoveryCounterPtr &commit_counter);
+    void erase_rs_recovery_commit_counter(int64_t id);
+
+    // register a hyperspace callback to catch a failure of this server
+    // (the failure will then trigger a recovery)
+    void register_recovery_callback(RangeServerConnectionPtr &rsc);
+
+    // spawn notification hook
+    void notification_hook(int type, const String &message);
+
+    // set the BalancePlanAuthority
+    void set_balance_plan_authority(BalancePlanAuthority *bpa);
+
+    // get the BalancePlanAuthority; this creates a new instance when
+    // called for the very first time 
+    BalancePlanAuthority *get_balance_plan_authority();
+
+    RecoveryState &recovery_state() { return m_recovery_state; }
 
   private:
 
@@ -196,6 +256,8 @@ namespace Hypertable {
 
     ServerList m_server_list;
     ServerList::iterator m_server_list_iter;
+    RecoveryState m_recovery_state;
+    BalancePlanAuthority *m_balance_plan_authority;
   };
   typedef intrusive_ptr<Context> ContextPtr;
 
