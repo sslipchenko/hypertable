@@ -37,7 +37,7 @@ namespace Hypertable {
     virtual void execute();
     virtual const String name();
     virtual const String label();
-    virtual bool exclusive() { return true; }
+    virtual bool is_perpetual() { return true; }
 
     virtual void display_state(std::ostream &os) { }
     virtual size_t encoded_state_length() const { return 0; }

@@ -23,6 +23,7 @@
 #include "Common/Error.h"
 #include "Common/md5.h"
 #include "Common/FailureInducer.h"
+#include "Common/ScopeGuard.h"
 
 #include "OperationRecover.h"
 #include "OperationRecoverRanges.h"
@@ -38,7 +39,7 @@ OperationRecover::OperationRecover(ContextPtr &context,
         RangeServerConnectionPtr &rsc)
   : Operation(context, MetaLog::EntityType::OPERATION_RECOVER_SERVER),
     m_location(rsc->location()), m_rsc(rsc), m_hyperspace_handle(0), 
-    m_waiting(false), m_servers_down(0) {
+    m_lock_acquired(false) {
   m_dependencies.insert(Dependency::RECOVERY_BLOCKER);
   m_exclusivities.insert(m_rsc->location());
   m_obstructions.insert(Dependency::RECOVER_SERVER);
@@ -49,7 +50,7 @@ OperationRecover::OperationRecover(ContextPtr &context,
 
 OperationRecover::OperationRecover(ContextPtr &context,
     const MetaLog::EntityHeader &header_)
-  : Operation(context, header_), m_servers_down(0) {
+  : Operation(context, header_), m_hyperspace_handle(0), m_lock_acquired(false) {
 }
 
 void OperationRecover::notification_hook() {
@@ -103,7 +104,7 @@ void OperationRecover::notification_hook() {
   m_context->notification_hook(NotificationHookType::NOTICE, msg);
 }
 
-void OperationRecover::notification_hook_failure(Exception &e) {
+void OperationRecover::notification_hook_failure(const Exception &e) {
   HT_ASSERT(m_rsc != 0);
 
   String msg = format(
@@ -128,6 +129,8 @@ void OperationRecover::notification_hook_failure(Exception &e) {
 }
 
 void OperationRecover::execute() {
+  std::vector<Entity *> entities;
+  Operation *sub_op;
   int state = get_state();
   int type;
 
@@ -138,33 +141,10 @@ void OperationRecover::execute() {
   else
     HT_ASSERT(m_location == m_rsc->location());
 
-  std::vector<Entity *> entities;
-  Operation *sub_op;
-
-  if (!m_hyperspace_handle) {
-    try {
-      // get the hyperspace lock
-      if (acquire_server_lock()) {
-        // operation blocked till we have waited long enough to know 
-        // server is dead
-        if (m_waiting)
-          return;
-      }
-      else {
-        // rangeserver is connected, no need for recovery
-        m_rsc->set_recovering(false);
-        complete_ok();
-        return;
-      }
-    }
-    catch (Exception &e) {
-      HT_ASSERT(state == OperationState::INITIAL);
-      // range server is connected to Hyperspace but not to master
-      HT_ERROR_OUT << e << HT_END;
-      notification_hook_failure(e);
-      complete_error(e);
-      return;
-    }
+  if (!acquire_server_lock()) {
+    m_rsc->set_recovering(false);
+    complete_ok();
+    return;
   }
 
   switch (state) {
@@ -190,7 +170,7 @@ void OperationRecover::execute() {
     if (m_root_range.size()) {
       type = RangeSpec::ROOT;
       sub_op = new OperationRecoverRanges(m_context, m_location, type,
-                                                m_root_range);
+                                          m_root_range);
       HT_INFO_OUT << "Number of root ranges to recover for location " 
           << m_location << "="
           << m_root_range.size() << HT_END;
@@ -204,7 +184,7 @@ void OperationRecover::execute() {
     if (m_metadata_ranges.size()) {
       type = RangeSpec::METADATA;
       sub_op = new OperationRecoverRanges(m_context, m_location, type,
-                                                m_metadata_ranges);
+                                          m_metadata_ranges);
       HT_INFO_OUT << "Number of metadata ranges to recover for location "
           << m_location << "="
           << m_metadata_ranges.size() << HT_END;
@@ -218,7 +198,7 @@ void OperationRecover::execute() {
     if (m_system_ranges.size()) {
       type = RangeSpec::SYSTEM;
       sub_op = new OperationRecoverRanges(m_context, m_location, type,
-                                                m_system_ranges);
+                                          m_system_ranges);
       HT_INFO_OUT << "Number of system ranges to recover for location "
           << m_location << "="
           << m_system_ranges.size() << HT_END;
@@ -232,7 +212,7 @@ void OperationRecover::execute() {
     if (m_user_ranges.size()) {
       type = RangeSpec::USER;
       sub_op = new OperationRecoverRanges(m_context, m_location, type,
-                                                m_user_ranges);
+                                          m_user_ranges);
       HT_INFO_OUT << "Number of user ranges to recover for location " 
           << m_location << "="
           << m_user_ranges.size() << HT_END;
@@ -272,90 +252,48 @@ void OperationRecover::execute() {
 OperationRecover::~OperationRecover() {
 }
 
-bool OperationRecover::proceed_with_recovery() {
-  // do not continue with recovery if the RangeServer is back online
-  if (m_rsc->connected())
-    return false;
-
-  uint64_t wait_interval = (uint64_t)m_context->props->get_i32("Hypertable.Failover.GracePeriod");
-
-  boost::xtime now;
-  boost::xtime_get(&now, boost::TIME_UTC_);
-
-  size_t current_servers_down = m_context->server_count() 
-            - m_context->connected_server_count();
-
-  // restart waiting if another RangeServer goes down during the grace period
-  if (!m_waiting || (m_servers_down < current_servers_down)) {
-    HT_INFO_OUT << m_location << ": Currently " << current_servers_down 
-        << " servers down (previously " << m_servers_down 
-        << "). Waiting for grace period..." << HT_END;
-    m_dhp = new DispatchHandlerTimedUnblock(m_context, m_location);
-    boost::xtime_get(&m_wait_start, boost::TIME_UTC_);
-    m_waiting = true;
-    m_servers_down = current_servers_down;
-    m_context->comm->set_timer(wait_interval, m_dhp.get());
-    block();
-  }
-  else {
-    int64_t elapsed_time = xtime_diff_millis(m_wait_start, now);
-    if (elapsed_time > 0 && (uint64_t)elapsed_time > wait_interval) {
-      m_waiting = false;
-      return !m_rsc->connected();
-    }
-  }
-  return true;
-}
 
 bool OperationRecover::acquire_server_lock() {
 
-  uint32_t oflags = OPEN_FLAG_READ | OPEN_FLAG_WRITE | OPEN_FLAG_LOCK;
-  uint32_t lock_status = LOCK_STATUS_BUSY;
-  uint32_t retry_interval = m_context->props->get_i32("Hypertable.Connection.Retry.Interval");
-  LockSequencer sequencer;
-  bool reported = false;
-  int max_retries = 10;
-  int retry_count = 0;
+  if (m_lock_acquired)
+    return true;
 
-  // need to wait for long enough to be certain that the RS has failed
-  // before trying to acquire lock
-  if (get_state() == OperationState::INITIAL) {
-    if (!proceed_with_recovery())
-      return false;
-    else if (m_waiting)
-      return true;
-  }
+  try {
+    String fname = m_context->toplevel_dir + "/servers/" + m_location;
+    uint32_t oflags = OPEN_FLAG_READ | OPEN_FLAG_WRITE | OPEN_FLAG_LOCK;
+    uint32_t lock_status = LOCK_STATUS_BUSY;
+    LockSequencer sequencer;
+    uint64_t handle = 0;
+    
+    HT_ON_SCOPE_EXIT(&Hyperspace::close_handle_ptr, m_context->hyperspace, &handle);
 
-  m_hyperspace_handle =
-    m_context->hyperspace->open(m_context->toplevel_dir 
-                                + "/servers/" 
-                                + m_location,
-                                oflags);
-  while (lock_status != LOCK_STATUS_GRANTED) {
-    m_context->hyperspace->try_lock(m_hyperspace_handle, 
-                                LOCK_MODE_EXCLUSIVE, &lock_status,
-        &sequencer);
+    handle = m_context->hyperspace->open(fname, oflags);
+
+    m_context->hyperspace->try_lock(handle, 
+                                    LOCK_MODE_EXCLUSIVE, &lock_status,
+                                    &sequencer);
     if (lock_status != LOCK_STATUS_GRANTED) {
-      if (!reported) {
-        HT_INFO_OUT << "Couldn't obtain lock on '" << m_context->toplevel_dir
-          << "/servers/"<< m_location << "' due to conflict, "
-          << "entering retry loop ..." << HT_END;
-        reported = true;
-      }
-      if (retry_count > max_retries) {
-        HT_THROW(Error::HYPERSPACE_LOCK_CONFLICT, (String)"Couldn't obtain "
-                "lock on '" + m_context->toplevel_dir 
-                + "/servers/" + m_location +
-                "' due to conflict,  hit max_retries " + retry_count);
-      }
-      poll(0, 0, retry_interval);
-      ++retry_count;
+      HT_INFO_OUT << "Couldn't obtain lock on '" << fname 
+                  << "' due to conflict, lock_status=" << lock_status << HT_END;      
+      //notification_hook_failure(Exception(Error::HYPERSPACE_LOCK_CONFLICT, fname));
+      return false;
     }
+
+    m_context->hyperspace->attr_set(handle, "removed", "", 0);
+
+    m_hyperspace_handle = handle;
+    handle = 0;
+    m_lock_acquired = true;
+
+    HT_INFO_OUT << "Acquired lock on '" << fname 
+                << "', starting recovery..." << HT_END;
   }
-  m_context->hyperspace->attr_set(m_hyperspace_handle, "removed", "", 0);
-  HT_INFO_OUT << "Obtained lock and set removed attr on " 
-      << m_context->toplevel_dir
-      << "/servers/" << m_location << HT_END;
+  catch (Exception &e) {
+    HT_ERROR_OUT << "Problem obtaining " << m_location 
+                 << " hyperspace lock (" << e << "), aborting..." << HT_END;
+    notification_hook_failure(e);
+    return false;
+  }
   return true;
 }
 
@@ -438,7 +376,7 @@ void OperationRecover::read_rsml() {
 }
 
 size_t OperationRecover::encoded_state_length() const {
-  size_t len = Serialization::encoded_length_vstr(m_location) + 17;
+  size_t len = Serialization::encoded_length_vstr(m_location) + 16;
   foreach_ht(const QualifiedRangeStateSpecManaged &range, m_root_range)
     len += range.encoded_length();
   foreach_ht(const QualifiedRangeStateSpecManaged &range, m_metadata_ranges)
@@ -452,7 +390,6 @@ size_t OperationRecover::encoded_state_length() const {
 
 void OperationRecover::encode_state(uint8_t **bufp) const {
   Serialization::encode_vstr(bufp, m_location);
-  Serialization::encode_bool(bufp, m_waiting);
   Serialization::encode_i32(bufp, m_root_range.size());
   foreach_ht(const QualifiedRangeStateSpecManaged &range, m_root_range)
     range.encode(bufp);
@@ -476,8 +413,6 @@ void OperationRecover::decode_request(const uint8_t **bufp,
         size_t *remainp) {
 
   m_location = Serialization::decode_vstr(bufp, remainp);
-  m_waiting = Serialization::decode_bool(bufp, remainp);
-  boost::xtime_get(&m_wait_start, boost::TIME_UTC_);
   int nn;
   QualifiedRangeStateSpec qrss;
   nn = Serialization::decode_i32(bufp, remainp);
@@ -500,7 +435,5 @@ void OperationRecover::decode_request(const uint8_t **bufp,
     qrss.decode(bufp, remainp);
     m_user_ranges.push_back(qrss);
   }
-  m_rsc = 0;
-  m_hyperspace_handle = 0;
 }
 

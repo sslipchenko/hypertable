@@ -53,12 +53,6 @@ namespace Hypertable {
     virtual bool exclusive() { return true; }
 
   private:
-    enum {
-      FLAG_HAS_ROOT     = 0x0001,
-      FLAG_HAS_METADATA = 0x0002,
-      FLAG_HAS_SYSTEM   = 0x0004,
-      FLAG_HAS_USER     = 0x0008
-    };
 
     // acquire lock on Hyperspace file; returns true if lock is acquired or
     // false if the RangeServer is back online
@@ -73,15 +67,12 @@ namespace Hypertable {
     // cleans up after this operation is complete
     void clear_server_state();
 
-    // returns true if server is not yet connected
-    bool proceed_with_recovery();
-
     // spawn conf/notification-hook.sh and inform the administrator that
     // a rangeserver is about to be recovered
     void notification_hook();
 
     // report an error during recovery
-    void notification_hook_failure(Exception &e);
+    void notification_hook_failure(const Exception &e);
 
     // persisted state
     String m_location;
@@ -92,10 +83,7 @@ namespace Hypertable {
     // in mem state
     RangeServerConnectionPtr m_rsc;
     uint64_t m_hyperspace_handle;
-    DispatchHandlerTimedUnblockPtr m_dhp;
-    boost::xtime m_wait_start;
-    bool m_waiting;
-    size_t m_servers_down;
+    bool m_lock_acquired;
   };
 
   typedef intrusive_ptr<OperationRecover> OperationRecoverPtr;

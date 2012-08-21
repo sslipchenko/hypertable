@@ -63,6 +63,11 @@ void OperationRegisterServer::execute() {
   else
     m_context->find_server_by_location(m_location, m_rsc);
 
+  // Clean up existing connection (happens when connect arrives before
+  // disconnect notification from Hyperspace)
+  if (m_location != "")
+    m_context->disconnect_server(m_location);
+
   if (!m_rsc) {
     if (m_location == "") {
       uint64_t id = m_context->hyperspace->attr_incr(m_context->master_file_handle, "next_server_id");

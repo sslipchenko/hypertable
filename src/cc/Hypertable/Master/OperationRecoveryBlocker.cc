@@ -39,36 +39,27 @@ OperationRecoveryBlocker::OperationRecoveryBlocker(ContextPtr &context,
 }
 
 void OperationRecoveryBlocker::execute() {
-  HT_INFOF("Entering RecoveryBlocker-%lld", (Lld)header.id);
-  size_t total_servers, connected_servers, quorum;
-  try {
-    try_again:
-    total_servers = m_context->server_count();
-    connected_servers = m_context->connected_server_count();
-    quorum = (total_servers * m_context->props->get_i32("Hypertable.Failover.Quorum.Percentage")) / 100;
-    HT_INFO_OUT << "total_servers=" << total_servers << " connected_servers="
-        << connected_servers << " quorum=" << quorum << HT_END;
 
-    if (connected_servers < quorum || connected_servers == 0) {
-      block();
-    }
-    else {
-      while (1) {
-        poll(0,0, 15000);
-        size_t new_connected_servers = m_context->connected_server_count();
-        if (new_connected_servers < connected_servers)
-          goto try_again;
-        if (new_connected_servers == connected_servers)
-          break;
-      }
-      complete_ok_no_log();
-    }
+  HT_INFOF("Entering RecoveryBlocker-%lld", (Lld)header.id);
+
+  size_t total_servers = m_context->server_count();
+  size_t connected_servers = m_context->connected_server_count();
+  size_t quorum = (total_servers * m_context->props->get_i32("Hypertable.Failover.Quorum.Percentage")) / 100;
+
+  HT_INFO_OUT << "total_servers=" << total_servers << " connected_servers="
+              << connected_servers << " quorum=" << quorum << HT_END;
+
+  if (connected_servers < quorum || connected_servers == 0) {
+    block();
+    HT_INFOF("Leaving RecoveryBlocker-%lld state=%s-BLOCKED", (Lld)header.id,
+             OperationState::get_text(get_state()));
+    return;
   }
-  catch (Exception &e) {
-    HT_THROW2(e.code(), e, "Recovery Blocker");
-  }
+
+  complete_ok_no_log();
+
   HT_INFOF("Leaving RecoveryBlocker-%lld state=%s", (Lld)header.id,
-      OperationState::get_text(get_state()));
+           OperationState::get_text(get_state()));
 }
 
 const String OperationRecoveryBlocker::name() {

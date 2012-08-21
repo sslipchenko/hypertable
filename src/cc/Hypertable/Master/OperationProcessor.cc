@@ -178,11 +178,6 @@ void OperationProcessor::unblock(const String &name) {
     if (m_context.ops[bound.first->second]->unblock())
       unblocked_something = true;
 
-  for (bound = m_context.dependency_index.equal_range(name);
-       bound.first != bound.second; ++bound.first)
-    if (m_context.ops[bound.first->second]->unblock())
-      unblocked_something = true;
-
   if (unblocked_something) {
     m_context.current_blocked = 0;
     m_context.need_order_recompute = true;

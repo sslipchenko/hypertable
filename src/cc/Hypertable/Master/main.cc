@@ -45,6 +45,7 @@ extern "C" {
 #include "OperationInitialize.h"
 #include "OperationProcessor.h"
 #include "OperationRecover.h"
+#include "OperationRecoveryBlocker.h"
 #include "OperationSystemUpgrade.h"
 #include "OperationWaitForServers.h"
 #include "OperationBalance.h"
@@ -297,6 +298,8 @@ int main(int argc, char **argv) {
       context->op_balance = dynamic_cast<OperationBalance *>(operation.get());
       operations.push_back(operation);
     }
+    operation = new OperationRecoveryBlocker(context);
+    operations.push_back(operation);
 
     context->op->add_operations(operations);
 

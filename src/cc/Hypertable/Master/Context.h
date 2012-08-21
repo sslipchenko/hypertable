@@ -153,14 +153,8 @@ namespace Hypertable {
 
     // adds a new server; called by the main() function at startup
     void add_server(RangeServerConnectionPtr &rsc);
-
-    // connect a new server; called by OperationRegisterServer
-    bool connect_server(RangeServerConnectionPtr &rsc, const String &hostname,
-            InetAddr local_addr, InetAddr public_addr);
-
-    // disconnect a range server
-    bool disconnect_server(RangeServerConnectionPtr &rsc);
-
+    bool connect_server(RangeServerConnectionPtr &rsc, const String &hostname, InetAddr local_addr, InetAddr public_addr);
+    void disconnect_server(const String &location, uint64_t handle=0);
     void wait_for_server();
     void erase_server(RangeServerConnectionPtr &rsc);
     bool find_server_by_location(const String &location, RangeServerConnectionPtr &rsc);
@@ -212,8 +206,7 @@ namespace Hypertable {
 
   private:
 
-    // remove a RangeServerConnection from the internal index
-    void remove_server(RangeServerConnectionPtr &rsc);
+    bool find_server_by_location_unlocked(const String &location, RangeServerConnectionPtr &rsc);
 
     class RangeServerConnectionEntry {
     public:

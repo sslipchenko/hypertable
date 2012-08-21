@@ -30,33 +30,10 @@
 #include "ReferenceManager.h"
 #include "RecoveryReplayCounter.h"
 #include "BalancePlanAuthority.h"
+#include "RangeServerHyperspaceCallback.h"
 
 using namespace Hypertable;
 using namespace std;
-
-class RecoverySessionCallback : public Hyperspace::HandleCallback {
-  public:
-    RecoverySessionCallback(ContextPtr context, String rs)
-      : Hyperspace::HandleCallback(Hyperspace::EVENT_MASK_LOCK_RELEASED), 
-        m_context(context), m_rs(rs) {
-    }
-
-    virtual void lock_released() {
-      RangeServerConnectionPtr rsc;
-      if (m_context->find_server_by_location(m_rs, rsc)) {
-        if (m_context->disconnect_server(rsc)) {
-          HT_INFOF("RangeServer %s lost its hyperspace lock; starting recovery",
-                rsc->location().c_str());
-          OperationPtr operation = new OperationRecover(m_context, rsc);
-          m_context->op->add_operation(operation);
-        }
-      }
-    }
-
-  private:
-    ContextPtr m_context;
-    String m_rs;
-};
 
 Context::~Context() {
   if (hyperspace && master_file_handle > 0) {
@@ -159,19 +136,21 @@ bool Context::connect_server(RangeServerConnectionPtr &rsc,
   return true;
 }
 
-void Context::register_recovery_callback(RangeServerConnectionPtr &rsc)
-{
+void Context::register_recovery_callback(RangeServerConnectionPtr &rsc) {
   ScopedLock lock(mutex);
-  String rspath = toplevel_dir + "/servers/" + rsc->location();
-  Hyperspace::HandleCallbackPtr cb = new RecoverySessionCallback(this, 
-          rsc->location());
-  uint64_t handle = hyperspace->open(rspath, Hyperspace::OPEN_FLAG_READ, cb);
+  String fname = toplevel_dir + "/servers/" + rsc->location();
+  RangeServerHyperspaceCallback *rscb
+    = new RangeServerHyperspaceCallback(this, rsc->location());
+  Hyperspace::HandleCallbackPtr cb(rscb);
+  uint64_t handle = hyperspace->open(fname, Hyperspace::OPEN_FLAG_READ, cb);
   HT_ASSERT(handle);
+  rscb->set_handle(handle);
   m_recovery_state.m_hyperspace_handles.insert(RecoveryState::HandleMap::value_type(rsc->location(), handle));
+  HT_INFOF("Inserted handle %llu (%s) to hyperspace_handles map", (Llu)handle, rsc->location().c_str());
 }
 
-void Context::notification_hook(int type, const String &message)
-{
+
+void Context::notification_hook(int type, const String &message) {
   String type_str;
   switch (type) {
     case NotificationHookType::NOTICE:
@@ -366,24 +345,43 @@ void Context::commit_complete(EventPtr &event) {
   return;
 }
 
-bool Context::disconnect_server(RangeServerConnectionPtr &rsc) {
+void Context::disconnect_server(const String &location, uint64_t handle) {
   ScopedLock lock(mutex);
-  HT_ASSERT(conn_count > 0);
+  RangeServerConnectionPtr rsc;
 
-  HT_INFOF("Unregistering proxy %s", rsc->location().c_str());
-
-  RecoveryState::HandleMap::iterator it = m_recovery_state.m_hyperspace_handles.find(rsc->location());
+  RecoveryState::HandleMap::iterator it = m_recovery_state.m_hyperspace_handles.find(location);
   if (it != m_recovery_state.m_hyperspace_handles.end()) {
-    hyperspace->close_nowait((*it).second);
+    if (handle && (*it).second != handle)
+      return;
+    try {
+      hyperspace->close_nowait((*it).second);
+    }
+    catch (Exception &e) {
+      HT_ERROR_OUT << "Problem closing Hyperspace handle " 
+                   << (*it).second << " - " << e << HT_END;
+    }
+    HT_INFOF("Removing handle %llu (%s) from hyperspace_handles map",
+             (Llu)(*it).second, (*it).first.c_str());
     m_recovery_state.m_hyperspace_handles.erase(it);
   }
+  else
+    return;
 
-  if (rsc->disconnect()) {
-    conn_count--;
-    return true;
+  if (find_server_by_location_unlocked(location, rsc)) {
+    HT_INFOF("Disconnecting server %s", location.c_str());
+    if (rsc->disconnect()) {
+      HT_ASSERT(conn_count > 0);
+      conn_count--;
+      HT_INFOF("Decremented conn_count to %d", (int)conn_count);
+      uint32_t millis = props->get_i32("Hypertable.Failover.GracePeriod");
+      HT_INFOF("Scheduling recovery operation for %s in %ld milliseconds",
+               location.c_str(), millis);
+      ContextPtr context(this);
+      DispatchHandlerPtr handler
+        = new AddRecoveryOperationTimerHandler(context, rsc);
+      comm->set_timer(millis, handler.get());
+    }
   }
-
-  return false;
 }
 
 void Context::wait_for_server() {
@@ -392,10 +390,13 @@ void Context::wait_for_server() {
     cond.wait(lock);
 }
 
-
 bool Context::find_server_by_location(const String &location,
         RangeServerConnectionPtr &rsc) {
   ScopedLock lock(mutex);
+  return find_server_by_location_unlocked(location, rsc);
+}
+
+bool Context::find_server_by_location_unlocked(const String &location, RangeServerConnectionPtr &rsc) {
   LocationIndex &hash_index = m_server_list.get<1>();
   LocationIndex::iterator lookup_iter;
 

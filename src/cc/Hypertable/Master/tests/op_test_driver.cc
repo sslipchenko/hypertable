@@ -483,7 +483,7 @@ void create_table_test(ContextPtr &context) {
   run_test(context, log_dir, entities, "create-table-LOAD_RANGE-b:throw:0",
            expected_operations, expected_servers);
 
-  context->disconnect_server(rsc1);
+  context->disconnect_server(rsc1->location());
   initialize_test(context, log_dir, entities, "");
   poll(0,0,100);
   context->connect_server(rsc1, "foo.hypertable.com", InetAddr("localhost", 30267),
@@ -560,7 +560,7 @@ void create_table_with_index_test(ContextPtr &context) {
   run_test(context, log_dir, entities, "create-table-FINALIZE:throw:1",
            expected_operations, expected_servers);
 
-  context->disconnect_server(rsc1);
+  context->disconnect_server(rsc1->location());
   initialize_test(context, log_dir, entities, "");
   poll(0,0,100);
   context->connect_server(rsc1, "foo.hypertable.com", InetAddr("localhost", 30267),
