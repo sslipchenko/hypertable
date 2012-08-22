@@ -184,6 +184,10 @@ run_test() {
     echo "Test $TEST_ID PASSED." >> report.txt
   fi
 
+  if [ $TEST_ID == 10 ] || [ $TEST_ID == 11 ] || [ $TEST_ID == 12 ] || [ $TEST_ID == 13 ] ; then
+      kill -9 `cat $HT_HOME/run/Hypertable.Master*.pid`
+  fi
+
   /bin/rm -f running.$TEST_ID
 }
 

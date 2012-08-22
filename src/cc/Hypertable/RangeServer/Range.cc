@@ -138,7 +138,9 @@ void Range::initialize() {
                   m_metalog_entity->spec.start_row,
                   m_metalog_entity->spec.end_row);
 
-  m_is_root = (m_metalog_entity->table.is_metadata() &&
+  m_is_metadata = m_metalog_entity->table.is_metadata();
+
+  m_is_root = (m_is_metadata &&
                (m_metalog_entity->spec.start_row==0 || *m_metalog_entity->spec.start_row==0) &&
                !strcmp(m_metalog_entity->spec.end_row, Key::END_ROOT_ROW));
 

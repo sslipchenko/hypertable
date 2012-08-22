@@ -146,7 +146,6 @@ void Context::register_recovery_callback(RangeServerConnectionPtr &rsc) {
   HT_ASSERT(handle);
   rscb->set_handle(handle);
   m_recovery_state.m_hyperspace_handles.insert(RecoveryState::HandleMap::value_type(rsc->location(), handle));
-  HT_INFOF("Inserted handle %llu (%s) to hyperspace_handles map", (Llu)handle, rsc->location().c_str());
 }
 
 
@@ -360,8 +359,6 @@ void Context::disconnect_server(const String &location, uint64_t handle) {
       HT_ERROR_OUT << "Problem closing Hyperspace handle " 
                    << (*it).second << " - " << e << HT_END;
     }
-    HT_INFOF("Removing handle %llu (%s) from hyperspace_handles map",
-             (Llu)(*it).second, (*it).first.c_str());
     m_recovery_state.m_hyperspace_handles.erase(it);
   }
   else
@@ -372,7 +369,6 @@ void Context::disconnect_server(const String &location, uint64_t handle) {
     if (rsc->disconnect()) {
       HT_ASSERT(conn_count > 0);
       conn_count--;
-      HT_INFOF("Decremented conn_count to %d", (int)conn_count);
       uint32_t millis = props->get_i32("Hypertable.Failover.GracePeriod");
       HT_INFOF("Scheduling recovery operation for %s in %ld milliseconds",
                location.c_str(), millis);

@@ -2799,6 +2799,7 @@ void RangeServer::update_add_and_respond() {
           ScopedLock lock(m_mutex);
           m_maintenance_scheduler->need_scheduling();
           maintenance_needed = true;
+          HT_MAYBE_FAIL_X("metadata-update-and-respond", (*iter).first->is_metadata());
           if (m_timer_handler)
             m_timer_handler->schedule_maintenance();
           break;
