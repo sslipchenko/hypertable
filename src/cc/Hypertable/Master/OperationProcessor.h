@@ -61,6 +61,7 @@ namespace Hypertable {
     void unblock(const String &name);
     void remove_operation(int64_t hash_code);
     bool operation_complete(int64_t hash_code);
+    void state_description(String &output);
 
   private:
 

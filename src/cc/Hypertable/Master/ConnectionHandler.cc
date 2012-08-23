@@ -53,6 +53,8 @@
 #include "RangeServerConnection.h"
 #include "ReferenceManager.h"
 
+#include <fstream>
+#include <iostream>
 
 using namespace Hypertable;
 using namespace Serialization;
@@ -204,6 +206,9 @@ void ConnectionHandler::handle(EventPtr &event) {
     time_t now = time(0);
 
     try {
+
+      maybe_dump_op_statistics();
+
       if (m_context->next_monitoring_time <= now) {
         operation = new OperationGatherStatistics(m_context);
         m_context->op->add_operation(operation);
@@ -272,4 +277,19 @@ int32_t ConnectionHandler::send_error_response(EventPtr &event, int32_t error, c
     HT_ERRORF("Problem sending error response back to %s - %s",
               event->addr.format().c_str(), Error::get_text(error));
   return error;
+}
+
+void ConnectionHandler::maybe_dump_op_statistics() {
+
+  if (FileUtils::exists(System::install_dir + "/run/debug-op")) {
+    String description;
+    String output_fname = System::install_dir + "/run/op.output";
+    ofstream out;
+    out.open(output_fname.c_str());
+    m_context->op->state_description(description);
+    out << description;
+    out.close();
+    FileUtils::unlink(System::install_dir + "/run/debug-op");
+  }
+  
 }
