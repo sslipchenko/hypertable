@@ -1703,33 +1703,6 @@ RangeServer::load_range(ResponseCallback *cb, const TableIdentifier *table,
     }
 
     /**
-     * NOTE: The range does not need to be locked in the following replay
-     * since it has not been added yet and therefore no one else can find it
-     * and concurrently access it.
-     */
-    if (range_state->transfer_log && *range_state->transfer_log) {
-      CommitLogReaderPtr commit_log_reader =
-        new CommitLogReader(Global::log_dfs, range_state->transfer_log);
-      if (!commit_log_reader->empty()) {
-        CommitLog *log;
-        if (is_root)
-          log = Global::root_log;
-        else if (table->is_metadata())
-          log = Global::metadata_log;
-        else if (table->is_system())
-          log = Global::system_log;
-        else
-          log = Global::user_log;
-
-        range->replay_transfer_log(commit_log_reader.get());
-
-        if ((error = log->link_log(commit_log_reader.get())) != Error::OK)
-          HT_THROWF(error, "Unable to link transfer log (%s) into commit log(%s)",
-                    range_state->transfer_log, log->get_log_dir().c_str());
-      }
-    }
-
-    /**
      * Take ownership of the range by writing the 'Location' column in the
      * METADATA table, or /hypertable/root{location} attribute of Hyperspace
      * if it is the root range.
@@ -1822,16 +1795,17 @@ RangeServer::acknowledge_load(ResponseCallbackAcknowledgeLoad *cb,
   TableInfoPtr table_info;
   RangePtr range;
   map<QualifiedRangeSpec, int> error_map;
-  vector<MetaLog::Entity *> entities;
 
-  if (!m_replay_finished) {
-    if (!wait_for_recovery_finish(cb->get_event()->expiration_time()))
-      return;
-  }
+  foreach_ht (const QualifiedRangeSpec &rr, ranges) {
 
-  {
-    ScopedLock lock(m_drop_table_mutex);
-    foreach_ht (const QualifiedRangeSpec &rr, ranges) {
+    if (!m_replay_finished) {
+      if (!wait_for_recovery_finish(&rr.table, &rr.range, cb->get_event()->expiration_time()))
+        return;
+    }
+
+    {
+      ScopedLock lock(m_drop_table_mutex);
+
       HT_INFO_OUT << "Acknowledging range: " << rr.table.id << "["
           << rr.range.start_row << ".." << rr.range.end_row << "]" << HT_END;
 
@@ -1858,18 +1832,18 @@ RangeServer::acknowledge_load(ResponseCallbackAcknowledgeLoad *cb,
         HT_WARN_OUT << "Range: " << rr << " already acknowledged" << HT_END;
         continue;
       }
-      range->acknowledge_load();
+
+      try {
+        range->acknowledge_load();
+      }
+      catch(Exception &e) {
+        error_map[rr] = e.code();
+        HT_ERROR_OUT << e << HT_END;
+        continue;
+      }
+
       error_map[rr] = Error::OK;
       HT_INFO_OUT << "Range: " << rr <<" acknowledged" << HT_END;
-      entities.push_back(range->metalog_entity());
-    }
-
-    try {
-      range->acknowledge_load();
-    }
-    catch(Exception &e) {
-      cb->error(e.code(), Global::location_initializer->get());
-      return;
     }
   }
 
