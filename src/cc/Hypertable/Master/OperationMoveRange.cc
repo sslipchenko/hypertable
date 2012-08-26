@@ -110,11 +110,9 @@ void OperationMoveRange::execute() {
   switch (state) {
 
   case OperationState::INITIAL:
+
     if (!bpa->get_balance_destination(m_table, m_range, m_destination)) {
-      HT_INFOF("MoveRange %s: BalancePlanAuthority cancelled move to %s",
-            m_range_name.c_str(), m_destination.c_str());
-      remove_approval_add(0x03);
-      complete_ok();
+      m_context->op->unblock(Dependency::SERVERS);
       return;
     }
 

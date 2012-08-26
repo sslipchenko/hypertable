@@ -265,7 +265,7 @@ BalancePlanAuthority::create_range_plan(const String &location, int type,
   foreach_ht (uint32_t fragment, fragments) {
     if (location_it == active_locations.end())
       location_it = active_locations.begin();
-    plan->replay_plan.insert(location_it->c_str(), fragment);
+    plan->replay_plan.insert(fragment, *location_it);
     ++location_it;
   }
 
@@ -289,7 +289,7 @@ BalancePlanAuthority::update_range_plan(RangeRecoveryPlanPtr &plan,
   foreach_ht (uint32_t fragment, fragments) {
     if (location_it == active_locations.end())
       location_it = active_locations.begin();
-    plan->replay_plan.insert(location_it->c_str(), fragment);
+    plan->replay_plan.insert(fragment, *location_it);
     ++location_it;
   }
 
@@ -347,6 +347,8 @@ BalancePlanAuthority::balance_move_complete(const TableIdentifier &table,
                 const RangeSpec &range, int32_t error) {
   ScopedLock lock(m_mutex);
   RangeMoveSpecPtr move_spec = new RangeMoveSpec();
+
+  HT_INFO_OUT << "balance_move_complete for " << table << " " << range << HT_END;
 
   move_spec->table = table;
   move_spec->table.generation = 0;

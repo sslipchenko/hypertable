@@ -35,6 +35,10 @@
 
 namespace Hypertable {
 
+  /**
+   * BalancePlanAuthority is a class that acts as a central authority for all
+   * balance plans created due to auto-balancing (???) and range server failover
+   */
   class BalancePlanAuthority : public MetaLog::Entity {
   public:
     BalancePlanAuthority(ContextPtr context, MetaLog::WriterPtr &mml_writer);
@@ -45,6 +49,12 @@ namespace Hypertable {
     virtual ~BalancePlanAuthority() { }
 
     // returns true if there are no pending balance plans
+    /**
+     * Determines if there are any balance plans registered due to a
+     * range server failure
+     *
+     * @return <i>true</i> if balance plans registered, <i>false</i> otherwiseb
+     */
     bool is_empty();
 
     // creates a new recovery plan; invoked by OperationRecoverRanges

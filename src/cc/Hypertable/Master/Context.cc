@@ -371,7 +371,7 @@ void Context::disconnect_server(const String &location, uint64_t handle) {
       conn_count--;
       uint32_t millis = props->get_i32("Hypertable.Failover.GracePeriod");
       HT_INFOF("Scheduling recovery operation for %s in %ld milliseconds",
-               location.c_str(), millis);
+               location.c_str(), (long)millis);
       ContextPtr context(this);
       DispatchHandlerPtr handler
         = new AddRecoveryOperationTimerHandler(context, rsc);

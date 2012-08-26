@@ -153,11 +153,6 @@ bool RangeRecoveryReceiverPlan::get_qualified_range_spec(const TableIdentifier &
   return retval;
 }
 
-void RangeRecoveryReceiverPlan::erase_qualified_range_spec(const QualifiedRangeSpec &range) {
-  QualifiedRangeStateSpec state_spec(range);
-  RangeIndex &range_index = m_plan.get<ByRange>();
-  range_index.erase(state_spec);
-}
 
 size_t RangeRecoveryReceiverPlan::encoded_length() const {
   const LocationIndex &location_index = m_plan.get<ByLocation>();

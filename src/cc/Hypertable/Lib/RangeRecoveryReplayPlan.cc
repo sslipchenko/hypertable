@@ -29,7 +29,7 @@ using namespace std;
 using namespace boost::multi_index;
 using namespace Hypertable;
 
-void RangeRecoveryReplayPlan::insert(const char *location, uint32_t fragment) {
+void RangeRecoveryReplayPlan::insert(uint32_t fragment, const String &location) {
   ReplayEntry entry(location, fragment);
   FragmentIndex &fragment_index = m_plan.get<ByFragment>();
   FragmentIndex::iterator fragment_it = fragment_index.find(entry.fragment);
@@ -47,7 +47,7 @@ void RangeRecoveryReplayPlan::get_fragments(vector<uint32_t> &fragments) const {
     fragments.push_back(fragment_it->fragment);
 }
 
-void RangeRecoveryReplayPlan::get_fragments(const char *location,
+void RangeRecoveryReplayPlan::get_fragments(const String &location,
     vector<uint32_t> &fragments) const {
   const LocationIndex &location_index = m_plan.get<ByLocation>();
   pair<LocationIndex::const_iterator, LocationIndex::const_iterator> bounds =

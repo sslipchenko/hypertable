@@ -59,7 +59,6 @@ namespace Hypertable {
             const char *row, QualifiedRangeStateSpec &range);
     bool get_qualified_range_spec(const TableIdentifier &table,
             const char *row, QualifiedRangeSpec &range);
-    void erase_qualified_range_spec(const QualifiedRangeSpec &range);
 
     size_t encoded_length() const;
     void encode(uint8_t **bufp) const;
