@@ -491,7 +491,8 @@ void OperationProcessor::state_description(String &output) {
 
   oss << "Num vertices = " << num_vertices(m_context.graph) << "\n";
   oss << "Busy count = " << m_context.busy_count << "\n";
-  oss << "Need order recomput = " << (m_context.need_order_recompute ? "true\n" : "false\n");
+  oss << "Active set size = " << m_context.current_active.size() << "\n";
+  oss << "Need order recompute = " << (m_context.need_order_recompute ? "true\n" : "false\n");
   oss << "Shutdown = " << (m_context.shutdown ? "true\n" : "false\n");
   oss << "Paused = " << (m_context.paused ? "true\n" : "false\n");
   oss << "\n";
