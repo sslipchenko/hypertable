@@ -26,8 +26,9 @@
 #include "Hypertable/Lib/CommitLogReader.h"
 
 #include "BalancePlanAuthority.h"
-#include "Utility.h"
 #include "Context.h"
+#include "EntityType.h"
+#include "Utility.h"
 
 using namespace Hypertable;
 

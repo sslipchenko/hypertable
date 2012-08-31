@@ -21,10 +21,8 @@
 
 #include "Common/Compat.h"
 #include "Common/Serialization.h"
-#include "Common/Time.h"
 
-#include <ctime>
-
+#include "EntityType.h"
 #include "RangeServerConnection.h"
 
 using namespace Hypertable;

@@ -27,7 +27,6 @@
 #include "Common/InetAddr.h"
 #include "Common/Mutex.h"
 
-#include "Hypertable/Lib/MetaLogEntity.h"
 #include "Hypertable/Lib/MetaLogWriter.h"
 
 namespace Hypertable {
@@ -102,14 +101,6 @@ namespace Hypertable {
     bool m_recovering;
   };
   typedef intrusive_ptr<RangeServerConnection> RangeServerConnectionPtr;
-
-  namespace MetaLog {
-    namespace EntityType {
-      enum {
-        RANGE_SERVER_CONNECTION = 0x00020000
-      };
-    }
-  }
 
 } // namespace Hypertable
 

@@ -27,7 +27,6 @@
 #include <boost/thread/condition.hpp>
 
 #include "Hypertable/Lib/BalancePlan.h"
-#include "Hypertable/Lib/MetaLogEntity.h"
 #include "Hypertable/Lib/MetaLogWriter.h"
 #include "Hypertable/Lib/RangeRecoveryPlan.h"
 
@@ -136,14 +135,6 @@ namespace Hypertable {
   };
 
   typedef intrusive_ptr<BalancePlanAuthority> BalancePlanAuthorityPtr;
-
-  namespace MetaLog {
-    namespace EntityType {
-      enum {
-        BALANCE_PLAN_AUTHORITY = 0x00030000
-      };
-    }
-  }
 
 } // namespace Hypertable
 
