@@ -58,14 +58,12 @@ namespace Hypertable {
     bool find_server_by_public_addr(InetAddr addr, RangeServerConnectionPtr &rsc);
     bool find_server_by_local_addr(InetAddr addr, RangeServerConnectionPtr &rsc);
     bool next_available_server(RangeServerConnectionPtr &rsc);
-    bool is_connected(const String &location);
     void get_unbalanced_servers(const std::vector<String> &locations,
                                 std::vector<RangeServerConnectionPtr> &unbalanced);
     void set_servers_balanced(const std::vector<RangeServerConnectionPtr> &servers);
     size_t server_count() { ScopedLock lock(mutex); return m_server_list.size(); }
     size_t connected_server_count();
     void get_servers(std::vector<RangeServerConnectionPtr> &servers);
-    void get_connected_servers(std::vector<RangeServerConnectionPtr> &servers);
     void get_connected_servers(StringSet &locations);
     size_t connection_count() { ScopedLock lock(mutex); return conn_count; }
 

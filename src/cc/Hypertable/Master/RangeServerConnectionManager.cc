@@ -232,13 +232,6 @@ bool RangeServerConnectionManager::next_available_server(RangeServerConnectionPt
   return false;
 }
 
-bool RangeServerConnectionManager::is_connected(const String &location) {
-  RangeServerConnectionPtr rsc;
-  if (find_server_by_location(location, rsc))
-    rsc->connected();
-  return false;
-}
-
 void RangeServerConnectionManager::get_servers(std::vector<RangeServerConnectionPtr> &servers) {
   ScopedLock lock(mutex);
   for (ServerList::iterator iter = m_server_list.begin(); iter != m_server_list.end(); ++iter) {
@@ -255,13 +248,6 @@ size_t RangeServerConnectionManager::connected_server_count() {
       ++count;
   }
   return count;
-}
-void RangeServerConnectionManager::get_connected_servers(std::vector<RangeServerConnectionPtr> &servers) {
-  ScopedLock lock(mutex);
-  for (ServerList::iterator iter = m_server_list.begin(); iter != m_server_list.end(); ++iter) {
-    if (!iter->removed() && iter->connected())
-      servers.push_back(iter->rsc);
-  }
 }
 
 void RangeServerConnectionManager::get_connected_servers(StringSet &locations) {

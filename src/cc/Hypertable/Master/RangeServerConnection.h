@@ -50,38 +50,26 @@ namespace Hypertable {
     bool connect(const String &hostname, InetAddr local_addr, 
                  InetAddr public_addr);
     bool disconnect();
-    bool connected() { ScopedLock lock(m_mutex); return m_connected; }
-    bool get_removed();
+    bool connected();
     void set_removed();
+    bool get_removed();
+    bool set_balanced();
     bool get_balanced();
-    bool set_balanced(bool val=true);
-    bool is_recovering() {
-      ScopedLock lock(m_mutex);
-      return m_recovering;
-    }
-    void set_recovering(bool b) {
-      ScopedLock lock(m_mutex);
-      m_recovering = b;
-    }
 
-    void set_handle(uint64_t handle) { 
-      ScopedLock lock(m_mutex);
-      m_handle = handle;
-    }
-    uint64_t get_handle() { 
-      ScopedLock lock(m_mutex);
-      return m_handle;
-    }
+    void set_recovering(bool b);
+    bool is_recovering();
+
+    void set_handle(uint64_t handle);
+    uint64_t get_handle();
 
     CommAddress get_comm_address();
-
-    virtual const String name() { return "RangeServerConnection"; }
 
     const String location() const { return m_location; }
     const String hostname() const { return m_hostname; }
     InetAddr local_addr() const { return m_local_addr; }
     InetAddr public_addr() const { return m_public_addr; }
 
+    virtual const String name() { return "RangeServerConnection"; }
     virtual void display(std::ostream &os);
     virtual size_t encoded_length() const;
     virtual void encode(uint8_t **bufp) const;

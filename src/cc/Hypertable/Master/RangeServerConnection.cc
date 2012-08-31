@@ -76,10 +76,12 @@ bool RangeServerConnection::disconnect() {
   return false;
 }
 
-bool RangeServerConnection::get_removed() {
+
+bool RangeServerConnection::connected() {
   ScopedLock lock(m_mutex);
-  return m_state & RangeServerConnectionFlags::REMOVED;
+  return m_connected;
 }
+
 
 void RangeServerConnection::set_removed() {
   ScopedLock lock(m_mutex);
@@ -91,28 +93,46 @@ void RangeServerConnection::set_removed() {
     m_mml_writer->record_state(this);
 }
 
+bool RangeServerConnection::get_removed() {
+  ScopedLock lock(m_mutex);
+  return m_state & RangeServerConnectionFlags::REMOVED;
+}
+
+bool RangeServerConnection::set_balanced() {
+  ScopedLock lock(m_mutex);
+  if (m_state & RangeServerConnectionFlags::BALANCED)
+    return false;
+  m_state |= RangeServerConnectionFlags::BALANCED;
+  if (m_mml_writer)
+    m_mml_writer->record_state(this);
+  return true;
+}
+
 bool RangeServerConnection::get_balanced() {
   ScopedLock lock(m_mutex);
   return m_state & RangeServerConnectionFlags::BALANCED;
 }
 
-
-bool RangeServerConnection::set_balanced(bool val) {
+bool RangeServerConnection::is_recovering() {
   ScopedLock lock(m_mutex);
-  if (val) {
-    if (m_state & RangeServerConnectionFlags::BALANCED)
-      return false;
-    m_state |= RangeServerConnectionFlags::BALANCED;
-  }
-  else {
-    if ((m_state & RangeServerConnectionFlags::BALANCED) == 0)
-      return false;
-    m_state &= ~RangeServerConnectionFlags::BALANCED;
-  }
-  if (m_mml_writer)
-    m_mml_writer->record_state(this);
-  return true;
+  return m_recovering;
 }
+
+void RangeServerConnection::set_recovering(bool b) {
+  ScopedLock lock(m_mutex);
+  m_recovering = b;
+}
+
+void RangeServerConnection::set_handle(uint64_t handle) { 
+  ScopedLock lock(m_mutex);
+  m_handle = handle;
+}
+
+uint64_t RangeServerConnection::get_handle() { 
+  ScopedLock lock(m_mutex);
+  return m_handle;
+}
+
 
 
 CommAddress RangeServerConnection::get_comm_address() {
