@@ -29,8 +29,11 @@
 #include "Common/StringExt.h"
 #include "Common/Time.h"
 
+#include "Hyperspace/Session.h"
+
 #include <boost/algorithm/string.hpp>
 
+#include "RangeServerHyperspaceCallback.h"
 #include "OperationRegisterServer.h"
 #include "OperationProcessor.h"
 
@@ -54,36 +57,46 @@ void OperationRegisterServer::execute() {
   bool newly_created = false;
 
   if (m_location == "") {
-    if (!m_context->find_server_by_hostname(m_system_stats.net_info.host_name,
-                m_rsc))
-      m_context->find_server_by_public_addr(m_public_addr, m_rsc);
+    if (!m_context->rsc_manager->find_server_by_hostname(m_system_stats.net_info.host_name, m_rsc))
+      m_context->rsc_manager->find_server_by_public_addr(m_public_addr, m_rsc);
     if (m_rsc)
       m_location = m_rsc->location();
   }
   else
-    m_context->find_server_by_location(m_location, m_rsc);
+    m_context->rsc_manager->find_server_by_location(m_location, m_rsc);
 
   // Clean up existing connection (happens when connect arrives before
   // disconnect notification from Hyperspace)
-  if (m_location != "")
-    m_context->disconnect_server(m_location);
+  if (m_rsc)
+    m_context->rsc_manager->disconnect_server(m_rsc);
+  else if (m_location == "") {
+    uint64_t id = m_context->hyperspace->attr_incr(m_context->master_file_handle,
+                                                   "next_server_id");
+    if (m_context->location_hash.empty())
+      m_location = String("rs") + id;
+    else
+      m_location = format("rs-%s-%llu", m_context->location_hash.c_str(),
+                          (Llu)id);
 
+    String fname = m_context->toplevel_dir + "/servers/";
+    // !!! wrap in try/catch
+    m_context->hyperspace->mkdirs(fname);
+    fname += m_location;
+    uint32_t oflags = Hyperspace::OPEN_FLAG_READ | Hyperspace::OPEN_FLAG_CREATE;
+    // !!! wrap in try/catch
+    uint64_t handle = m_context->hyperspace->open(fname, oflags);
+    m_context->hyperspace->close(handle);
+  }
+
+  /* !!! fix this
+     bool balanced = false;
+     if (!m_context->in_operation)
+     balanced = true;
+  */
   if (!m_rsc) {
-    if (m_location == "") {
-      uint64_t id = m_context->hyperspace->attr_incr(m_context->master_file_handle, "next_server_id");
-      if (m_context->location_hash.empty())
-        m_location = String("rs") + id;
-      else
-        m_location = format("rs-%s-%llu", m_context->location_hash.c_str(),
-                (Llu)id);
-    }
-
-    bool balanced = false;
-    if (!m_context->in_operation)
-      balanced = true;
     m_rsc = new RangeServerConnection(m_context->mml_writer, m_location,
-        m_system_stats.net_info.host_name, m_public_addr,
-        balanced);
+                                      m_system_stats.net_info.host_name,
+                                      m_public_addr);
     newly_created = true;
   }
 
@@ -107,6 +120,16 @@ void OperationRegisterServer::execute() {
       HT_ERRORF("Problem sending response (location=%s) back to %s",
               m_location.c_str(), m_event->addr.format().c_str());
     return;
+  }
+
+  if (m_rsc->get_handle() == 0) {
+    String fname = m_context->toplevel_dir + "/servers/" + m_location;
+    RangeServerHyperspaceCallback *rscb
+      = new RangeServerHyperspaceCallback(m_context, m_rsc);
+    Hyperspace::HandleCallbackPtr cb(rscb);
+    uint64_t handle = m_context->hyperspace->open(fname, Hyperspace::OPEN_FLAG_READ, cb);
+    HT_ASSERT(handle);
+    m_rsc->set_handle(handle);
   }
 
   if (!m_context->connect_server(m_rsc, m_system_stats.net_info.host_name,
@@ -178,36 +201,6 @@ void OperationRegisterServer::execute() {
         HT_ERRORF("Problem sending response (location=%s) back to %s",
             m_location.c_str(), m_event->addr.format().c_str());
     }
-  }
-
-  // wait till the RangeServer created a Hyperspace file (i.e.
-  // "/hyperspace/servers/rs1"), then register a callback which will fire if
-  // the file is unlocked
-  int timeout = 10000;
-  int waited = 0;
-  int step = 500;
-  while (waited < timeout) {
-    poll(0, 0, step);
-    waited += step;
-    try {
-      m_context->register_recovery_callback(m_rsc);
-    }
-    catch (Exception &e) {
-      // is this last loop? then fail with an error
-      if (waited + step > timeout) {
-        complete_error_no_log(e.code(), e.what());
-        if (newly_created)
-          m_rsc->set_removed();
-        m_context->op->unblock(m_location);
-        m_context->op->unblock(Dependency::SERVERS);
-        m_context->op->unblock(Dependency::RECOVERY_BLOCKER);
-        HT_INFOF("%lld Leaving RegisterServer %s",
-                (Lld)header.id, m_rsc->location().c_str());
-        return;
-      }
-      continue;
-    }
-    break;
   }
 
   complete_ok_no_log();

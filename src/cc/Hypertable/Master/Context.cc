@@ -30,7 +30,6 @@
 #include "ReferenceManager.h"
 #include "RecoveryReplayCounter.h"
 #include "BalancePlanAuthority.h"
-#include "RangeServerHyperspaceCallback.h"
 
 using namespace Hypertable;
 using namespace std;
@@ -43,109 +42,6 @@ Context::~Context() {
   delete balancer;
   delete reference_manager;
   delete m_balance_plan_authority;
-}
-
-void Context::add_server(RangeServerConnectionPtr &rsc) {
-  ScopedLock lock(mutex);
-  pair<Sequence::iterator, bool> insert_result = m_server_list.push_back( RangeServerConnectionEntry(rsc) );
-
-  if (!insert_result.second) {
-    HT_INFOF("Tried to insert %s host=%s local=%s public=%s",
-            rsc->location().c_str(), rsc->hostname().c_str(),
-            rsc->local_addr().format().c_str(),
-            rsc->public_addr().format().c_str());
-    for (Sequence::iterator iter = m_server_list.begin();
-            iter != m_server_list.end(); ++iter) {
-      HT_INFOF("Contains %s host=%s local=%s public=%s",
-              iter->location().c_str(), iter->hostname().c_str(),
-              iter->local_addr().format().c_str(),
-              iter->public_addr().format().c_str());
-    }
-    HT_ASSERT(insert_result.second);
-  }
-}
-
-bool Context::connect_server(RangeServerConnectionPtr &rsc,
-        const String &hostname, InetAddr local_addr, InetAddr public_addr) {
-  ScopedLock lock(mutex);
-  LocationIndex &location_index = m_server_list.get<1>();
-  LocationIndex::iterator orig_iter;
-
-  HT_INFOF("connect_server(%s, '%s', local=%s, public=%s)",
-           rsc->location().c_str(), hostname.c_str(),
-           local_addr.format().c_str(), public_addr.format().c_str());
-
-  comm->set_alias(local_addr, public_addr);
-  comm->add_proxy(rsc->location(), hostname, public_addr);
-
-  if ((orig_iter = location_index.find(rsc->location())) == location_index.end()) {
-
-    if (rsc->connect(hostname, local_addr, public_addr, test_mode)) {
-      conn_count++;
-      if (conn_count == 1)
-        cond.notify_all();
-    }
-
-    m_server_list.push_back(RangeServerConnectionEntry(rsc));
-  }
-  else {
-    bool needs_reindex = false;
-
-    rsc = orig_iter->rsc;
-
-    if (rsc->connected()) {
-      HT_ERRORF("Attempted to connect '%s' but failed because already connected.",
-                rsc->location().c_str());
-      return false;
-    }
-
-    if (hostname != rsc->hostname()) {
-      HT_INFOF("Changing hostname for %s from '%s' to '%s'",
-               rsc->location().c_str(), rsc->hostname().c_str(),
-               hostname.c_str());
-      needs_reindex = true;
-    }
-
-    if (local_addr != rsc->local_addr()) {
-      HT_INFOF("Changing local address for %s from '%s' to '%s'",
-               rsc->location().c_str(), rsc->local_addr().format().c_str(),
-               local_addr.format().c_str());
-      needs_reindex = true;
-    }
-
-    if (public_addr != rsc->public_addr()) {
-      HT_INFOF("Changing public address for %s from '%s' to '%s'",
-               rsc->location().c_str(), rsc->public_addr().format().c_str(),
-               public_addr.format().c_str());
-      needs_reindex = true;
-    }
-
-    if (orig_iter->rsc->connect(hostname, local_addr, public_addr, test_mode)) {
-      conn_count++;
-      if (conn_count == 1)
-        cond.notify_all();
-    }
-
-    if (needs_reindex) {
-      location_index.erase(orig_iter);
-      m_server_list.push_back(RangeServerConnectionEntry(rsc));
-      m_server_list_iter = m_server_list.begin();
-    }
-  }
-
-  return true;
-}
-
-void Context::register_recovery_callback(RangeServerConnectionPtr &rsc) {
-  ScopedLock lock(mutex);
-  String fname = toplevel_dir + "/servers/" + rsc->location();
-  RangeServerHyperspaceCallback *rscb
-    = new RangeServerHyperspaceCallback(this, rsc->location());
-  Hyperspace::HandleCallbackPtr cb(rscb);
-  uint64_t handle = hyperspace->open(fname, Hyperspace::OPEN_FLAG_READ, cb);
-  HT_ASSERT(handle);
-  rscb->set_handle(handle);
-  m_recovery_state.m_hyperspace_handles.insert(RecoveryState::HandleMap::value_type(rsc->location(), handle));
 }
 
 
@@ -344,6 +240,7 @@ void Context::commit_complete(EventPtr &event) {
   return;
 }
 
+<<<<<<< HEAD
 void Context::disconnect_server(const String &location, uint64_t handle) {
   ScopedLock lock(mutex);
   RangeServerConnectionPtr rsc;
@@ -505,75 +402,14 @@ bool Context::next_available_server(RangeServerConnectionPtr &rsc) {
 
   return false;
 }
+=======
+>>>>>>> Reorganized - added RangeServerConnectionManager class
 
 bool Context::reassigned(TableIdentifier *table, RangeSpec &range, String &location) {
   // TBD
   return false;
 }
 
-
-bool Context::is_connected(const String &location) {
-  RangeServerConnectionPtr rsc;
-  if (find_server_by_location(location, rsc))
-    rsc->connected();
-  return false;
-}
-
-void Context::get_servers(std::vector<RangeServerConnectionPtr> &servers) {
-  ScopedLock lock(mutex);
-  for (ServerList::iterator iter = m_server_list.begin(); iter != m_server_list.end(); ++iter) {
-    if (!iter->removed())
-      servers.push_back(iter->rsc);
-  }
-}
-
-size_t Context::connected_server_count() {
-  ScopedLock lock(mutex);
-  size_t count=0;
-  for (ServerList::iterator iter = m_server_list.begin(); iter != m_server_list.end(); ++iter) {
-    if (!iter->removed() && iter->connected())
-      ++count;
-  }
-  return count;
-}
-void Context::get_connected_servers(std::vector<RangeServerConnectionPtr> &servers) {
-  ScopedLock lock(mutex);
-  for (ServerList::iterator iter = m_server_list.begin(); iter != m_server_list.end(); ++iter) {
-    if (!iter->removed() && iter->connected())
-      servers.push_back(iter->rsc);
-  }
-}
-
-void Context::get_connected_servers(StringSet &locations) {
-  ScopedLock lock(mutex);
-  for (ServerList::iterator iter = m_server_list.begin(); iter != m_server_list.end(); ++iter) {
-    if (!iter->removed() && iter->connected())
-      locations.insert(iter->location());
-  }
-}
-
-void Context::get_unbalanced_servers(const std::vector<String> &locations,
-    std::vector<RangeServerConnectionPtr> &unbalanced) {
-  ScopedLock lock(mutex);
-  LocationIndex &hash_index = m_server_list.get<1>();
-  LocationIndex::iterator lookup_iter;
-  RangeServerConnectionPtr rsc;
-
-  foreach_ht(const String &location, locations) {
-    if ((lookup_iter = hash_index.find(location)) == hash_index.end())
-      continue;
-    rsc = lookup_iter->rsc;
-    if (!rsc->get_removed() && !rsc->get_balanced())
-      unbalanced.push_back(rsc);
-  }
-}
-
-void Context::set_servers_balanced(const std::vector<RangeServerConnectionPtr> &unbalanced) {
-  ScopedLock lock(mutex);
-  foreach_ht (const RangeServerConnectionPtr rsc, unbalanced) {
-    rsc->set_balanced();
-  }
-}
 
 bool Context::can_accept_ranges(const RangeServerStatistics &stats)
 {

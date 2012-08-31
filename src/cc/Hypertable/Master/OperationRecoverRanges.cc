@@ -453,8 +453,8 @@ bool OperationRecoverRanges::validate_recovery_plan() {
 void OperationRecoverRanges::wait_for_quorum(bool &blocked) {
   blocked = false;
   StringSet active_locations;
-  m_context->get_connected_servers(active_locations);
-  size_t total_servers = m_context->server_count();
+  m_context->rsc_manager->get_connected_servers(active_locations);
+  size_t total_servers = m_context->rsc_manager->server_count();
   size_t quorum = (total_servers * 
           m_context->props->get_i32("Hypertable.Failover.Quorum.Percentage")) 
             / 100;

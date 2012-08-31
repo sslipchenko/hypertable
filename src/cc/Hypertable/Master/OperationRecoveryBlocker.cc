@@ -42,8 +42,8 @@ void OperationRecoveryBlocker::execute() {
 
   HT_INFOF("Entering RecoveryBlocker-%lld", (Lld)header.id);
 
-  size_t total_servers = m_context->server_count();
-  size_t connected_servers = m_context->connected_server_count();
+  size_t total_servers = m_context->rsc_manager->server_count();
+  size_t connected_servers = m_context->rsc_manager->connected_server_count();
   size_t quorum = (total_servers * m_context->props->get_i32("Hypertable.Failover.Quorum.Percentage")) / 100;
 
   HT_INFO_OUT << "total_servers=" << total_servers << " connected_servers="

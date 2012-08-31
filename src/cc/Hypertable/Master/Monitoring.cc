@@ -145,7 +145,7 @@ void Monitoring::add(std::vector<RangeServerStatistics> &stats) {
       // if server is getting recovered: overwrite the error
       RangeServerConnectionPtr rsc;
       if (stats[i].fetch_error == Error::NO_RESPONSE
-          && m_context->find_server_by_location(stats[i].location, rsc)) {
+          && m_context->rsc_manager->find_server_by_location(stats[i].location, rsc)) {
         if (rsc->is_recovering())
           (*iter).second->fetch_error_msg = "Recovering...";
         else

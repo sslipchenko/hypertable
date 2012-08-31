@@ -57,10 +57,10 @@ void OperationRecover::notification_hook() {
   // Recovery will only continue if 40% of the RangeServers are running. This
   // setting can be overwritten with the parameter --Hypertable.Failover.Quorum
   StringSet active_locations;
-  m_context->get_connected_servers(active_locations);
+  m_context->rsc_manager->get_connected_servers(active_locations);
   size_t quorum_percent =
           m_context->props->get_i32("Hypertable.Failover.Quorum.Percentage");
-  size_t servers_total = m_context->server_count();
+  size_t servers_total = m_context->rsc_manager->server_count();
   size_t servers_required = (servers_total * quorum_percent) / 100;
   size_t servers_up = active_locations.size();
   size_t servers_down = servers_total - servers_up;
@@ -137,7 +137,7 @@ void OperationRecover::execute() {
   HT_INFOF("Entering RecoverServer %s state=%s this=%p",
            m_location.c_str(), OperationState::get_text(state), (void *)this);
   if (!m_rsc)
-    (void)m_context->find_server_by_location(m_location, m_rsc);
+    (void)m_context->rsc_manager->find_server_by_location(m_location, m_rsc);
   else
     HT_ASSERT(m_location == m_rsc->location());
 
@@ -317,7 +317,9 @@ void OperationRecover::clear_server_state() {
     HT_INFO_OUT << "delete RangeServerConnection from mml for "
         << m_location << HT_END;
     m_context->mml_writer->record_removal(m_rsc.get());
-    m_context->erase_server(m_rsc);
+    m_context->rsc_manager->erase_server(m_rsc);
+    // drop server from monitor list
+    m_context->monitoring->drop_server(m_rsc->location());
     HT_MAYBE_FAIL("recover-server-4");
   }
   // unlock hyperspace file

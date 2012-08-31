@@ -54,6 +54,7 @@ OperationWaitForServers.cc
 OperationLoadBalancer.cc
 OperationStop.cc
 RangeServerConnection.cc
+RangeServerConnectionManager.cc
 ReferenceManager.cc
 ResponseManager.cc
 Utility.cc

@@ -31,36 +31,31 @@ using namespace Hypertable;
 
 RangeServerConnection::RangeServerConnection(MetaLog::WriterPtr &mml_writer,
                                              const String &location,
-                                             const String &hostname, InetAddr public_addr,
-                                             bool balanced)
+                                             const String &hostname, InetAddr public_addr)
   : MetaLog::Entity(MetaLog::EntityType::RANGE_SERVER_CONNECTION), 
-    m_mml_writer(mml_writer), m_location(location), m_hostname(hostname), 
-    m_state(RangeServerConnectionFlags::INIT), m_removal_time(0), 
-    m_public_addr(public_addr), m_connected(false), m_recovering(false) {
-  if (balanced)
-    m_state |= RangeServerConnectionFlags::BALANCED;
+    m_mml_writer(mml_writer), m_handle(0), m_location(location), m_hostname(hostname), 
+    m_state(RangeServerConnectionFlags::INIT), m_public_addr(public_addr),
+    m_connected(false), m_recovering(false) {
   m_comm_addr.set_proxy(m_location);
-  HT_ASSERT(m_mml_writer);
-  m_mml_writer->record_state(this);
+  if (m_mml_writer)
+    m_mml_writer->record_state(this);
 }
 
-RangeServerConnection::RangeServerConnection(MetaLog::WriterPtr &mml_writer, const MetaLog::EntityHeader &header_)
-  : MetaLog::Entity(header_), m_mml_writer(mml_writer), m_connected(false) {
+RangeServerConnection::RangeServerConnection(MetaLog::WriterPtr &mml_writer,
+                                          const MetaLog::EntityHeader &header_)
+  : MetaLog::Entity(header_), m_mml_writer(mml_writer), m_handle(0),
+    m_connected(false) {
   m_comm_addr.set_proxy(m_location);
 }
 
-void RangeServerConnection::set_mml_writer(MetaLog::WriterPtr &mml_writer) {
-  HT_ASSERT(mml_writer);
-  m_mml_writer = mml_writer;
-}
 
 bool RangeServerConnection::connect(const String &hostname, 
-        InetAddr local_addr, InetAddr public_addr, bool test_mode) {
+        InetAddr local_addr, InetAddr public_addr) {
   ScopedLock lock(m_mutex);
 
   // update the mml if the hostname or IP changed
   if (hostname != m_hostname || public_addr != m_public_addr) {
-    if (!test_mode)
+    if (m_mml_writer)
       m_mml_writer->record_state(this);
   }
 
@@ -69,10 +64,8 @@ bool RangeServerConnection::connect(const String &hostname,
   m_public_addr = public_addr;
   if (!m_connected) {
     m_connected = true;
-    m_cond.notify_all();
     return true;
   }
-  m_cond.notify_all();
   return false;
 }
 
@@ -96,10 +89,8 @@ void RangeServerConnection::set_removed() {
     return;
   m_connected = false;
   m_state |= RangeServerConnectionFlags::REMOVED;
-  m_removal_time = time(0);
-  HT_ASSERT(m_mml_writer);
-  m_mml_writer->record_state(this);
-  m_cond.notify_all();
+  if (m_mml_writer)
+    m_mml_writer->record_state(this);
 }
 
 bool RangeServerConnection::get_balanced() {
@@ -120,26 +111,11 @@ bool RangeServerConnection::set_balanced(bool val) {
       return false;
     m_state &= ~RangeServerConnectionFlags::BALANCED;
   }
-  HT_ASSERT(m_mml_writer);
-  m_mml_writer->record_state(this);
+  if (m_mml_writer)
+    m_mml_writer->record_state(this);
   return true;
 }
 
-
-bool RangeServerConnection::wait_for_connection() {
-  ScopedLock lock(m_mutex);
-  boost::xtime expire_time;
-  if (m_state & RangeServerConnectionFlags::REMOVED)
-    return false;
-  boost::xtime_get(&expire_time, boost::TIME_UTC_);
-  while (!m_connected) {
-    expire_time.sec += (int64_t)60;
-    HT_INFOF("Waiting for connection to '%s' ...", m_location.c_str());
-    if (m_cond.timed_wait(lock, expire_time))
-      break;
-  }
-  return true;
-}
 
 CommAddress RangeServerConnection::get_comm_address() {
   ScopedLock lock(m_mutex);
@@ -174,7 +150,8 @@ size_t RangeServerConnection::encoded_length() const {
 
 void RangeServerConnection::encode(uint8_t **bufp) const {
   Serialization::encode_i32(bufp, m_state);
-  Serialization::encode_i32(bufp, m_removal_time);
+  // was removal_time but not used ...
+  Serialization::encode_i32(bufp, 0);  
   m_public_addr.encode(bufp);
   Serialization::encode_vstr(bufp, m_location);
   Serialization::encode_vstr(bufp, m_hostname);
@@ -182,10 +159,13 @@ void RangeServerConnection::encode(uint8_t **bufp) const {
 
 void RangeServerConnection::decode(const uint8_t **bufp, size_t *remainp) {
   m_state = Serialization::decode_i32(bufp, remainp);
-  m_removal_time = Serialization::decode_i32(bufp, remainp);
+  // was removal_time but not used ...
+  Serialization::decode_i32(bufp, remainp);
   m_public_addr.decode(bufp, remainp);
   m_location = Serialization::decode_vstr(bufp, remainp);
   m_hostname = Serialization::decode_vstr(bufp, remainp);
   m_comm_addr.set_proxy(m_location);
   m_connected = false;
 }
+
+

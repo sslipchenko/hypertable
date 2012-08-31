@@ -235,7 +235,7 @@ BalancePlanAuthority::create_range_plan(const String &location, int type,
   const char *type_strings[] = { "root", "metadata", "system", "user", "UNKNOWN" };
 
   StringSet active_locations;
-  m_context->get_connected_servers(active_locations);
+  m_context->rsc_manager->get_connected_servers(active_locations);
 
   vector<uint32_t> fragments;
 
@@ -277,7 +277,7 @@ BalancePlanAuthority::update_range_plan(RangeRecoveryPlanPtr &plan,
         const String &location)
 {
   StringSet active_locations;
-  m_context->get_connected_servers(active_locations);
+  m_context->rsc_manager->get_connected_servers(active_locations);
 
   HT_ASSERT(active_locations.find(location) == active_locations.end());
 

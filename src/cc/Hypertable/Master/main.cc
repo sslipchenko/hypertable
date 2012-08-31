@@ -110,6 +110,7 @@ int main(int argc, char **argv) {
     context->conn_manager = new ConnectionManager(context->comm);
     context->props = properties;
     context->hyperspace = new Hyperspace::Session(context->comm, context->props);
+    context->rsc_manager = new RangeServerConnectionManager();
 
     context->toplevel_dir = properties->get_str("Hypertable.Directory");
     boost::trim_if(context->toplevel_dir, boost::is_any_of("/"));
@@ -243,8 +244,7 @@ int main(int argc, char **argv) {
       else if (dynamic_cast<RangeServerConnection *>(entities[i].get())) {
         rsc = dynamic_cast<RangeServerConnection *>(entities[i].get());
         HT_ASSERT(rsc);
-        rsc->set_mml_writer(context->mml_writer);
-        context->add_server(rsc);
+        context->rsc_manager->add_server(rsc);
         locations.insert(rsc->location());
         if (recovery_operations.find(rsc->location())
                 == recovery_operations.end())

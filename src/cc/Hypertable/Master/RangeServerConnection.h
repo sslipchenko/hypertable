@@ -22,14 +22,8 @@
 #ifndef HYPERTABLE_RANGESERVERCONNECTION_H
 #define HYPERTABLE_RANGESERVERCONNECTION_H
 
-#include <map>
-
-#include <boost/thread/condition.hpp>
-
 #include "AsyncComm/CommAddress.h"
-#include "AsyncComm/Event.h"
 
-#include "Common/HashMap.h"
 #include "Common/InetAddr.h"
 #include "Common/Mutex.h"
 
@@ -48,17 +42,20 @@ namespace Hypertable {
 
   class RangeServerConnection : public MetaLog::Entity {
   public:
-    RangeServerConnection(MetaLog::WriterPtr &mml_writer, const String &location,
-                          const String &hostname, InetAddr public_addr, bool balanced=false);
-    RangeServerConnection(MetaLog::WriterPtr &mml_writer, const MetaLog::EntityHeader &header_);
+    RangeServerConnection(MetaLog::WriterPtr &mml_writer,const String &location,
+                          const String &hostname, InetAddr public_addr);
+    RangeServerConnection(MetaLog::WriterPtr &mml_writer,
+                          const MetaLog::EntityHeader &header_);
     virtual ~RangeServerConnection() { }
 
+    bool connect(const String &hostname, InetAddr local_addr, 
+                 InetAddr public_addr);
+    bool disconnect();
     bool connected() { ScopedLock lock(m_mutex); return m_connected; }
     bool get_removed();
     void set_removed();
     bool get_balanced();
     bool set_balanced(bool val=true);
-    bool wait_for_connection();
     bool is_recovering() {
       ScopedLock lock(m_mutex);
       return m_recovering;
@@ -66,6 +63,15 @@ namespace Hypertable {
     void set_recovering(bool b) {
       ScopedLock lock(m_mutex);
       m_recovering = b;
+    }
+
+    void set_handle(uint64_t handle) { 
+      ScopedLock lock(m_mutex);
+      m_handle = handle;
+    }
+    uint64_t get_handle() { 
+      ScopedLock lock(m_mutex);
+      return m_handle;
     }
 
     CommAddress get_comm_address();
@@ -81,23 +87,14 @@ namespace Hypertable {
     virtual size_t encoded_length() const;
     virtual void encode(uint8_t **bufp) const;
     virtual void decode(const uint8_t **bufp, size_t *remainp);
-    virtual void set_mml_writer(MetaLog::WriterPtr &mml_writer);
-
-    friend class Context;
-
-  protected:
-    bool connect(const String &hostname, InetAddr local_addr, 
-            InetAddr public_addr, bool test_mode = false);
-    bool disconnect();
 
   private:
     Mutex m_mutex;
-    boost::condition m_cond;
     MetaLog::WriterPtr m_mml_writer;
+    uint64_t m_handle;
     String m_location;
     String m_hostname;
     int32_t m_state;
-    time_t m_removal_time;
     CommAddress m_comm_addr;
     InetAddr m_local_addr;
     InetAddr m_public_addr;
@@ -105,8 +102,6 @@ namespace Hypertable {
     bool m_recovering;
   };
   typedef intrusive_ptr<RangeServerConnection> RangeServerConnectionPtr;
-
-  typedef std::map<String, RangeServerConnectionPtr> RangeServerConnectionMap;
 
   namespace MetaLog {
     namespace EntityType {

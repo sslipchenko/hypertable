@@ -78,7 +78,7 @@ void LoadBalancer::balance(const String &algorithm) {
 
     if (m_unbalanced_servers.size() > 0) {
       // all previously unbalanced servers are now balanced
-      m_context->set_servers_balanced(m_unbalanced_servers);
+      m_context->rsc_manager->set_servers_balanced(m_unbalanced_servers);
       m_unbalanced_servers.clear();
     }
     ptime now = second_clock::local_time();
@@ -246,5 +246,5 @@ void LoadBalancer::get_unbalanced_servers(const vector<RangeServerStatistics> &s
   vector<String> servers;
   foreach_ht(const RangeServerStatistics &server_stats, stats)
     servers.push_back(server_stats.location);
-  m_context->get_unbalanced_servers(servers, m_unbalanced_servers);
+  m_context->rsc_manager->get_unbalanced_servers(servers, m_unbalanced_servers);
 }

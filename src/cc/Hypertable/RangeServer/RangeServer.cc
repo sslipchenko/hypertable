@@ -472,17 +472,12 @@ RangeServer::~RangeServer() {
  */
 void RangeServer::initialize(PropertiesPtr &props) {
   String top_dir = Global::toplevel_dir + "/servers/";
-  m_hyperspace->mkdirs(top_dir);
-  top_dir += Global::location_initializer->get();
 
-  /**
-   * Create "server existence" file in Hyperspace and lock it exclusively
-   */
+  String fname = top_dir + Global::location_initializer->get();
   uint32_t lock_status;
-  uint32_t oflags = OPEN_FLAG_READ | OPEN_FLAG_WRITE | OPEN_FLAG_CREATE 
-                    | OPEN_FLAG_LOCK;
+  uint32_t oflags = OPEN_FLAG_READ | OPEN_FLAG_WRITE | OPEN_FLAG_LOCK;
 
-  m_existence_file_handle = m_hyperspace->open(top_dir.c_str(), oflags);
+  m_existence_file_handle = m_hyperspace->open(fname, oflags);
 
   while (true) {
     lock_status = 0;

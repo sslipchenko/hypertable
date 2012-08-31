@@ -431,8 +431,8 @@ void create_table_test(ContextPtr &context) {
   rsc1 = new RangeServerConnection(context->mml_writer, "rs1", "foo.hypertable.com", InetAddr("72.14.204.99", 38060));
   rsc2 = new RangeServerConnection(context->mml_writer, "rs2", "bar.hypertable.com", InetAddr("69.147.125.65", 38060));
 
-  context->connect_server(rsc1, "foo.hypertable.com", InetAddr("72.14.204.99", 33567), InetAddr("72.14.204.99", 38060));
-  context->connect_server(rsc2, "bar.hypertable.com", InetAddr("69.147.125.65", 30569), InetAddr("69.147.125.65", 38060));
+  context->rsc_manager->connect_server(rsc1, "foo.hypertable.com", InetAddr("72.14.204.99", 33567), InetAddr("72.14.204.99", 38060));
+  context->rsc_manager->connect_server(rsc2, "bar.hypertable.com", InetAddr("69.147.125.65", 30569), InetAddr("69.147.125.65", 38060));
 
   expected_servers.push_back("rs1");
   expected_servers.push_back("rs2");
@@ -483,10 +483,10 @@ void create_table_test(ContextPtr &context) {
   run_test(context, log_dir, entities, "create-table-LOAD_RANGE-b:throw:0",
            expected_operations, expected_servers);
 
-  context->disconnect_server(rsc1->location());
+  context->rsc_manager->disconnect_server(rsc1);
   initialize_test(context, log_dir, entities, "");
   poll(0,0,100);
-  context->connect_server(rsc1, "foo.hypertable.com", InetAddr("localhost", 30267),
+  context->rsc_manager->connect_server(rsc1, "foo.hypertable.com", InetAddr("localhost", 30267),
                           InetAddr("localhost", 38060));
   context->op->wait_for_empty();
 
@@ -516,9 +516,9 @@ void create_table_with_index_test(ContextPtr &context) {
   rsc2 = new RangeServerConnection(context->mml_writer, "rs2", 
           "bar.hypertable.com", InetAddr("69.147.125.65", 38060));
 
-  context->connect_server(rsc1, "foo.hypertable.com", 
+  context->rsc_manager->connect_server(rsc1, "foo.hypertable.com", 
           InetAddr("72.14.204.99", 33567), InetAddr("72.14.204.99", 38060));
-  context->connect_server(rsc2, "bar.hypertable.com", 
+  context->rsc_manager->connect_server(rsc2, "bar.hypertable.com", 
           InetAddr("69.147.125.65", 30569), InetAddr("69.147.125.65", 38060));
 
   expected_servers.push_back("rs1");
@@ -560,10 +560,10 @@ void create_table_with_index_test(ContextPtr &context) {
   run_test(context, log_dir, entities, "create-table-FINALIZE:throw:1",
            expected_operations, expected_servers);
 
-  context->disconnect_server(rsc1->location());
+  context->rsc_manager->disconnect_server(rsc1);
   initialize_test(context, log_dir, entities, "");
   poll(0,0,100);
-  context->connect_server(rsc1, "foo.hypertable.com", InetAddr("localhost", 30267),
+  context->rsc_manager->connect_server(rsc1, "foo.hypertable.com", InetAddr("localhost", 30267),
                           InetAddr("localhost", 38060));
   context->op->wait_for_empty();
 
@@ -618,10 +618,10 @@ void master_initialize_test(ContextPtr &context) {
   rsc3 = new RangeServerConnection(context->mml_writer, "rs3", "how.hypertable.com", InetAddr("72.14.204.98", 38060));
   rsc4 = new RangeServerConnection(context->mml_writer, "rs4", "cow.hypertable.com", InetAddr("69.147.125.62", 38060));
 
-  context->connect_server(rsc1, "foo.hypertable.com", InetAddr("72.14.204.99", 33567), InetAddr("72.14.204.99", 38060));
-  context->connect_server(rsc2, "bar.hypertable.com", InetAddr("69.147.125.65", 30569), InetAddr("69.147.125.65", 38060));
-  context->connect_server(rsc3, "how.hypertable.com", InetAddr("72.14.204.98", 33572), InetAddr("72.14.204.98", 38060));
-  context->connect_server(rsc4, "cow.hypertable.com", InetAddr("69.147.125.62", 30569), InetAddr("69.147.125.62", 38060));
+  context->rsc_manager->connect_server(rsc1, "foo.hypertable.com", InetAddr("72.14.204.99", 33567), InetAddr("72.14.204.99", 38060));
+  context->rsc_manager->connect_server(rsc2, "bar.hypertable.com", InetAddr("69.147.125.65", 30569), InetAddr("69.147.125.65", 38060));
+  context->rsc_manager->connect_server(rsc3, "how.hypertable.com", InetAddr("72.14.204.98", 33572), InetAddr("72.14.204.98", 38060));
+  context->rsc_manager->connect_server(rsc4, "cow.hypertable.com", InetAddr("69.147.125.62", 30569), InetAddr("69.147.125.62", 38060));
 
   expected_servers.push_back("rs1");
   expected_servers.push_back("rs2");
@@ -756,13 +756,13 @@ void move_range_test(ContextPtr &context) {
   rsc4 = new RangeServerConnection(context->mml_writer,
           "rs4", "cow.hypertable.com", InetAddr("69.147.125.62", 38060));
 
-  context->connect_server(rsc1, "foo.hypertable.com",
+  context->rsc_manager->connect_server(rsc1, "foo.hypertable.com",
           InetAddr("72.14.204.99", 33567), InetAddr("72.14.204.99", 38060));
-  context->connect_server(rsc2, "bar.hypertable.com",
+  context->rsc_manager->connect_server(rsc2, "bar.hypertable.com",
           InetAddr("69.147.125.65", 30569), InetAddr("69.147.125.65", 38060));
-  context->connect_server(rsc3, "how.hypertable.com",
+  context->rsc_manager->connect_server(rsc3, "how.hypertable.com",
           InetAddr("72.14.204.98", 33572), InetAddr("72.14.204.98", 38060));
-  context->connect_server(rsc4, "cow.hypertable.com",
+  context->rsc_manager->connect_server(rsc4, "cow.hypertable.com",
           InetAddr("69.147.125.62", 30569), InetAddr("69.147.125.62", 38060));
 
   expected_servers.push_back("rs1");
@@ -861,15 +861,15 @@ void balance_plan_authority_test(ContextPtr &context) {
   rsc5 = new RangeServerConnection(context->mml_writer, "rs5",
           "boo.hypertable.com", InetAddr("70.147.125.62", 38060));
 
-  context->connect_server(rsc1, "foo.hypertable.com",
+  context->rsc_manager->connect_server(rsc1, "foo.hypertable.com",
           InetAddr("72.14.204.99", 33567), InetAddr("72.14.204.99", 38060));
-  context->connect_server(rsc2, "bar.hypertable.com",
+  context->rsc_manager->connect_server(rsc2, "bar.hypertable.com",
           InetAddr("69.147.125.65", 30569), InetAddr("69.147.125.65", 38060));
-  context->connect_server(rsc3, "how.hypertable.com",
+  context->rsc_manager->connect_server(rsc3, "how.hypertable.com",
           InetAddr("72.14.204.98", 33572), InetAddr("72.14.204.98", 38060));
-  context->connect_server(rsc4, "cow.hypertable.com",
+  context->rsc_manager->connect_server(rsc4, "cow.hypertable.com",
           InetAddr("69.147.125.62", 30569), InetAddr("69.147.125.62", 38060));
-  context->connect_server(rsc5, "boo.hypertable.com",
+  context->rsc_manager->connect_server(rsc5, "boo.hypertable.com",
           InetAddr("70.147.125.62", 30569), InetAddr("70.147.125.62", 38060));
 
   BalancePlanAuthority *bpa = context->get_balance_plan_authority();

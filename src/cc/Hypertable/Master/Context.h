@@ -48,12 +48,11 @@
 
 #include "Monitoring.h"
 #include "RangeServerConnection.h"
+#include "RangeServerConnectionManager.h"
 #include "RecoveryReplayCounter.h"
 #include "RecoveryCounter.h"
 
 namespace Hypertable {
-
-  using namespace boost::multi_index;
 
   class LoadBalancer;
   class Operation;
@@ -94,21 +93,18 @@ namespace Hypertable {
 
         typedef std::map<int64_t, RecoveryReplayCounterPtr> ReplayMap;
         typedef std::map<int64_t, RecoveryCounterPtr> CounterMap;
-        typedef std::map<String, uint64_t> HandleMap;
 
         Mutex m_mutex;
         ReplayMap m_replay_map;
         CounterMap m_prepare_map;
         CounterMap m_commit_map;
-        HandleMap m_hyperspace_handles;
     };
 
   public:
     Context() : timer_interval(0), monitoring_interval(0), gc_interval(0),
-                next_monitoring_time(0), next_gc_time(0), conn_count(0),
+                next_monitoring_time(0), next_gc_time(0),
                 test_mode(false), in_operation(false),
                 m_balance_plan_authority(0) {
-      m_server_list_iter = m_server_list.end();
       master_file_handle = 0;
       balancer = 0;
       response_manager = 0;
@@ -122,6 +118,7 @@ namespace Hypertable {
     Mutex mutex;
     boost::condition cond;
     Comm *comm;
+    RangeServerConnectionManagerPtr rsc_manager;
     PropertiesPtr props;
     ConnectionManagerPtr conn_manager;
     Hyperspace::SessionPtr hyperspace;
@@ -143,7 +140,6 @@ namespace Hypertable {
     uint32_t gc_interval;
     time_t next_monitoring_time;
     time_t next_gc_time;
-    size_t conn_count;
     bool test_mode;
     OperationProcessor *op;
     OperationBalance *op_balance;
@@ -151,46 +147,15 @@ namespace Hypertable {
     int32_t max_allowable_skew;
     bool in_operation;
 
-    // adds a new server; called by the main() function at startup
-    void add_server(RangeServerConnectionPtr &rsc);
-    bool connect_server(RangeServerConnectionPtr &rsc, const String &hostname, InetAddr local_addr, InetAddr public_addr);
-    void disconnect_server(const String &location, uint64_t handle=0);
-    void wait_for_server();
-    void erase_server(RangeServerConnectionPtr &rsc);
-    bool find_server_by_location(const String &location, RangeServerConnectionPtr &rsc);
-    bool find_server_by_hostname(const String &hostname, RangeServerConnectionPtr &rsc);
-    bool find_server_by_public_addr(InetAddr addr, RangeServerConnectionPtr &rsc);
-    bool find_server_by_local_addr(InetAddr addr, RangeServerConnectionPtr &rsc);
-    bool next_available_server(RangeServerConnectionPtr &rsc);
-
     bool reassigned(TableIdentifier *table, RangeSpec &range, String &location);
 
-    bool is_connected(const String &location);
-
-    void get_unbalanced_servers(const std::vector<String> &locations,
-        std::vector<RangeServerConnectionPtr> &unbalanced);
-
-    void set_servers_balanced(const std::vector<RangeServerConnectionPtr> &servers);
-
-    size_t connection_count() { ScopedLock lock(mutex); return conn_count; }
-
-    size_t server_count() { ScopedLock lock(mutex); return m_server_list.size(); }
-    size_t connected_server_count();
-    void get_servers(std::vector<RangeServerConnectionPtr> &servers);
-
     bool can_accept_ranges(const RangeServerStatistics &stats);
-    void get_connected_servers(std::vector<RangeServerConnectionPtr> &servers);
-    void get_connected_servers(StringSet &locations);
     void replay_complete(EventPtr &event);
     void prepare_complete(EventPtr &event);
     void commit_complete(EventPtr &event);
     void install_rs_recovery_commit_counter(int64_t id,
         RecoveryCounterPtr &commit_counter);
     void erase_rs_recovery_commit_counter(int64_t id);
-
-    // register a hyperspace callback to catch a failure of this server
-    // (the failure will then trigger a recovery)
-    void register_recovery_callback(RangeServerConnectionPtr &rsc);
 
     // spawn notification hook
     void notification_hook(int type, const String &message);
@@ -206,49 +171,6 @@ namespace Hypertable {
 
   private:
 
-    bool find_server_by_location_unlocked(const String &location, RangeServerConnectionPtr &rsc);
-
-    class RangeServerConnectionEntry {
-    public:
-      RangeServerConnectionEntry(RangeServerConnectionPtr &_rsc) : rsc(_rsc) { }
-      RangeServerConnectionPtr rsc;
-      String location() const { return rsc->location(); }
-      String hostname() const { return rsc->hostname(); }
-      InetAddr public_addr() const { return rsc->public_addr(); }
-      InetAddr local_addr() const { return rsc->local_addr(); }
-      bool connected() const { return rsc->connected(); }
-      bool removed() const { return rsc->get_removed(); }
-    };
-
-    struct InetAddrHash {
-      std::size_t operator()(InetAddr addr) const {
-        return (std::size_t)(addr.sin_addr.s_addr ^ addr.sin_port);
-      }
-    };
-
-    typedef boost::multi_index_container<
-      RangeServerConnectionEntry,
-      indexed_by<
-        sequenced<>,
-        hashed_unique<const_mem_fun<RangeServerConnectionEntry, String,
-            &RangeServerConnectionEntry::location> >,
-        hashed_non_unique<const_mem_fun<RangeServerConnectionEntry, String,
-            &RangeServerConnectionEntry::hostname> >,
-        hashed_unique<const_mem_fun<RangeServerConnectionEntry, InetAddr,
-            &RangeServerConnectionEntry::public_addr>, InetAddrHash>,
-        hashed_non_unique<const_mem_fun<RangeServerConnectionEntry, InetAddr,
-            &RangeServerConnectionEntry::local_addr>, InetAddrHash>
-        >
-      > ServerList;
-
-    typedef ServerList::nth_index<0>::type Sequence;
-    typedef ServerList::nth_index<1>::type LocationIndex;
-    typedef ServerList::nth_index<2>::type HostnameIndex;
-    typedef ServerList::nth_index<3>::type PublicAddrIndex;
-    typedef ServerList::nth_index<4>::type LocalAddrIndex;
-
-    ServerList m_server_list;
-    ServerList::iterator m_server_list_iter;
     RecoveryState m_recovery_state;
     BalancePlanAuthority *m_balance_plan_authority;
   };

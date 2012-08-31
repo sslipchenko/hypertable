@@ -24,8 +24,9 @@
 
 #include "Hyperspace/Session.h"
 
-#include "Context.h"
 #include "AddRecoveryOperationTimerHandler.h"
+#include "Context.h"
+#include "RangeServerConnection.h"
 
 namespace Hypertable {
 
@@ -38,20 +39,24 @@ namespace Hypertable {
    */
   class RangeServerHyperspaceCallback : public Hyperspace::HandleCallback {
   public:
-    RangeServerHyperspaceCallback(ContextPtr context, String location)
+    RangeServerHyperspaceCallback(ContextPtr &context, RangeServerConnectionPtr &rsc)
     : Hyperspace::HandleCallback(Hyperspace::EVENT_MASK_LOCK_RELEASED),
-      m_context(context), m_location(location), m_handle(0) { }
+      m_context(context), m_rsc(rsc) { }
 
     virtual void lock_released() {
-      m_context->disconnect_server(m_location, m_handle);
+      if (m_context->rsc_manager->disconnect_server(m_rsc)) {
+        uint32_t millis = m_context->props->get_i32("Hypertable.Failover.GracePeriod");
+        HT_INFOF("Scheduling recovery operation for %s in %ld milliseconds",
+                 m_rsc->location().c_str(), (long)millis);
+        DispatchHandlerPtr handler
+          = new AddRecoveryOperationTimerHandler(m_context, m_rsc);
+        m_context->comm->set_timer(millis, handler.get());
+      }
     }
-
-    void set_handle(uint64_t handle) { m_handle = handle; }
 
   private:
     ContextPtr m_context;
-    String m_location;
-    uint64_t m_handle;
+    RangeServerConnectionPtr m_rsc;
   };
 
 }

@@ -59,7 +59,7 @@ void OperationGatherStatistics::execute() {
   switch (state) {
 
   case OperationState::INITIAL:
-    m_context->get_servers(servers);
+    m_context->rsc_manager->get_servers(servers);
     results.resize(servers.size());
     for (size_t i=0; i<servers.size(); i++) {
       results[i].addr = servers[i]->local_addr();
