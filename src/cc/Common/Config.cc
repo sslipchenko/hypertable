@@ -269,12 +269,8 @@ void DefaultPolicy::init_options() {
         "Disables the generation of monitoring statistics")
     ("Hypertable.LoadBalancer.Enable", boo()->default_value(true),
         "Enable automatic load balancing")
-    ("Hypertable.LoadBalancer.Interval", i32()->default_value(86400000),
-        "Time interval between LoadBalancer operations")
-    ("Hypertable.LoadBalancer.WindowStart", str()->default_value("00:00:01"),
-        "Time of day at which LoadBalancer balance window starts")
-    ("Hypertable.LoadBalancer.WindowEnd", str()->default_value("00:03:00"),
-        "Time of day at which the LoadBalancer balance window ends")
+    ("Hypertable.LoadBalancer.Crontab", str()->default_value("0 0 * * *"),
+        "Crontab entry to control when load balancer is run")
     ("Hypertable.LoadBalancer.ServerWaitInterval", i32()->default_value(300000),
         "Amount of time to wait before running balancer when a new RangeServer is detected")
     ("Hypertable.LoadBalancer.LoadavgThreshold", f64()->default_value(0.25),
