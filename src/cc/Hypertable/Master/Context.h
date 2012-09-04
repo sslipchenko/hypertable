@@ -57,7 +57,6 @@ namespace Hypertable {
   class LoadBalancer;
   class Operation;
   class OperationProcessor;
-  class OperationBalance;
   class ResponseManager;
   class ReferenceManager;
   class BalancePlanAuthority;
@@ -110,7 +109,6 @@ namespace Hypertable {
       response_manager = 0;
       reference_manager = 0;
       op = 0;
-      op_balance = 0;
     }
 
     ~Context();
@@ -142,7 +140,6 @@ namespace Hypertable {
     time_t next_gc_time;
     bool test_mode;
     OperationProcessor *op;
-    OperationBalance *op_balance;
     String location_hash;
     int32_t max_allowable_skew;
     bool in_operation;

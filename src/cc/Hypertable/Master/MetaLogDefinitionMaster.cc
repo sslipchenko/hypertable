@@ -107,9 +107,7 @@ Entity *DefinitionMaster::create(uint16_t log_version, const EntityHeader &heade
       operation->set_original_type(EntityType::OLD_OPERATION_MOVE_RANGE);
     }
     else if (header.type == EntityType::OLD_OPERATION_BALANCE) {
-      ((EntityHeader *)&header)->type = EntityType::OPERATION_BALANCE;
-      operation = new OperationBalance(m_context, header);
-      operation->set_original_type(EntityType::OLD_OPERATION_BALANCE);
+      return 0;
     }
   }
   else if (header.type == EntityType::BALANCE_PLAN_AUTHORITY) {
@@ -133,8 +131,8 @@ Entity *DefinitionMaster::create(uint16_t log_version, const EntityHeader &heade
       operation = new OperationRenameTable(m_context, header);
     else if (header.type == EntityType::OPERATION_MOVE_RANGE)
       operation = new OperationMoveRange(m_context, header);
-    else if (header.type == EntityType::OPERATION_BALANCE)
-      operation = new OperationBalance(m_context, header);
+    else if (header.type == EntityType::OPERATION_BALANCE_RETIRED)
+      return 0;
     else if (header.type == EntityType::OPERATION_RECOVER_SERVER)
       operation = new OperationRecover(m_context, header);
     else if (header.type == EntityType::OPERATION_RECOVER_SERVER_RANGES)

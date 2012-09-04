@@ -51,7 +51,6 @@ OperationRenameTable.cc
 OperationStatus.cc
 OperationSystemUpgrade.cc
 OperationWaitForServers.cc
-OperationLoadBalancer.cc
 OperationStop.cc
 RangeServerConnection.cc
 RangeServerConnectionManager.cc

@@ -40,6 +40,7 @@ namespace Hypertable {
     size_t encoded_length() const;
     void encode(uint8_t **bufp) const;
     void decode(const uint8_t **bufp, size_t *remainp);
+    bool empty() { return moves.empty(); }
 
     void clear() {
       moves.clear();

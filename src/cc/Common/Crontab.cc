@@ -37,7 +37,7 @@ Crontab::Crontab(const String &spec) {
   parse_entry(spec, &m_entry);
 }
 
-void Crontab::next_event(time_t now, time_t *next) {
+time_t Crontab::next_event(time_t now) {
   struct tm next_tm;
   int i;
   int hour_increment = 0;
@@ -67,8 +67,7 @@ void Crontab::next_event(time_t now, time_t *next) {
   for (i=next_tm.tm_min; i<60; i++) {
     if (m_entry.minute[i]) {
       next_tm.tm_min = i;
-      *next = mktime(&next_tm);
-      return;
+      return mktime(&next_tm);
     }
   }
   if (i == 60) {
@@ -77,8 +76,7 @@ void Crontab::next_event(time_t now, time_t *next) {
     goto next_hour;
   }
 
-  *next = mktime(&next_tm);
-  return;
+  return mktime(&next_tm);
 }
 
 void Crontab::next_matching_day(struct tm *next_tm, bool increment) {

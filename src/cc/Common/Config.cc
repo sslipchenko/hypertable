@@ -271,7 +271,9 @@ void DefaultPolicy::init_options() {
         "Enable automatic load balancing")
     ("Hypertable.LoadBalancer.Crontab", str()->default_value("0 0 * * *"),
         "Crontab entry to control when load balancer is run")
-    ("Hypertable.LoadBalancer.ServerWaitInterval", i32()->default_value(300000),
+    ("Hypertable.LoadBalancer.BalanceDelay.Initial", i32()->default_value(86400),
+        "Amount of time to wait after start up before running balancer")
+    ("Hypertable.LoadBalancer.BalanceDelay.NewServer", i32()->default_value(60),
         "Amount of time to wait before running balancer when a new RangeServer is detected")
     ("Hypertable.LoadBalancer.LoadavgThreshold", f64()->default_value(0.25),
         "Servers with loadavg above this much above the mean will be considered by the "

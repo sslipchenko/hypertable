@@ -31,7 +31,6 @@
 
 #include "Hypertable/Lib/Key.h"
 
-#include "LoadBalancer.h"
 #include "OperationMoveRange.h"
 #include "OperationProcessor.h"
 #include "Utility.h"

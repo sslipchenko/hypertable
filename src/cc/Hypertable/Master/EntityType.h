@@ -71,11 +71,12 @@ namespace Hypertable {
         OPERATION_GET_SCHEMA                 = 0x00030010,
         OPERATION_MOVE_RANGE                 = 0x00030011,
         OPERATION_RELINQUISH_ACKNOWLEDGE     = 0x00030012,
-        OPERATION_BALANCE                    = 0x00030013,
-        OPERATION_LOAD_BALANCER              = 0x00030014,
+        OPERATION_BALANCE_RETIRED            = 0x00030013,
+        OPERATION_LOAD_BALANCER_RETIRED      = 0x00030014,
         OPERATION_RECOVER_SERVER_RANGES      = 0x00030015,
         OPERATION_RECOVERY_BLOCKER           = 0x00030016,
-        OPERATION_STOP                       = 0x00030017
+        OPERATION_STOP                       = 0x00030017,
+        OPERATION_BALANCE                    = 0x00030018
       };
     }
   }

@@ -22,63 +22,45 @@
 #ifndef HYPERTABLE_LOADBALANCER_H
 #define HYPERTABLE_LOADBALANCER_H
 
-#include <set>
-
-#include <boost/thread/condition.hpp>
-#include <boost/date_time/posix_time/posix_time.hpp>
-
+#include "Common/Crontab.h"
 #include "Common/Mutex.h"
 #include "Common/ReferenceCount.h"
 
 #include "Hypertable/Lib/BalancePlan.h"
 
-#include "RSMetrics.h"
+#include "RangeServerConnection.h"
+#include "RangeServerStatistics.h"
 #include "Context.h"
 
-namespace Hypertable {
-  using namespace boost::posix_time;
+#include <vector>
+#include <time.h>
 
-  class OperationBalance;
+namespace Hypertable {
 
   class LoadBalancer : public ReferenceCount {
   public:
     LoadBalancer(ContextPtr context);
 
-    // starts a balance operation
-    void balance(const String &algorithm = String());
+    void add_unbalanced_server(RangeServerConnectionPtr &rsc);
 
-    // transfers monitoring statistics from the RangeServers; invoked by
-    // OperationGatherStatistics
+    bool balance_needed();
+
+    void create_plan(const String &algorithm, BalancePlanPtr &plan,
+                    std::vector <RangeServerConnectionPtr> &unbalanced_servers);
+
     void transfer_monitoring_data(vector<RangeServerStatistics> &stats);
 
   private:
-    void calculate_balance_plan(const String &algorithm,
-                    BalancePlanPtr &plan);
-    void distribute_load(const boost::posix_time::ptime &now,
-                    vector<RangeServerStatistics> &range_server_stats,
-                    BalancePlanPtr &plan);
-    void distribute_table_ranges(vector<RangeServerStatistics> &stats,
-                    BalancePlanPtr &plan);
-    void offload_servers(vector<RangeServerStatistics> &stats,
-                    set<String> &offload, BalancePlanPtr &plan);
-
-    void get_unbalanced_servers(const std::vector<RangeServerStatistics> &stats);
-
     Mutex m_mutex;
-    Mutex m_data_mutex;
     ContextPtr m_context;
-    uint32_t m_balance_interval;
-    uint32_t m_balance_wait;
-    time_duration m_balance_window_start;
-    time_duration m_balance_window_end;
-    ptime m_last_balance_time;
-    double m_balance_loadavg_threshold;
+    Mutex m_add_mutex;
+    CrontabPtr m_crontab;
+    time_t m_next_balance_time;
     std::vector <RangeServerConnectionPtr> m_unbalanced_servers;
+    double m_loadavg_threshold;
+    uint32_t m_new_server_balance_delay;
     bool m_enabled;
-    bool m_waiting_for_servers;
     std::vector <RangeServerStatistics> m_range_server_stats;
-    ptime m_wait_time_start;
-    BalancePlanPtr m_plan;
   };
 
   typedef intrusive_ptr<LoadBalancer> LoadBalancerPtr;

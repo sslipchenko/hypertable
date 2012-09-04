@@ -49,7 +49,7 @@ namespace Hypertable {
 
   public:
     Crontab(const String &spec);
-    void next_event(time_t now, time_t *next);
+    time_t next_event(time_t now);
     crontab_entry &entry() { return m_entry; }
 
   private:

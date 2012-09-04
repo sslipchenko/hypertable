@@ -61,7 +61,7 @@ namespace {
     char input_buf[32], output_buf[32];
     time_t t, next;
     t = mktime(tmval);
-    crontab->next_event(t, &next);
+    next = crontab->next_event(t);
     ctime_r(&t, input_buf);
     String input(input_buf);
     boost::trim_if(input, boost::is_any_of("\n\t "));

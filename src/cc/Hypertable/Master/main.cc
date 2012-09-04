@@ -218,19 +218,11 @@ int main(int argc, char **argv) {
     context->op->wait_for_empty();
 
     // Then reconstruct state and start execution
-    context->op_balance = NULL;
     for (size_t i = 0; i < entities.size(); i++) {
       operation = dynamic_cast<Operation *>(entities[i].get());
       if (operation) {
         if (operation->remove_explicitly())
           context->reference_manager->add(operation);
-        if (dynamic_cast<OperationBalance *>(operation.get())) {
-          // there should be only one OPERATION_BALANCE
-          HT_ASSERT(context->op_balance == NULL);
-          context->op_balance =
-              dynamic_cast<OperationBalance *>(operation.get());
-          operations.push_back(operation);
-        }
         // master was interrupted in the middle of rangeserver failover
         else if (dynamic_cast<OperationRecover *>(operation.get())) {
           HT_INFO("Recovery was interrupted; continuing");
@@ -293,11 +285,6 @@ int main(int argc, char **argv) {
     // Add PERPETUAL operations
     operation = new OperationWaitForServers(context);
     operations.push_back(operation);
-    if (!context->op_balance) {
-      operation = new OperationBalance(context);
-      context->op_balance = dynamic_cast<OperationBalance *>(operation.get());
-      operations.push_back(operation);
-    }
     operation = new OperationRecoveryBlocker(context);
     operations.push_back(operation);
 

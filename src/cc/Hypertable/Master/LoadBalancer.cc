@@ -19,42 +19,55 @@
  * 02110-1301, USA.
  */
 #include "Common/Compat.h"
-#include "Common/Sweetener.h"
-#include "Common/Time.h"
 
 #include "LoadBalancer.h"
-#include "OperationBalance.h"
 #include "Utility.h"
-#include "BalanceLoad.h"
-#include "BalanceRanges.h"
-#include "BalanceOffload.h"
 
 using namespace Hypertable;
 
-enum {
-  BALANCE_MODE_DISTRIBUTE_LOAD             = 1,
-  BALANCE_MODE_DISTRIBUTE_TABLE_RANGES     = 2,
-  BALANCE_MODE_OFFLOAD_SERVERS             = 3
-};
-
-
 LoadBalancer::LoadBalancer(ContextPtr context)
-  : m_context(context), m_last_balance_time(min_date_time),
-    m_waiting_for_servers(false) {
-  m_balance_interval = 
-            m_context->props->get_i32("Hypertable.LoadBalancer.Interval");
-  m_balance_window_start = 
-            duration_from_string(m_context->props->get_str(
-                        "Hypertable.LoadBalancer.WindowStart"));
-  m_balance_window_end =
-            duration_from_string(m_context->props->get_str(
-                        "Hypertable.LoadBalancer.WindowEnd"));
-  m_balance_wait = 
-            m_context->props->get_i32("Hypertable.LoadBalancer.ServerWaitInterval");
-  m_balance_loadavg_threshold = 
-            m_context->props->get_f64("Hypertable.LoadBalancer.LoadavgThreshold");
+  : m_context(context) {
+
+  m_crontab = new Crontab( m_context->props->get_str("Hypertable.LoadBalancer.Crontab") );
+
+  m_new_server_balance_delay =
+    m_context->props->get_i32("Hypertable.LoadBalancer.BalanceDelay.NewServer");
+
   m_enabled = context->props->get_bool("Hypertable.LoadBalancer.Enable");
+
+  m_loadavg_threshold = 
+            m_context->props->get_f64("Hypertable.LoadBalancer.LoadavgThreshold");
+
+  time_t t = time(0) +
+    m_context->props->get_i32("Hypertable.LoadBalancer.BalanceDelay.Initial");
+
+  m_next_balance_time = m_crontab->next_event(t);
+
 }
+
+void LoadBalancer::add_unbalanced_server(RangeServerConnectionPtr &rsc) {
+  ScopedLock lock(m_add_mutex);  
+  m_unbalanced_servers.push_back(rsc);
+  m_next_balance_time = time(0) + m_new_server_balance_delay;
+}
+
+bool LoadBalancer::balance_needed() {
+  return time(0) >= m_next_balance_time;
+}
+
+void LoadBalancer::create_plan(const String &algorithm, BalancePlanPtr &plan,
+                   std::vector <RangeServerConnectionPtr> &unbalanced_servers) {
+  // implement me!
+}
+
+
+void LoadBalancer::transfer_monitoring_data(vector<RangeServerStatistics> &stats) {
+  ScopedLock lock(m_add_mutex);
+  m_range_server_stats.swap(stats);
+}
+
+
+#if 0
 
 void LoadBalancer::balance(const String &algorithm) {
   BalancePlanPtr plan = new BalancePlan;
@@ -248,3 +261,5 @@ void LoadBalancer::get_unbalanced_servers(const vector<RangeServerStatistics> &s
     servers.push_back(server_stats.location);
   m_context->rsc_manager->get_unbalanced_servers(servers, m_unbalanced_servers);
 }
+
+#endif

@@ -26,7 +26,6 @@
 #include "LoadBalancer.h"
 #include "Operation.h"
 #include "OperationRecover.h"
-#include "OperationBalance.h"
 #include "ReferenceManager.h"
 #include "RecoveryReplayCounter.h"
 #include "BalancePlanAuthority.h"
