@@ -222,7 +222,7 @@ void ConnectionHandler::handle(EventPtr &event) {
       }
 
       if (m_context->balancer->balance_needed()) {
-        operation = new OperationBalance(m_context, "load");
+        operation = new OperationBalance(m_context);
         m_context->op->add_operation(operation);
       }
     }

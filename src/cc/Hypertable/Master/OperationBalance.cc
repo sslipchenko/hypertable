@@ -44,10 +44,10 @@
 using namespace Hypertable;
 using namespace Hyperspace;
 
-OperationBalance::OperationBalance(ContextPtr &context, const String &algorithm)
+OperationBalance::OperationBalance(ContextPtr &context)
   : Operation(context, MetaLog::EntityType::OPERATION_BALANCE) {
   initialize_dependencies();
-  m_plan = new BalancePlan(algorithm);
+  m_plan = new BalancePlan();
 }
 
 OperationBalance::OperationBalance(ContextPtr &context, BalancePlanPtr &plan)
@@ -98,8 +98,7 @@ void OperationBalance::execute() {
       std::vector<Entity *> entities;
 
       if (m_plan->empty())
-        m_context->balancer->create_plan(m_plan->algorithm, m_plan,
-                                         unbalanced_servers);
+        m_context->balancer->create_plan(m_plan, unbalanced_servers);
 
       foreach_ht (RangeServerConnectionPtr &rsc, unbalanced_servers) {
         rsc->set_balanced();

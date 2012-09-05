@@ -216,6 +216,7 @@ namespace {
     { Error::MASTER_LOCATION_INVALID, "MASTER location invalid" },
     { Error::MASTER_OPERATION_IN_PROGRESS, "MASTER operation in progress" },
     { Error::MASTER_RANGESERVER_IN_RECOVERY, "MASTER RangeServer in recovery" },
+    { Error::MASTER_BALANCE_PREVENTED, "MASTER balance operation prevented" },
 
     { Error::RANGESERVER_GENERATION_MISMATCH,
         "RANGE SERVER generation mismatch" },

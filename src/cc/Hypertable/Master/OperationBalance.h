@@ -30,7 +30,7 @@ namespace Hypertable {
 
   class OperationBalance : public Operation {
   public:
-    OperationBalance(ContextPtr &context, const String &algorithm);
+    OperationBalance(ContextPtr &context);
     OperationBalance(ContextPtr &context, BalancePlanPtr &plan);
     OperationBalance(ContextPtr &context, EventPtr &event);
     OperationBalance(ContextPtr &context, const MetaLog::EntityHeader &header_);

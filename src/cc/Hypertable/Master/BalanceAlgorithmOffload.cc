@@ -19,43 +19,43 @@
  * 02110-1301, USA.
  */
 #include "Common/Compat.h"
+#include "Common/Error.h"
+
+#include <boost/algorithm/string.hpp>
 
 #include <algorithm>
 
 #include "Hypertable/Lib/Client.h"
-#include "BalanceOffload.h"
+
+#include "BalanceAlgorithmOffload.h"
+#include "Utility.h"
 
 using namespace Hypertable;
 using namespace std;
 
-void BalanceOffload::compute_plan(vector<RangeServerStatistics> &range_server_stats,
-                set<String> &offload_servers, const String &root_location,
-                BalancePlanPtr &balance_plan) {
-  size_t num_servers = range_server_stats.size();
-  if (num_servers <= 1)
-    return;
-
-  // Now scan thru METADATA Location and StartRow and come up with balance plan
-  compute_moves(range_server_stats, offload_servers,
-                root_location, balance_plan);
+BalanceAlgorithmOffload::BalanceAlgorithmOffload(ContextPtr &context,
+ std::vector<RangeServerStatistics> &statistics, String arguments)
+  : m_context(context), m_statistics(statistics) {
+  boost::trim(arguments);
+  boost::split(m_offload_servers, arguments, boost::is_any_of(", \t"));
 }
 
-void BalanceOffload::compute_moves(vector<RangeServerStatistics> &range_server_stats,
-                set<String> &offload_servers, const String &root_location,
-                BalancePlanPtr &plan) {
+
+void BalanceAlgorithmOffload::compute_plan(BalancePlanPtr &plan) {
   set<String> load_servers;
   set<String>::iterator load_servers_it;
+  String root_location = Utility::root_range_location(m_context);
 
-  foreach_ht(const RangeServerStatistics &stats, range_server_stats) {
-    if (offload_servers.find(stats.location) == offload_servers.end()) {
+  foreach_ht(const RangeServerStatistics &stats, m_statistics) {
+    if (m_offload_servers.find(stats.location) == m_offload_servers.end()) {
       if (m_context->can_accept_ranges(stats))
         load_servers.insert(stats.location);
     }
   }
 
-  // return if there's no server with enough disk space
   if (load_servers.empty())
-    return;
+    HT_THROW(Error::MASTER_BALANCE_PREVENTED,
+             "No destination servers found with enough room");
 
   load_servers_it = load_servers.begin();
 
@@ -66,7 +66,7 @@ void BalanceOffload::compute_moves(vector<RangeServerStatistics> &range_server_s
   String location("Location"), start_row("StartRow");
 
   // check if we need to move root range
-  if (offload_servers.find(root_location) != offload_servers.end()) {
+  if (m_offload_servers.find(root_location) != m_offload_servers.end()) {
     String new_location = *load_servers_it;
     load_servers_it++;
     if (load_servers_it == load_servers.end())
@@ -115,7 +115,7 @@ void BalanceOffload::compute_moves(vector<RangeServerStatistics> &range_server_s
 
     // check if this range is on one of the offload servers
     if (last_location.size() > 0 && read_start_row &&
-        offload_servers.find(last_location) != offload_servers.end()) {
+        m_offload_servers.find(last_location) != m_offload_servers.end()) {
       size_t pos = last_key.find(':');
       HT_ASSERT(pos != string::npos);
       String table(last_key, 0, pos);

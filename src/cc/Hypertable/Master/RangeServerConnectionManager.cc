@@ -27,7 +27,7 @@ using namespace Hypertable;
 using namespace std;
 
 RangeServerConnectionManager::RangeServerConnectionManager()
-  : conn_count(0) {
+  : m_conn_count(0), m_generation(0) {
   comm = Comm::instance();
   m_server_list_iter = m_server_list.end();
 }
@@ -50,6 +50,7 @@ void RangeServerConnectionManager::add_server(RangeServerConnectionPtr &rsc) {
     }
     HT_ASSERT(insert_result.second);
   }
+  m_generation++;
 }
 
 bool RangeServerConnectionManager::connect_server(RangeServerConnectionPtr &rsc,
@@ -66,8 +67,8 @@ bool RangeServerConnectionManager::connect_server(RangeServerConnectionPtr &rsc,
   HT_INFOF("Registered proxy %s", rsc->location().c_str());
 
   if (rsc->connect(hostname, local_addr, public_addr)) {
-    conn_count++;
-    if (conn_count == 1)
+    m_conn_count++;
+    if (m_conn_count == 1)
       notify = true;
     retval = true;
   }
@@ -98,13 +99,15 @@ bool RangeServerConnectionManager::connect_server(RangeServerConnectionPtr &rsc,
   if (notify)
     cond.notify_all();
 
+  m_generation++;
+
   return retval;
 }
 
 bool RangeServerConnectionManager::disconnect_server(RangeServerConnectionPtr &rsc) {
   if (rsc->disconnect()) {
-    HT_ASSERT(conn_count > 0);
-    conn_count--;
+    HT_ASSERT(m_conn_count > 0);
+    m_conn_count--;
     return true;
   }
   return false;
@@ -112,7 +115,7 @@ bool RangeServerConnectionManager::disconnect_server(RangeServerConnectionPtr &r
 
 void RangeServerConnectionManager::wait_for_server() {
   ScopedLock lock(mutex);
-  while (conn_count == 0)
+  while (m_conn_count == 0)
     cond.wait(lock);
 }
 
@@ -203,6 +206,8 @@ void RangeServerConnectionManager::erase_server(RangeServerConnectionPtr &rsc) {
     public_addr_index.erase(public_addr_iter);
   // reset server list iter
   m_server_list_iter = m_server_list.begin();
+  
+  m_generation++;
 
   rsc->set_removed();
 }

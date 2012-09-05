@@ -65,7 +65,7 @@ namespace Hypertable {
     size_t connected_server_count();
     void get_servers(std::vector<RangeServerConnectionPtr> &servers);
     void get_connected_servers(StringSet &locations);
-    size_t connection_count() { ScopedLock lock(mutex); return conn_count; }
+    size_t connection_count() { ScopedLock lock(mutex); return m_conn_count; }
 
   private:
 
@@ -117,8 +117,8 @@ namespace Hypertable {
     Comm *comm;
     ServerList m_server_list;
     ServerList::iterator m_server_list_iter;
-    size_t conn_count;
-
+    size_t m_conn_count;
+    uint32_t m_generation;
   };
   typedef intrusive_ptr<RangeServerConnectionManager> RangeServerConnectionManagerPtr;
 

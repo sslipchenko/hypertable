@@ -18,6 +18,7 @@
 #
 
 set(Master_SRCS
+BalanceAlgorithmOffload.cc
 BalanceLoad.cc
 BalanceOffload.cc
 BalanceRanges.cc
