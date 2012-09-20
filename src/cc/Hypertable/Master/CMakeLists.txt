@@ -18,9 +18,9 @@
 #
 
 set(Master_SRCS
+BalanceAlgorithmEvenRanges.cc
 BalanceAlgorithmOffload.cc
 BalanceLoad.cc
-BalanceRanges.cc
 BalancePlanAuthority.cc
 ConnectionHandler.cc
 Context.cc
