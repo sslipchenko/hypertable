@@ -34,7 +34,9 @@ namespace Hypertable {
     BalanceAlgorithmEvenRanges(ContextPtr &context,
                                std::vector<RangeServerStatistics> &statistics);
 
-    virtual void compute_plan(BalancePlanPtr &plan);
+    virtual void compute_plan(BalancePlanPtr &plan,
+                              std::vector<RangeServerConnectionPtr> &balanced,
+                              uint32_t *generation);
 
   private:
     ContextPtr m_context;

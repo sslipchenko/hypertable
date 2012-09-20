@@ -34,6 +34,9 @@ RangeServerConnectionManager::RangeServerConnectionManager()
 
 void RangeServerConnectionManager::add_server(RangeServerConnectionPtr &rsc) {
   ScopedLock lock(mutex);
+
+  m_generation++;
+
   pair<Sequence::iterator, bool> insert_result = m_server_list.push_back( RangeServerConnectionEntry(rsc) );
 
   if (!insert_result.second) {
@@ -50,7 +53,6 @@ void RangeServerConnectionManager::add_server(RangeServerConnectionPtr &rsc) {
     }
     HT_ASSERT(insert_result.second);
   }
-  m_generation++;
 }
 
 bool RangeServerConnectionManager::connect_server(RangeServerConnectionPtr &rsc,
@@ -62,6 +64,8 @@ bool RangeServerConnectionManager::connect_server(RangeServerConnectionPtr &rsc,
   HT_INFOF("connect_server(%s, '%s', local=%s, public=%s)",
            rsc->location().c_str(), hostname.c_str(),
            local_addr.format().c_str(), public_addr.format().c_str());
+
+  m_generation++;
 
   comm->set_alias(local_addr, public_addr);
   comm->add_proxy(rsc->location(), hostname, public_addr);
@@ -120,7 +124,6 @@ bool RangeServerConnectionManager::connect_server(RangeServerConnectionPtr &rsc,
       m_server_list_iter = m_server_list.begin();
     }
   }
-  m_generation++;
   return true;
 }
 
@@ -265,6 +268,21 @@ void RangeServerConnectionManager::get_servers(std::vector<RangeServerConnection
   }
 }
 
+void RangeServerConnectionManager::get_valid_connections(StringSet &locations,
+                                               std::vector<RangeServerConnectionPtr> &connections,
+                                               uint32_t *generation) {
+  ScopedLock lock(mutex);
+  LocationIndex &location_index = m_server_list.get<1>();
+  LocationIndex::iterator iter;
+
+  foreach_ht (const String &location, locations) {
+    if ((iter = location_index.find(location)) != location_index.end())
+      connections.push_back(iter->rsc);
+  }
+  *generation = m_generation;
+}
+
+
 size_t RangeServerConnectionManager::connected_server_count() {
   ScopedLock lock(mutex);
   size_t count=0;
@@ -283,8 +301,8 @@ void RangeServerConnectionManager::get_connected_servers(StringSet &locations) {
   }
 }
 
-void RangeServerConnectionManager::get_unbalanced_servers(const std::vector<String> &locations,
-    std::vector<RangeServerConnectionPtr> &unbalanced) {
+void RangeServerConnectionManager::get_unbalanced_servers(StringSet &locations,
+      std::vector<RangeServerConnectionPtr> &unbalanced, uint32_t *generation) {
   ScopedLock lock(mutex);
   LocationIndex &hash_index = m_server_list.get<1>();
   LocationIndex::iterator lookup_iter;

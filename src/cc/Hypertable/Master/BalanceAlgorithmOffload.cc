@@ -41,23 +41,28 @@ BalanceAlgorithmOffload::BalanceAlgorithmOffload(ContextPtr &context,
 }
 
 
-void BalanceAlgorithmOffload::compute_plan(BalancePlanPtr &plan) {
-  set<String> load_servers;
-  set<String>::iterator load_servers_it;
+void BalanceAlgorithmOffload::compute_plan(BalancePlanPtr &plan,
+                                           std::vector<RangeServerConnectionPtr> &balanced,
+                                           uint32_t *generation) {
+  StringSet locations;
+  StringSet::iterator locations_it;
   String root_location = Utility::root_range_location(m_context);
+
+  *generation = 0;
 
   foreach_ht(const RangeServerStatistics &stats, m_statistics) {
     if (m_offload_servers.find(stats.location) == m_offload_servers.end()) {
-      if (m_context->can_accept_ranges(stats))
-        load_servers.insert(stats.location);
+      if (!stats.stats || !stats.stats->live || !m_context->can_accept_ranges(stats))
+        continue;
+      locations.insert(stats.location);
     }
   }
 
-  if (load_servers.empty())
+  if (locations.empty())
     HT_THROW(Error::MASTER_BALANCE_PREVENTED,
              "No destination servers found with enough room");
 
-  load_servers_it = load_servers.begin();
+  locations_it = locations.begin();
 
   ScanSpec scan_spec;
   Cell cell;
@@ -67,10 +72,10 @@ void BalanceAlgorithmOffload::compute_plan(BalancePlanPtr &plan) {
 
   // check if we need to move root range
   if (m_offload_servers.find(root_location) != m_offload_servers.end()) {
-    String new_location = *load_servers_it;
-    load_servers_it++;
-    if (load_servers_it == load_servers.end())
-      load_servers_it = load_servers.begin();
+    String new_location = *locations_it;
+    locations_it++;
+    if (locations_it == locations.end())
+      locations_it = locations.begin();
 
     RangeMoveSpecPtr move = new RangeMoveSpec(root_location.c_str(),
                 new_location.c_str(), TableIdentifier::METADATA_ID,
@@ -120,10 +125,10 @@ void BalanceAlgorithmOffload::compute_plan(BalancePlanPtr &plan) {
       HT_ASSERT(pos != string::npos);
       String table(last_key, 0, pos);
       String end_row(last_key, pos+1);
-      String new_location = *load_servers_it;
-      load_servers_it++;
-      if (load_servers_it == load_servers.end())
-        load_servers_it = load_servers.begin();
+      String new_location = *locations_it;
+      locations_it++;
+      if (locations_it == locations.end())
+        locations_it = locations.begin();
 
       RangeMoveSpecPtr move = new RangeMoveSpec(last_location.c_str(),
                                     new_location.c_str(),

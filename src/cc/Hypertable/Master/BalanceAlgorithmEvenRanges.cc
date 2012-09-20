@@ -32,7 +32,7 @@ using namespace std;
 
 namespace {
 
-  typedef std::map<const char *, uint32_t, LtCstr> RangeDistributionMap;
+  typedef std::map<String, uint32_t> RangeDistributionMap;
 
   class TableSummary : public ReferenceCount {
   public:
@@ -45,19 +45,19 @@ namespace {
   typedef intrusive_ptr<TableSummary> TableSummaryPtr;
 
   // map of table_id to TableSummary
-  typedef std::map<const char *, TableSummaryPtr, LtCstr> TableSummaryMap;
+  typedef std::map<const String, TableSummaryPtr> TableSummaryMap;
 
   typedef struct {
-    vector<const char *> servers;
+    vector<String> servers;
     TableSummaryMap table_summaries;
     size_t num_ranges;
     uint32_t num_empty_servers;
   } balance_state_t;
 
-  bool maybe_add_to_plan(const char *table, const char *src_server,
-                         const char *start_row, const char *end_row,
+  bool maybe_add_to_plan(const String &table, const String &src_server,
+                         const String &start_row, const String &end_row,
                          balance_state_t &state, BalancePlanPtr &plan) {
-    CstrSet saturated_tables;
+    StringSet saturated_tables;
 
     // no one can take any more ranges from this table
     if (saturated_tables.find(table) != saturated_tables.end()) {
@@ -102,8 +102,8 @@ namespace {
     String dst_server;
 
     bool found_dst_server = false;
-    foreach_ht(const char *target_server, state.servers) {
-      if (!strcmp(target_server, src_server))
+    foreach_ht(const String &target_server, state.servers) {
+      if (!target_server.compare(src_server))
         continue;
       dst_range_dist_it = table_it->second->range_dist.find(target_server);
       if (dst_range_dist_it == table_it->second->range_dist.end()) {
@@ -130,8 +130,8 @@ namespace {
     // update range distribution info and add move to balance plan
     --(src_range_dist_it->second);
     ++(dst_range_dist_it->second);
-    RangeMoveSpecPtr move = new RangeMoveSpec(src_server, dst_server.c_str(),
-                                              table, start_row, end_row);
+    RangeMoveSpecPtr move = new RangeMoveSpec(src_server.c_str(), dst_server.c_str(),
+                                              table.c_str(), start_row.c_str(), end_row.c_str());
     plan->moves.push_back(move);
 
     // randomly shuffle the contents of the empty_servers vector to avoid
@@ -151,8 +151,10 @@ BalanceAlgorithmEvenRanges::BalanceAlgorithmEvenRanges(ContextPtr &context,
 
 
 
-void BalanceAlgorithmEvenRanges::compute_plan(BalancePlanPtr &plan) {
+void BalanceAlgorithmEvenRanges::compute_plan(BalancePlanPtr &plan,
+     std::vector<RangeServerConnectionPtr> &balanced, uint32_t *generation) {
   balance_state_t state;
+  StringSet locations;
 
   state.num_ranges = 0;
   state.num_empty_servers = 0;
@@ -162,8 +164,7 @@ void BalanceAlgorithmEvenRanges::compute_plan(BalancePlanPtr &plan) {
     if (!rs.stats || !rs.stats->live || !m_context->can_accept_ranges(rs))
       continue;
 
-    const char *server_id = rs.location.c_str();
-    state.servers.push_back(server_id);
+    locations.insert(rs.location);
 
     if (rs.stats->range_count > 0) {
       TableSummaryPtr ts;
@@ -176,7 +177,7 @@ void BalanceAlgorithmEvenRanges::compute_plan(BalancePlanPtr &plan) {
         }
         else
           ts = it->second;
-        ts->range_dist.insert(make_pair(server_id, table.range_count));
+        ts->range_dist.insert(make_pair(rs.location, table.range_count));
         ts->total_ranges += table.range_count;
       }
     }
@@ -184,9 +185,18 @@ void BalanceAlgorithmEvenRanges::compute_plan(BalancePlanPtr &plan) {
       state.num_empty_servers++;
   }
 
-  if (state.servers.size() <= 1)
+  if (locations.size() <= 1)
     HT_THROWF(Error::MASTER_BALANCE_PREVENTED,
-              "Not enough available servers (%u)", (unsigned)state.servers.size());
+              "Not enough available servers (%u)", (unsigned)locations.size());
+
+  std::vector<RangeServerConnectionPtr> connections;
+  m_context->rsc_manager->get_valid_connections(locations, connections, generation);
+
+  foreach_ht (RangeServerConnectionPtr &rsc, connections) {
+    if (!rsc->get_balanced())
+      balanced.push_back(rsc);
+    state.servers.push_back(rsc->location());
+  }
   
   /**
    * Now scan thru METADATA Location and StartRow and come up with balance plan
@@ -240,8 +250,7 @@ void BalanceAlgorithmEvenRanges::compute_plan(BalancePlanPtr &plan) {
         HT_ASSERT(pos != string::npos);
         String table(last_key, 0, pos);
         String end_row(last_key, pos+1);
-        if (maybe_add_to_plan(table.c_str(), last_location.c_str(),
-                              last_start_row.c_str(), end_row.c_str(), state, plan)) {
+        if (maybe_add_to_plan(table, last_location, last_start_row, end_row, state, plan)) {
           HT_DEBUG_OUT << "Added move for range " << table << ":" << end_row
                        << ", start_row=" << last_start_row << ", location="
                        << last_location << HT_END;

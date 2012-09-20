@@ -120,7 +120,10 @@ void LoadBalancer::create_plan(BalancePlanPtr &plan,
 
   }
 
-  algo->compute_plan(plan);
+  std::vector<RangeServerConnectionPtr> balanced;
+  uint32_t generation;
+  
+  algo->compute_plan(plan, balanced, &generation);
 
 
     /**

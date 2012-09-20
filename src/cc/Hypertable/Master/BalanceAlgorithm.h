@@ -26,11 +26,16 @@
 
 #include "Hypertable/Lib/BalancePlan.h"
 
+#include "RangeServerConnection.h"
+
 namespace Hypertable {
 
   class BalanceAlgorithm : public ReferenceCount {
   public:
-    virtual void compute_plan(BalancePlanPtr &plan) = 0;
+    virtual void compute_plan(BalancePlanPtr &plan,
+                              std::vector<RangeServerConnectionPtr> &balanced,
+                              uint32_t *generation) = 0;
+
   };
   typedef intrusive_ptr<BalanceAlgorithm> BalanceAlgorithmPtr;
 
