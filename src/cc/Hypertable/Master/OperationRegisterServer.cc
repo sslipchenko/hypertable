@@ -132,8 +132,8 @@ void OperationRegisterServer::execute() {
     m_rsc->set_handle(handle);
   }
 
-  if (!m_context->connect_server(m_rsc, m_system_stats.net_info.host_name,
-                                 m_local_addr, m_public_addr)) {
+  if (!m_context->rsc_manager->connect_server(m_rsc, m_system_stats.net_info.host_name,
+                                              m_local_addr, m_public_addr)) {
 
     m_error = Error::CONNECT_ERROR_MASTER;
     m_error_msg = format("Problem connecting location %s", m_location.c_str());

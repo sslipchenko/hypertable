@@ -56,52 +56,72 @@ void RangeServerConnectionManager::add_server(RangeServerConnectionPtr &rsc) {
 bool RangeServerConnectionManager::connect_server(RangeServerConnectionPtr &rsc,
         const String &hostname, InetAddr local_addr, InetAddr public_addr) {
   ScopedLock lock(mutex);
-  LocationIndex &hash_index = m_server_list.get<1>();
-  LocationIndex::iterator iter;
+  LocationIndex &location_index = m_server_list.get<1>();
+  LocationIndex::iterator orig_iter;
 
-  bool retval = false;
-  bool notify = false;
+  HT_INFOF("connect_server(%s, '%s', local=%s, public=%s)",
+           rsc->location().c_str(), hostname.c_str(),
+           local_addr.format().c_str(), public_addr.format().c_str());
 
   comm->set_alias(local_addr, public_addr);
   comm->add_proxy(rsc->location(), hostname, public_addr);
-  HT_INFOF("Registered proxy %s", rsc->location().c_str());
 
-  if (rsc->connect(hostname, local_addr, public_addr)) {
-    m_conn_count++;
-    if (m_conn_count == 1)
-      notify = true;
-    retval = true;
+  if ((orig_iter = location_index.find(rsc->location())) == location_index.end()) {
+
+    if (rsc->connect(hostname, local_addr, public_addr)) {
+      m_conn_count++;
+      if (m_conn_count == 1)
+        cond.notify_all();
+    }
+
+    m_server_list.push_back(RangeServerConnectionEntry(rsc));
   }
+  else {
+    bool needs_reindex = false;
 
-  if (m_server_list_iter != m_server_list.end() &&
-      m_server_list_iter->location() == rsc->location())
-    ++m_server_list_iter;
+    rsc = orig_iter->rsc;
 
-  // Remove this connection if already exists
-  iter = hash_index.find(rsc->location());
-  if (iter != hash_index.end())
-    hash_index.erase(iter);
+    if (rsc->connected()) {
+      HT_ERRORF("Attempted to connect '%s' but failed because already connected.",
+                rsc->location().c_str());
+      return false;
+    }
 
-  // NOTE: If this assert is still here on 4/1/2013, remove it!
-  {
-    PublicAddrIndex &public_addr_index = m_server_list.get<3>();
-    PublicAddrIndex::iterator public_addr_iter = 
-      public_addr_index.find(rsc->public_addr());
-    HT_ASSERT(public_addr_iter == public_addr_index.end());
+    if (hostname != rsc->hostname()) {
+      HT_INFOF("Changing hostname for %s from '%s' to '%s'",
+               rsc->location().c_str(), rsc->hostname().c_str(),
+               hostname.c_str());
+      needs_reindex = true;
+    }
+
+    if (local_addr != rsc->local_addr()) {
+      HT_INFOF("Changing local address for %s from '%s' to '%s'",
+               rsc->location().c_str(), rsc->local_addr().format().c_str(),
+               local_addr.format().c_str());
+      needs_reindex = true;
+    }
+
+    if (public_addr != rsc->public_addr()) {
+      HT_INFOF("Changing public address for %s from '%s' to '%s'",
+               rsc->location().c_str(), rsc->public_addr().format().c_str(),
+               public_addr.format().c_str());
+      needs_reindex = true;
+    }
+
+    if (orig_iter->rsc->connect(hostname, local_addr, public_addr)) {
+      m_conn_count++;
+      if (m_conn_count == 1)
+        cond.notify_all();
+    }
+
+    if (needs_reindex) {
+      location_index.erase(orig_iter);
+      m_server_list.push_back(RangeServerConnectionEntry(rsc));
+      m_server_list_iter = m_server_list.begin();
+    }
   }
-
-  // Add it (or re-add it)
-  pair<Sequence::iterator, bool> insert_result = m_server_list.push_back(RangeServerConnectionEntry(rsc));
-  HT_ASSERT(insert_result.second);
-  if (m_server_list.size() == 1 || m_server_list_iter == m_server_list.end())
-    m_server_list_iter = m_server_list.begin();
-
-  if (notify)
-    cond.notify_all();
-
   m_generation++;
-
-  return retval;
+  return true;
 }
 
 bool RangeServerConnectionManager::disconnect_server(RangeServerConnectionPtr &rsc) {

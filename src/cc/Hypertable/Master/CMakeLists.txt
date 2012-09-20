@@ -20,7 +20,6 @@
 set(Master_SRCS
 BalanceAlgorithmOffload.cc
 BalanceLoad.cc
-BalanceOffload.cc
 BalanceRanges.cc
 BalancePlanAuthority.cc
 ConnectionHandler.cc
