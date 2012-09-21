@@ -160,7 +160,7 @@ void OperationRecover::execute() {
     create_recovery_plan();
 
     set_state(OperationState::ISSUE_REQUESTS);
-    m_rsc->set_removed();
+
     HT_MAYBE_FAIL("recover-server-1");
     m_context->mml_writer->record_state(this);
     HT_MAYBE_FAIL("recover-server-2");
@@ -318,6 +318,7 @@ void OperationRecover::clear_server_state() {
         << m_location << HT_END;
     m_context->mml_writer->record_removal(m_rsc.get());
     m_context->rsc_manager->erase_server(m_rsc);
+
     // drop server from monitor list
     m_context->monitoring->drop_server(m_rsc->location());
     HT_MAYBE_FAIL("recover-server-4");

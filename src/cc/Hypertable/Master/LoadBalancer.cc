@@ -37,7 +37,9 @@ LoadBalancer::LoadBalancer(ContextPtr context)
   m_new_server_balance_delay =
     m_context->props->get_i32("Hypertable.LoadBalancer.BalanceDelay.NewServer");
 
-  m_enabled = context->props->get_bool("Hypertable.LoadBalancer.Enable");
+  // TODO: fix me!!
+  //m_enabled = context->props->get_bool("Hypertable.LoadBalancer.Enable");
+  m_enabled = false;
 
   m_loadavg_threshold = 
             m_context->props->get_f64("Hypertable.LoadBalancer.LoadavgThreshold");
@@ -46,10 +48,16 @@ LoadBalancer::LoadBalancer(ContextPtr context)
     m_context->props->get_i32("Hypertable.LoadBalancer.BalanceDelay.Initial");
 
   m_next_balance_time_load = m_crontab->next_event(t);
-  m_next_balance_time_new_server = 0;
+
+  if (m_context->rsc_manager->exist_unbalanced_servers()) {
+    m_new_server_added = true;
+    m_next_balance_time_new_server = time(0) + m_new_server_balance_delay;
+  }
+  else
+    m_next_balance_time_new_server = 0;
 }
 
-void LoadBalancer::add_unbalanced_server(RangeServerConnectionPtr &rsc) {
+void LoadBalancer::signal_new_server() {
   ScopedLock lock(m_add_mutex);
   m_new_server_added = true;
   m_next_balance_time_new_server = time(0) + m_new_server_balance_delay;
@@ -57,12 +65,25 @@ void LoadBalancer::add_unbalanced_server(RangeServerConnectionPtr &rsc) {
 
 bool LoadBalancer::balance_needed() {
   ScopedLock lock(m_add_mutex);
+  if (m_paused)
+    return false;
   if (m_new_server_added && time(0) >= m_next_balance_time_new_server)
     return true;
   if (m_enabled && time(0) >= m_next_balance_time_load)
     return true;
   return false;
 }
+
+
+void LoadBalancer::unpause() {
+  ScopedLock lock(m_add_mutex);
+  if (m_context->rsc_manager->exist_unbalanced_servers()) {
+    m_new_server_added = true;
+    m_next_balance_time_new_server = time(0) + m_new_server_balance_delay;
+  }
+  m_paused = false;
+}
+
 
 void LoadBalancer::transfer_monitoring_data(vector<RangeServerStatistics> &stats) {
   ScopedLock lock(m_add_mutex);
@@ -71,7 +92,7 @@ void LoadBalancer::transfer_monitoring_data(vector<RangeServerStatistics> &stats
 
 
 void LoadBalancer::create_plan(BalancePlanPtr &plan,
-                               std::vector <RangeServerConnectionPtr> &unbalanced_servers) {
+                               std::vector <RangeServerConnectionPtr> &balanced) {
   String name, arguments;
   time_t now = time(0);
   BalanceAlgorithmPtr algo;
@@ -110,6 +131,8 @@ void LoadBalancer::create_plan(BalancePlanPtr &plan,
       boost::to_lower(name);
     }
 
+    HT_INFOF("LoadBalance(name='%s', args='%s')", name.c_str(), arguments.c_str());
+
     if (name == "offload")
       algo = new BalanceAlgorithmOffload(m_context, m_statistics, arguments);
     else if (name == "table_ranges")
@@ -118,13 +141,16 @@ void LoadBalancer::create_plan(BalancePlanPtr &plan,
       HT_THROWF(Error::MASTER_BALANCE_PREVENTED,
                 "Unrecognized algorithm - %s", name.c_str());
 
+    plan->algorithm = name;
   }
 
-  std::vector<RangeServerConnectionPtr> balanced;
-  uint32_t generation;
-  
-  algo->compute_plan(plan, balanced, &generation);
+  algo->compute_plan(plan, balanced);
 
+  {
+    ScopedLock lock(m_add_mutex);
+    m_paused = true;
+  }
+  return;
 
     /**
 
@@ -211,53 +237,6 @@ void LoadBalancer::create_plan(BalancePlanPtr &plan,
   // set next_balance_time (if we didn't abort)
 }
 
-#if 0
-
-void LoadBalancer::distribute_load(const ptime &now,
-        vector<RangeServerStatistics> &statistics,
-        BalancePlanPtr &plan) {
-  // check to see if m_balance_interval time has passed since the last balance
-  time_duration td = now - m_last_balance_time;
-  if (td.total_milliseconds() < m_balance_interval)
-    return;
-  // check to see if it is past time time of day when the balance should occur
-  td = now.time_of_day();
-  if (td < m_balance_window_start || td > m_balance_window_end)
-    return;
-
-  HT_INFO_OUT << "Current time = " << td << ", m_balance_window_start="
-      << m_balance_window_start << ", m_balance_window_end="
-      << m_balance_window_end << HT_END;
-
-  BalanceLoad planner(m_balance_loadavg_threshold, statistics,
-          m_context);
-  planner.compute_plan(plan);
+void Hypertable::reenable_balancer(LoadBalancer *balancer) {
+  
 }
-
-void LoadBalancer::distribute_table_ranges(vector<RangeServerStatistics> &stats,
-                    BalancePlanPtr &plan) {
-  // no need to check if its time to do balance, we have empty servers,
-  // therefore balance
-  BalanceRanges planner(m_context);
-  planner.compute_plan(stats, plan);
-}
-
-void LoadBalancer::offload_servers(vector<RangeServerStatistics> &stats,
-                    set<String> &offload, BalancePlanPtr &plan) {
-  // no need to check if its time to do balance, we have empty servers,
-  // therefore balance
-  BalanceOffload planner(m_context);
-  String root_location;
-  root_location = Utility::root_range_location(m_context);
-  planner.compute_plan(stats, offload, root_location, plan);
-}
-
-void LoadBalancer::get_unbalanced_servers(const vector<RangeServerStatistics> &stats) {
-  m_unbalanced_servers.clear();
-  vector<String> servers;
-  foreach_ht(const RangeServerStatistics &server_stats, stats)
-    servers.push_back(server_stats.location);
-  m_context->rsc_manager->get_unbalanced_servers(servers, m_unbalanced_servers);
-}
-
-#endif

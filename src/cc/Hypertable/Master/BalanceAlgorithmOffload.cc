@@ -42,13 +42,10 @@ BalanceAlgorithmOffload::BalanceAlgorithmOffload(ContextPtr &context,
 
 
 void BalanceAlgorithmOffload::compute_plan(BalancePlanPtr &plan,
-                                           std::vector<RangeServerConnectionPtr> &balanced,
-                                           uint32_t *generation) {
+                            std::vector<RangeServerConnectionPtr> &balanced) {
   StringSet locations;
   StringSet::iterator locations_it;
   String root_location = Utility::root_range_location(m_context);
-
-  *generation = 0;
 
   foreach_ht(const RangeServerStatistics &stats, m_statistics) {
     if (m_offload_servers.find(stats.location) == m_offload_servers.end()) {

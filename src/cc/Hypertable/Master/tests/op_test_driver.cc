@@ -47,6 +47,7 @@
 #include "Hypertable/Master/OperationRenameTable.h"
 #include "Hypertable/Master/OperationSystemUpgrade.h"
 #include "Hypertable/Master/OperationMoveRange.h"
+#include "Hypertable/Master/RangeServerConnectionManager.h"
 #include "Hypertable/Master/ReferenceManager.h"
 #include "Hypertable/Master/ResponseManager.h"
 #include "Hypertable/Master/BalancePlanAuthority.h"
@@ -256,6 +257,7 @@ int main(int argc, char **argv) {
     context->props = properties;
     context->hyperspace = new Hyperspace::Session(context->comm, context->props);
     context->dfs = new DfsBroker::Client(context->conn_manager, context->props);
+    context->rsc_manager = new RangeServerConnectionManager();
 
     context->toplevel_dir = properties->get_str("Hypertable.Directory");
     boost::trim_if(context->toplevel_dir, boost::is_any_of("/"));
@@ -428,11 +430,18 @@ void create_table_test(ContextPtr &context) {
                                             log_dir + "/" + context->mml_definition->name(),
                                             entities);
 
-  rsc1 = new RangeServerConnection(context->mml_writer, "rs1", "foo.hypertable.com", InetAddr("72.14.204.99", 38060));
-  rsc2 = new RangeServerConnection(context->mml_writer, "rs2", "bar.hypertable.com", InetAddr("69.147.125.65", 38060));
+  rsc1 = new RangeServerConnection("rs1", "foo.hypertable.com", InetAddr("72.14.204.99", 38060));
+  rsc2 = new RangeServerConnection("rs2", "bar.hypertable.com", InetAddr("69.147.125.65", 38060));
 
   context->rsc_manager->connect_server(rsc1, "foo.hypertable.com", InetAddr("72.14.204.99", 33567), InetAddr("72.14.204.99", 38060));
   context->rsc_manager->connect_server(rsc2, "bar.hypertable.com", InetAddr("69.147.125.65", 30569), InetAddr("69.147.125.65", 38060));
+
+  {
+    std::vector<MetaLog::Entity *> entities;
+    entities.push_back(rsc1.get());
+    entities.push_back(rsc2.get());
+    context->mml_writer->record_state(entities);
+  }
 
   expected_servers.push_back("rs1");
   expected_servers.push_back("rs2");
@@ -511,15 +520,22 @@ void create_table_with_index_test(ContextPtr &context) {
                                             context->mml_definition->name(),
                                         entities);
 
-  rsc1 = new RangeServerConnection(context->mml_writer, "rs1", 
+  rsc1 = new RangeServerConnection("rs1", 
           "foo.hypertable.com", InetAddr("72.14.204.99", 38060));
-  rsc2 = new RangeServerConnection(context->mml_writer, "rs2", 
+  rsc2 = new RangeServerConnection("rs2", 
           "bar.hypertable.com", InetAddr("69.147.125.65", 38060));
 
   context->rsc_manager->connect_server(rsc1, "foo.hypertable.com", 
           InetAddr("72.14.204.99", 33567), InetAddr("72.14.204.99", 38060));
   context->rsc_manager->connect_server(rsc2, "bar.hypertable.com", 
           InetAddr("69.147.125.65", 30569), InetAddr("69.147.125.65", 38060));
+
+  {
+    std::vector<MetaLog::Entity *> entities;
+    entities.push_back(rsc1.get());
+    entities.push_back(rsc2.get());
+    context->mml_writer->record_state(entities);
+  }
 
   expected_servers.push_back("rs1");
   expected_servers.push_back("rs2");
@@ -613,15 +629,24 @@ void master_initialize_test(ContextPtr &context) {
                                             log_dir + "/" + context->mml_definition->name(),
                                             entities);
 
-  rsc1 = new RangeServerConnection(context->mml_writer, "rs1", "foo.hypertable.com", InetAddr("72.14.204.99", 38060));
-  rsc2 = new RangeServerConnection(context->mml_writer, "rs2", "bar.hypertable.com", InetAddr("69.147.125.65", 38060));
-  rsc3 = new RangeServerConnection(context->mml_writer, "rs3", "how.hypertable.com", InetAddr("72.14.204.98", 38060));
-  rsc4 = new RangeServerConnection(context->mml_writer, "rs4", "cow.hypertable.com", InetAddr("69.147.125.62", 38060));
+  rsc1 = new RangeServerConnection("rs1", "foo.hypertable.com", InetAddr("72.14.204.99", 38060));
+  rsc2 = new RangeServerConnection("rs2", "bar.hypertable.com", InetAddr("69.147.125.65", 38060));
+  rsc3 = new RangeServerConnection("rs3", "how.hypertable.com", InetAddr("72.14.204.98", 38060));
+  rsc4 = new RangeServerConnection("rs4", "cow.hypertable.com", InetAddr("69.147.125.62", 38060));
 
   context->rsc_manager->connect_server(rsc1, "foo.hypertable.com", InetAddr("72.14.204.99", 33567), InetAddr("72.14.204.99", 38060));
   context->rsc_manager->connect_server(rsc2, "bar.hypertable.com", InetAddr("69.147.125.65", 30569), InetAddr("69.147.125.65", 38060));
   context->rsc_manager->connect_server(rsc3, "how.hypertable.com", InetAddr("72.14.204.98", 33572), InetAddr("72.14.204.98", 38060));
   context->rsc_manager->connect_server(rsc4, "cow.hypertable.com", InetAddr("69.147.125.62", 30569), InetAddr("69.147.125.62", 38060));
+
+  {
+    std::vector<MetaLog::Entity *> entities;
+    entities.push_back(rsc1.get());
+    entities.push_back(rsc2.get());
+    entities.push_back(rsc3.get());
+    entities.push_back(rsc4.get());
+    context->mml_writer->record_state(entities);
+  }
 
   expected_servers.push_back("rs1");
   expected_servers.push_back("rs2");
@@ -747,14 +772,10 @@ void move_range_test(ContextPtr &context) {
           log_dir + "/" + context->mml_definition->name(),
           entities);
 
-  rsc1 = new RangeServerConnection(context->mml_writer,
-          "rs1", "foo.hypertable.com", InetAddr("72.14.204.99", 38060));
-  rsc2 = new RangeServerConnection(context->mml_writer,
-          "rs2", "bar.hypertable.com", InetAddr("69.147.125.65", 38060));
-  rsc3 = new RangeServerConnection(context->mml_writer,
-          "rs3", "how.hypertable.com", InetAddr("72.14.204.98", 38060));
-  rsc4 = new RangeServerConnection(context->mml_writer,
-          "rs4", "cow.hypertable.com", InetAddr("69.147.125.62", 38060));
+  rsc1 = new RangeServerConnection("rs1", "foo.hypertable.com", InetAddr("72.14.204.99", 38060));
+  rsc2 = new RangeServerConnection("rs2", "bar.hypertable.com", InetAddr("69.147.125.65", 38060));
+  rsc3 = new RangeServerConnection("rs3", "how.hypertable.com", InetAddr("72.14.204.98", 38060));
+  rsc4 = new RangeServerConnection("rs4", "cow.hypertable.com", InetAddr("69.147.125.62", 38060));
 
   context->rsc_manager->connect_server(rsc1, "foo.hypertable.com",
           InetAddr("72.14.204.99", 33567), InetAddr("72.14.204.99", 38060));
@@ -764,6 +785,15 @@ void move_range_test(ContextPtr &context) {
           InetAddr("72.14.204.98", 33572), InetAddr("72.14.204.98", 38060));
   context->rsc_manager->connect_server(rsc4, "cow.hypertable.com",
           InetAddr("69.147.125.62", 30569), InetAddr("69.147.125.62", 38060));
+
+  {
+    std::vector<MetaLog::Entity *> entities;
+    entities.push_back(rsc1.get());
+    entities.push_back(rsc2.get());
+    entities.push_back(rsc3.get());
+    entities.push_back(rsc4.get());
+    context->mml_writer->record_state(entities);
+  }
 
   expected_servers.push_back("rs1");
   expected_servers.push_back("rs2");
@@ -850,15 +880,15 @@ void balance_plan_authority_test(ContextPtr &context) {
           log_dir + "/" + context->mml_definition->name(), entities);
 
   RangeServerConnectionPtr rsc1, rsc2, rsc3, rsc4, rsc5;
-  rsc1 = new RangeServerConnection(context->mml_writer, "rs1",
+  rsc1 = new RangeServerConnection("rs1",
           "foo.hypertable.com", InetAddr("72.14.204.99", 38060));
-  rsc2 = new RangeServerConnection(context->mml_writer, "rs2",
+  rsc2 = new RangeServerConnection("rs2",
           "bar.hypertable.com", InetAddr("69.147.125.65", 38060));
-  rsc3 = new RangeServerConnection(context->mml_writer, "rs3",
+  rsc3 = new RangeServerConnection("rs3",
           "how.hypertable.com", InetAddr("72.14.204.98", 38060));
-  rsc4 = new RangeServerConnection(context->mml_writer, "rs4",
+  rsc4 = new RangeServerConnection("rs4",
           "cow.hypertable.com", InetAddr("69.147.125.62", 38060));
-  rsc5 = new RangeServerConnection(context->mml_writer, "rs5",
+  rsc5 = new RangeServerConnection("rs5",
           "boo.hypertable.com", InetAddr("70.147.125.62", 38060));
 
   context->rsc_manager->connect_server(rsc1, "foo.hypertable.com",
@@ -871,6 +901,16 @@ void balance_plan_authority_test(ContextPtr &context) {
           InetAddr("69.147.125.62", 30569), InetAddr("69.147.125.62", 38060));
   context->rsc_manager->connect_server(rsc5, "boo.hypertable.com",
           InetAddr("70.147.125.62", 30569), InetAddr("70.147.125.62", 38060));
+
+  {
+    std::vector<MetaLog::Entity *> entities;
+    entities.push_back(rsc1.get());
+    entities.push_back(rsc2.get());
+    entities.push_back(rsc3.get());
+    entities.push_back(rsc4.get());
+    entities.push_back(rsc5.get());
+    context->mml_writer->record_state(entities);
+  }
 
   BalancePlanAuthority *bpa = context->get_balance_plan_authority();
 

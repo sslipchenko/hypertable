@@ -152,19 +152,36 @@ BalanceAlgorithmEvenRanges::BalanceAlgorithmEvenRanges(ContextPtr &context,
 
 
 void BalanceAlgorithmEvenRanges::compute_plan(BalancePlanPtr &plan,
-     std::vector<RangeServerConnectionPtr> &balanced, uint32_t *generation) {
+     std::vector<RangeServerConnectionPtr> &balanced) {
   balance_state_t state;
   StringSet locations;
+  int32_t min_ranges = -1;
+  int32_t max_ranges = -1;
 
   state.num_ranges = 0;
   state.num_empty_servers = 0;
 
   foreach_ht (RangeServerStatistics &rs, m_statistics) {
 
-    if (!rs.stats || !rs.stats->live || !m_context->can_accept_ranges(rs))
+    if (!rs.stats->live) {
+      HT_INFOF("Aborting balance because %s is not yet live", rs.location.c_str());
+      plan->moves.clear();
+      return;
+    }
+
+    if (!rs.stats || !m_context->can_accept_ranges(rs))
       continue;
 
     locations.insert(rs.location);
+
+    if (min_ranges == -1)
+      min_ranges = max_ranges = rs.stats->range_count;
+    else {
+      if (min_ranges > rs.stats->range_count)
+        min_ranges = rs.stats->range_count;
+      if (max_ranges < rs.stats->range_count)
+        max_ranges = rs.stats->range_count;
+    }
 
     if (rs.stats->range_count > 0) {
       TableSummaryPtr ts;
@@ -189,13 +206,22 @@ void BalanceAlgorithmEvenRanges::compute_plan(BalancePlanPtr &plan,
     HT_THROWF(Error::MASTER_BALANCE_PREVENTED,
               "Not enough available servers (%u)", (unsigned)locations.size());
 
+  /**
+   * Populate the 'balanced' vector with the participants that
+   * are not balanced
+   */
   std::vector<RangeServerConnectionPtr> connections;
-  m_context->rsc_manager->get_valid_connections(locations, connections, generation);
-
+  m_context->rsc_manager->get_valid_connections(locations, connections);
   foreach_ht (RangeServerConnectionPtr &rsc, connections) {
     if (!rsc->get_balanced())
       balanced.push_back(rsc);
     state.servers.push_back(rsc->location());
+  }
+
+  // Only balance if the max variance is at least 3
+  if ((max_ranges - min_ranges) < 3) {
+    HT_INFO("Aborting balance because max variance < 3");
+    return;
   }
   
   /**

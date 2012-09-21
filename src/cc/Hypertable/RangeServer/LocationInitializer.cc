@@ -85,7 +85,8 @@ bool LocationInitializer::is_removed(const String &path, Hyperspace::SessionPtr 
         removed = true;
     }
     catch (Exception &e) {
-      HT_INFO_OUT << e << HT_END;
+      if (e.code() != Error::HYPERSPACE_FILE_NOT_FOUND)
+        HT_FATAL_OUT << e << HT_END;
     }
   }
   return removed;

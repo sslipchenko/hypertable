@@ -38,8 +38,7 @@ namespace Hypertable {
                             String arguments);
 
     virtual void compute_plan(BalancePlanPtr &plan,
-                              std::vector<RangeServerConnectionPtr> &balanced,
-                              uint32_t *generation);
+                              std::vector<RangeServerConnectionPtr> &balanced);
 
   private:
     ContextPtr m_context;

@@ -41,10 +41,9 @@ namespace Hypertable {
 
   class RangeServerConnection : public MetaLog::Entity {
   public:
-    RangeServerConnection(MetaLog::WriterPtr &mml_writer,const String &location,
-                          const String &hostname, InetAddr public_addr);
-    RangeServerConnection(MetaLog::WriterPtr &mml_writer,
-                          const MetaLog::EntityHeader &header_);
+    RangeServerConnection(const String &location, const String &hostname,
+                          InetAddr public_addr);
+    RangeServerConnection(const MetaLog::EntityHeader &header_);
     virtual ~RangeServerConnection() { }
 
     bool connect(const String &hostname, InetAddr local_addr, 
@@ -77,7 +76,6 @@ namespace Hypertable {
 
   private:
     Mutex m_mutex;
-    MetaLog::WriterPtr m_mml_writer;
     uint64_t m_handle;
     String m_location;
     String m_hostname;

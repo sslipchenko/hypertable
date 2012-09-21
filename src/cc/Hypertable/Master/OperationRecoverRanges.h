@@ -28,8 +28,6 @@
 #include "Hypertable/Lib/RangeRecoveryPlan.h"
 
 #include "Operation.h"
-#include "RangeServerConnection.h"
-
 
 namespace Hypertable {
 

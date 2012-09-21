@@ -220,7 +220,22 @@ BalancePlanAuthority::create_recovery_plan(const String &location,
   // store the new plan
   m_generation++;
   m_map[location] = plans;
-  m_mml_writer->record_state(this);
+
+  /**
+   * Put the RangeServerConnection object into the 'removed' state and then
+   * atomically persist both the RangeServerConnection object and the plan to
+   * the MML
+   */
+  {
+    vector<MetaLog::Entity *> entities;
+    RangeServerConnectionPtr rsc;
+    if (!m_context->rsc_manager->find_server_by_location(location, rsc))
+      HT_FATALF("Unable to location RangeServerConnection object for %s", location.c_str());
+    rsc->set_removed();
+    entities.push_back(this);
+    entities.push_back(rsc.get());
+    m_mml_writer->record_state(entities);
+  }
 
   lock.unlock(); // otherwise operator<< will deadlock
   HT_INFO_OUT << "Global recovery plan was modified: " << *this << HT_END;
@@ -308,21 +323,30 @@ BalancePlanAuthority::update_range_plan(RangeRecoveryPlanPtr &plan,
   }
 }
 
-void
-BalancePlanAuthority::register_balance_plan(BalancePlanPtr &plan) {
+bool
+BalancePlanAuthority::register_balance_plan(BalancePlanPtr &plan, int generation,
+                                            std::vector<Entity *> &entities) {
   ScopedLock lock(m_mutex);
+
+  if (generation != m_generation)
+    return false;
 
   // Insert moves into current set
   foreach_ht (RangeMoveSpecPtr &move, plan->moves)
     m_current_set.insert(move);
 
+  entities.push_back(this);
+  m_mml_writer->record_state(entities);
+
   HT_INFO_OUT << "Balance plan registered move " << plan->moves.size()
         << " ranges" << ", BalancePlan = " << *plan<< HT_END;
+
+  return true;
 }
 
 bool
 BalancePlanAuthority::get_balance_destination(const TableIdentifier &table,
-                const RangeSpec &range, String &location) {
+                  const RangeSpec &range, String &location) {
   ScopedLock lock(m_mutex);
 
   RangeMoveSpecPtr move_spec = new RangeMoveSpec();
@@ -338,6 +362,9 @@ BalancePlanAuthority::get_balance_destination(const TableIdentifier &table,
   else {
     if (!Utility::next_available_server(m_context, location))
       return false;
+    move_spec->dest_location = location;
+    m_current_set.insert(move_spec);
+    m_mml_writer->record_state(this);
   }
 
   return true;

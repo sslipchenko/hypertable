@@ -59,18 +59,16 @@ namespace Hypertable {
     bool find_server_by_local_addr(InetAddr addr, RangeServerConnectionPtr &rsc);
     bool next_available_server(RangeServerConnectionPtr &rsc);
     void get_unbalanced_servers(StringSet &locations,
-                                std::vector<RangeServerConnectionPtr> &unbalanced,
-                                uint32_t *generation);
+                                std::vector<RangeServerConnectionPtr> &unbalanced);
     void set_servers_balanced(const std::vector<RangeServerConnectionPtr> &servers);
+    bool exist_unbalanced_servers();
     size_t server_count() { ScopedLock lock(mutex); return m_server_list.size(); }
     size_t connected_server_count();
     void get_servers(std::vector<RangeServerConnectionPtr> &servers);
     void get_valid_connections(StringSet &locations,
-                               std::vector<RangeServerConnectionPtr> &connections,
-                               uint32_t *generation);
+                               std::vector<RangeServerConnectionPtr> &connections);
     void get_connected_servers(StringSet &locations);
     size_t connection_count() { ScopedLock lock(mutex); return m_conn_count; }
-    uint32_t get_generation() { ScopedLock lock(mutex); return m_generation; }
 
   private:
 
@@ -123,7 +121,6 @@ namespace Hypertable {
     ServerList m_server_list;
     ServerList::iterator m_server_list_iter;
     size_t m_conn_count;
-    uint32_t m_generation;
   };
   typedef intrusive_ptr<RangeServerConnectionManager> RangeServerConnectionManagerPtr;
 

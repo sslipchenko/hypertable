@@ -93,25 +93,32 @@ void OperationBalance::execute() {
   switch (state) {
 
   case OperationState::INITIAL:
-    {
-      std::vector<RangeServerConnectionPtr> unbalanced_servers;
+
+    try {
+      std::vector<RangeServerConnectionPtr> balanced;
       std::vector<Entity *> entities;
+      int generation = m_context->get_balance_plan_authority()->get_generation();
 
       if (m_plan->empty())
-        m_context->balancer->create_plan(m_plan, unbalanced_servers);
+        m_context->balancer->create_plan(m_plan, balanced);
 
-      foreach_ht (RangeServerConnectionPtr &rsc, unbalanced_servers) {
+      set_state(OperationState::STARTED);
+      entities.push_back(this);
+      foreach_ht (RangeServerConnectionPtr &rsc, balanced) {
         rsc->set_balanced();
         entities.push_back(rsc.get());
       }
 
-      m_context->get_balance_plan_authority()->register_balance_plan(m_plan);
-      entities.push_back(m_context->get_balance_plan_authority());
+      if (!m_context->get_balance_plan_authority()->register_balance_plan(m_plan, generation, entities))
+        return;
 
-      set_state(OperationState::STARTED);
-      entities.push_back(this);
-
-      m_context->mml_writer->record_state(entities);
+      // Un-pause the balancer
+      m_context->balancer->unpause();
+    }
+    catch (Exception &e) {
+      complete_error(e);
+      HT_ERROR_OUT << e << HT_END;
+      break;
     }
 
   case OperationState::STARTED:
@@ -147,8 +154,7 @@ void OperationBalance::execute() {
   }
 
   HT_INFOF("Leaving Balance-%lld algorithm=%s", (Lld)header.id,
-           m_plan->algorithm.c_str());           
-
+           m_plan->algorithm.c_str());
 }
 
 void OperationBalance::display_state(std::ostream &os) {

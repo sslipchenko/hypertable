@@ -27,15 +27,13 @@ using namespace Hypertable;
 using namespace std;
 
 RangeServerConnectionManager::RangeServerConnectionManager()
-  : m_conn_count(0), m_generation(0) {
+  : m_conn_count(0) {
   comm = Comm::instance();
   m_server_list_iter = m_server_list.end();
 }
 
 void RangeServerConnectionManager::add_server(RangeServerConnectionPtr &rsc) {
   ScopedLock lock(mutex);
-
-  m_generation++;
 
   pair<Sequence::iterator, bool> insert_result = m_server_list.push_back( RangeServerConnectionEntry(rsc) );
 
@@ -64,8 +62,6 @@ bool RangeServerConnectionManager::connect_server(RangeServerConnectionPtr &rsc,
   HT_INFOF("connect_server(%s, '%s', local=%s, public=%s)",
            rsc->location().c_str(), hostname.c_str(),
            local_addr.format().c_str(), public_addr.format().c_str());
-
-  m_generation++;
 
   comm->set_alias(local_addr, public_addr);
   comm->add_proxy(rsc->location(), hostname, public_addr);
@@ -230,9 +226,6 @@ void RangeServerConnectionManager::erase_server(RangeServerConnectionPtr &rsc) {
   // reset server list iter
   m_server_list_iter = m_server_list.begin();
   
-  m_generation++;
-
-  rsc->set_removed();
 }
 
 bool RangeServerConnectionManager::next_available_server(RangeServerConnectionPtr &rsc) {
@@ -269,8 +262,7 @@ void RangeServerConnectionManager::get_servers(std::vector<RangeServerConnection
 }
 
 void RangeServerConnectionManager::get_valid_connections(StringSet &locations,
-                                               std::vector<RangeServerConnectionPtr> &connections,
-                                               uint32_t *generation) {
+                                 std::vector<RangeServerConnectionPtr> &connections) {
   ScopedLock lock(mutex);
   LocationIndex &location_index = m_server_list.get<1>();
   LocationIndex::iterator iter;
@@ -279,7 +271,6 @@ void RangeServerConnectionManager::get_valid_connections(StringSet &locations,
     if ((iter = location_index.find(location)) != location_index.end())
       connections.push_back(iter->rsc);
   }
-  *generation = m_generation;
 }
 
 
@@ -302,7 +293,7 @@ void RangeServerConnectionManager::get_connected_servers(StringSet &locations) {
 }
 
 void RangeServerConnectionManager::get_unbalanced_servers(StringSet &locations,
-      std::vector<RangeServerConnectionPtr> &unbalanced, uint32_t *generation) {
+      std::vector<RangeServerConnectionPtr> &unbalanced) {
   ScopedLock lock(mutex);
   LocationIndex &hash_index = m_server_list.get<1>();
   LocationIndex::iterator lookup_iter;
@@ -322,4 +313,14 @@ void RangeServerConnectionManager::set_servers_balanced(const std::vector<RangeS
   foreach_ht (const RangeServerConnectionPtr rsc, unbalanced) {
     rsc->set_balanced();
   }
+}
+
+bool RangeServerConnectionManager::exist_unbalanced_servers() {
+  ScopedLock lock(mutex);
+  for (ServerList::iterator iter = m_server_list.begin();
+       iter != m_server_list.end(); ++iter) {
+    if (!iter->removed() && !iter->rsc->get_balanced())
+      return true;
+  }
+  return false;
 }

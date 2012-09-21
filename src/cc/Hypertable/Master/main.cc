@@ -210,7 +210,6 @@ int main(int argc, char **argv) {
 
     int worker_count  = get_i32("workers");
     context->op = new OperationProcessor(context, worker_count);
-    context->balancer = new LoadBalancer(context);
 
     // First do System Upgrade
     operation = new OperationSystemUpgrade(context);
@@ -254,6 +253,7 @@ int main(int argc, char **argv) {
         }
       }
     }
+    context->balancer = new LoadBalancer(context);
 
     std::map<String, OperationPtr>::iterator recovery_it = recovery_operations.begin();
     while (recovery_it != recovery_operations.end()) {

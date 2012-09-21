@@ -55,10 +55,8 @@ const char *DefinitionMaster::name() {
 Entity *DefinitionMaster::create(uint16_t log_version, const EntityHeader &header) {
   Operation *operation = 0;
 
-  if (header.type == EntityType::RANGE_SERVER_CONNECTION) {
-    MetaLog::WriterPtr mml_writer = m_context ? m_context->mml_writer : 0;
-    return new RangeServerConnection(mml_writer, header);
-  }
+  if (header.type == EntityType::RANGE_SERVER_CONNECTION)
+    return new RangeServerConnection(header);
 
   if ((header.type & 0xF0000L) == 0x20000L) {
 
@@ -137,6 +135,8 @@ Entity *DefinitionMaster::create(uint16_t log_version, const EntityHeader &heade
       operation = new OperationRecover(m_context, header);
     else if (header.type == EntityType::OPERATION_RECOVER_SERVER_RANGES)
       operation = new OperationRecoverRanges(m_context, header);
+    else if (header.type == EntityType::OPERATION_BALANCE)
+      operation = new OperationBalance(m_context, header);
   }
 
   if (operation)

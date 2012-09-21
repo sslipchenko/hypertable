@@ -33,8 +33,7 @@ namespace Hypertable {
   class BalanceAlgorithm : public ReferenceCount {
   public:
     virtual void compute_plan(BalancePlanPtr &plan,
-                              std::vector<RangeServerConnectionPtr> &balanced,
-                              uint32_t *generation) = 0;
+                              std::vector<RangeServerConnectionPtr> &balanced) = 0;
 
   };
   typedef intrusive_ptr<BalanceAlgorithm> BalanceAlgorithmPtr;

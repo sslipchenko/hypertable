@@ -27,21 +27,17 @@
 
 using namespace Hypertable;
 
-RangeServerConnection::RangeServerConnection(MetaLog::WriterPtr &mml_writer,
-                                             const String &location,
+RangeServerConnection::RangeServerConnection(const String &location,
                                              const String &hostname, InetAddr public_addr)
   : MetaLog::Entity(MetaLog::EntityType::RANGE_SERVER_CONNECTION), 
-    m_mml_writer(mml_writer), m_handle(0), m_location(location), m_hostname(hostname), 
+    m_handle(0), m_location(location), m_hostname(hostname), 
     m_state(RangeServerConnectionFlags::INIT), m_public_addr(public_addr),
     m_connected(false), m_recovering(false) {
   m_comm_addr.set_proxy(m_location);
-  if (m_mml_writer)
-    m_mml_writer->record_state(this);
 }
 
-RangeServerConnection::RangeServerConnection(MetaLog::WriterPtr &mml_writer,
-                                          const MetaLog::EntityHeader &header_)
-  : MetaLog::Entity(header_), m_mml_writer(mml_writer), m_handle(0),
+RangeServerConnection::RangeServerConnection(const MetaLog::EntityHeader &header_)
+  : MetaLog::Entity(header_), m_handle(0),
     m_connected(false) {
   m_comm_addr.set_proxy(m_location);
 }
@@ -51,11 +47,11 @@ bool RangeServerConnection::connect(const String &hostname,
         InetAddr local_addr, InetAddr public_addr) {
   ScopedLock lock(m_mutex);
 
-  // update the mml if the hostname or IP changed
+  /** update the mml if the hostname or IP changed
   if (hostname != m_hostname || public_addr != m_public_addr) {
-    if (m_mml_writer)
-      m_mml_writer->record_state(this);
+    needs_persisting = true;
   }
+  */
 
   m_hostname = hostname;
   m_local_addr = local_addr;
@@ -89,8 +85,6 @@ void RangeServerConnection::set_removed() {
     return;
   m_connected = false;
   m_state |= RangeServerConnectionFlags::REMOVED;
-  if (m_mml_writer)
-    m_mml_writer->record_state(this);
 }
 
 bool RangeServerConnection::get_removed() {
@@ -103,8 +97,6 @@ bool RangeServerConnection::set_balanced() {
   if (m_state & RangeServerConnectionFlags::BALANCED)
     return false;
   m_state |= RangeServerConnectionFlags::BALANCED;
-  if (m_mml_writer)
-    m_mml_writer->record_state(this);
   return true;
 }
 

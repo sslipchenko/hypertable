@@ -34,6 +34,7 @@
 #include <boost/algorithm/string.hpp>
 
 #include "RangeServerHyperspaceCallback.h"
+#include "LoadBalancer.h"
 #include "OperationRegisterServer.h"
 #include "OperationProcessor.h"
 
@@ -94,7 +95,7 @@ void OperationRegisterServer::execute() {
      balanced = true;
   */
   if (!m_rsc) {
-    m_rsc = new RangeServerConnection(m_context->mml_writer, m_location,
+    m_rsc = new RangeServerConnection(m_location,
                                       m_system_stats.net_info.host_name,
                                       m_public_addr);
     newly_created = true;
@@ -127,7 +128,7 @@ void OperationRegisterServer::execute() {
     RangeServerHyperspaceCallback *rscb
       = new RangeServerHyperspaceCallback(m_context, m_rsc);
     Hyperspace::HandleCallbackPtr cb(rscb);
-    uint64_t handle = m_context->hyperspace->open(fname, Hyperspace::OPEN_FLAG_READ, cb);
+    uint64_t handle = m_context->hyperspace->open(fname, Hyperspace::OPEN_FLAG_READ|Hyperspace::OPEN_FLAG_CREATE, cb);
     HT_ASSERT(handle);
     m_rsc->set_handle(handle);
   }
@@ -174,7 +175,7 @@ void OperationRegisterServer::execute() {
       HT_ERRORF("Problem sending response (location=%s) back to %s",
               m_location.c_str(), m_event->addr.format().c_str());
     if (newly_created)
-      m_rsc->set_removed();
+      m_context->rsc_manager->erase_server(m_rsc);
     m_context->op->unblock(m_location);
     m_context->op->unblock(Dependency::SERVERS);
     m_context->op->unblock(Dependency::RECOVERY_BLOCKER);
@@ -202,6 +203,12 @@ void OperationRegisterServer::execute() {
             m_location.c_str(), m_event->addr.format().c_str());
     }
   }
+
+  if (!m_rsc->get_balanced())
+    m_context->balancer->signal_new_server();
+
+  // TODO:  if (m_rsc->needs_persisting()) ...
+  m_context->mml_writer->record_state(m_rsc.get());
 
   complete_ok_no_log();
   m_context->op->unblock(m_location);

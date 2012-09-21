@@ -41,12 +41,14 @@ namespace Hypertable {
   public:
     LoadBalancer(ContextPtr context);
 
-    void add_unbalanced_server(RangeServerConnectionPtr &rsc);
+    void signal_new_server();
 
     bool balance_needed();
 
+    void unpause();
+
     void create_plan(BalancePlanPtr &plan,
-                    std::vector <RangeServerConnectionPtr> &unbalanced_servers);
+                     std::vector <RangeServerConnectionPtr> &balanced);
 
     void transfer_monitoring_data(vector<RangeServerStatistics> &stats);
 
@@ -57,15 +59,18 @@ namespace Hypertable {
     CrontabPtr m_crontab;
     time_t m_next_balance_time_load;
     time_t m_next_balance_time_new_server;
-    std::vector <RangeServerConnectionPtr> m_unbalanced_servers;
     double m_loadavg_threshold;
     uint32_t m_new_server_balance_delay;
     bool m_new_server_added;
     bool m_enabled;
+    bool m_paused;
     std::vector <RangeServerStatistics> m_statistics;
   };
 
   typedef intrusive_ptr<LoadBalancer> LoadBalancerPtr;
+
+  void reenable_balancer(LoadBalancer *balancer);
+  
 
 } // namespace Hypertable
 

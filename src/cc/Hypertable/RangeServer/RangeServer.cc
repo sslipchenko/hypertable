@@ -471,13 +471,11 @@ RangeServer::~RangeServer() {
  * - Open the commit log
  */
 void RangeServer::initialize(PropertiesPtr &props) {
-  String top_dir = Global::toplevel_dir + "/servers/";
-
-  String fname = top_dir + Global::location_initializer->get();
+  String top_dir = Global::toplevel_dir + "/servers/" + Global::location_initializer->get();
   uint32_t lock_status;
   uint32_t oflags = OPEN_FLAG_READ | OPEN_FLAG_WRITE | OPEN_FLAG_LOCK;
 
-  m_existence_file_handle = m_hyperspace->open(fname, oflags);
+  m_existence_file_handle = m_hyperspace->open(top_dir, oflags);
 
   while (true) {
     lock_status = 0;

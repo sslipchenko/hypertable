@@ -23,7 +23,6 @@
 #define HYPERTABLE_OPERATIONRECOVERYBLOCKER_H
 
 #include "Operation.h"
-#include "RangeServerConnection.h"
 
 namespace Hypertable {
 

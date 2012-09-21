@@ -81,7 +81,8 @@ namespace Hypertable {
     }
 
     // registers a new BalancePlan
-    void register_balance_plan(BalancePlanPtr &plan);
+    bool register_balance_plan(BalancePlanPtr &plan, int generation,
+                               std::vector<Entity *> &entities);
 
     // returns the new destination of a range; used by OperationMoveRange
     bool get_balance_destination(const TableIdentifier &table,
