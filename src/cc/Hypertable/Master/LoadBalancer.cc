@@ -19,97 +19,220 @@
  * 02110-1301, USA.
  */
 #include "Common/Compat.h"
-#include "Common/Sweetener.h"
-#include "Common/Time.h"
 
+#include "BalanceAlgorithmEvenRanges.h"
+#include "BalanceAlgorithmOffload.h"
 #include "LoadBalancer.h"
-#include "OperationBalance.h"
 #include "Utility.h"
+
+#include <cstring>
 
 using namespace Hypertable;
 
-void LoadBalancer::register_plan(BalancePlanPtr &plan) {
-  ScopedLock lock(m_mutex);
+LoadBalancer::LoadBalancer(ContextPtr context)
+  : m_context(context), m_new_server_added(false) {
 
-  m_plan = plan;
+  m_crontab = new Crontab( m_context->props->get_str("Hypertable.LoadBalancer.Crontab") );
 
-  // Insert moves into current set
-  foreach_ht (RangeMoveSpecPtr &move, m_plan->moves)
-    m_current_set.insert(move);
+  m_new_server_balance_delay =
+    m_context->props->get_i32("Hypertable.LoadBalancer.BalanceDelay.NewServer");
 
-  HT_INFO_OUT << "Balance plan registered move " << m_plan->moves.size() << " ranges" <<
-      ", BalancePlan = " << *m_plan<< HT_END;
+  // TODO: fix me!!
+  //m_enabled = context->props->get_bool("Hypertable.LoadBalancer.Enable");
+  m_enabled = false;
+
+  m_loadavg_threshold = 
+            m_context->props->get_f64("Hypertable.LoadBalancer.LoadavgThreshold");
+
+  time_t t = time(0) +
+    m_context->props->get_i32("Hypertable.LoadBalancer.BalanceDelay.Initial");
+
+  m_next_balance_time_load = m_crontab->next_event(t);
+
+  if (m_context->rsc_manager->exist_unbalanced_servers()) {
+    m_new_server_added = true;
+    m_next_balance_time_new_server = time(0) + m_new_server_balance_delay;
+  }
+  else
+    m_next_balance_time_new_server = 0;
 }
 
-bool LoadBalancer::get_destination(const TableIdentifier &table, const RangeSpec &range, String &location) {
-  ScopedLock lock(m_mutex);
-  RangeMoveSpecPtr move_spec = new RangeMoveSpec();
+void LoadBalancer::signal_new_server() {
+  ScopedLock lock(m_add_mutex);
+  m_new_server_added = true;
+  m_next_balance_time_new_server = time(0) + m_new_server_balance_delay;
+}
 
-  move_spec->table = table;
-  move_spec->table.generation = 0;
-  move_spec->range = range;
+bool LoadBalancer::balance_needed() {
+  ScopedLock lock(m_add_mutex);
+  if (m_paused)
+    return false;
+  if (m_new_server_added && time(0) >= m_next_balance_time_new_server)
+    return true;
+  if (m_enabled && time(0) >= m_next_balance_time_load)
+    return true;
+  return false;
+}
 
-  MoveSetT::iterator iter;
 
-  if ((iter = m_current_set.find(move_spec)) != m_current_set.end())
-    location = (*iter)->dest_location;
-  else if ((iter = m_incomplete_set.find(move_spec)) != m_incomplete_set.end())
-    location = (*iter)->dest_location;
+void LoadBalancer::unpause() {
+  ScopedLock lock(m_add_mutex);
+  if (m_context->rsc_manager->exist_unbalanced_servers()) {
+    m_new_server_added = true;
+    m_next_balance_time_new_server = time(0) + m_new_server_balance_delay;
+  }
+  m_paused = false;
+}
+
+
+void LoadBalancer::transfer_monitoring_data(vector<RangeServerStatistics> &stats) {
+  ScopedLock lock(m_add_mutex);
+  m_statistics.swap(stats);
+}
+
+
+void LoadBalancer::create_plan(BalancePlanPtr &plan,
+                               std::vector <RangeServerConnectionPtr> &balanced) {
+  String name, arguments;
+  time_t now = time(0);
+  BalanceAlgorithmPtr algo;
+
+  {
+    ScopedLock lock(m_add_mutex);
+    String algorithm_spec = plan->algorithm;
+
+    if (m_statistics.size() <= 1)
+      HT_THROWF(Error::MASTER_BALANCE_PREVENTED,
+                "Too few servers (%u)", (unsigned)m_statistics.size());
+
+    /**
+     * Split algorithm spec into algorithm name + arguments
+     */
+    boost::trim(algorithm_spec);
+    if (algorithm_spec == "") {
+      if (m_new_server_added && now >= m_next_balance_time_new_server)
+        name = "table_ranges";
+      else if (now >= m_next_balance_time_load)
+        name = "load";
+      else
+        HT_THROW(Error::MASTER_BALANCE_PREVENTED, "Balance not needed");
+    }
+    else {
+      char *ptr = strchr((char *)algorithm_spec.c_str(), ' ');
+      if (ptr) {
+        name = String(algorithm_spec, 0, ptr-algorithm_spec.c_str());
+        if (*ptr) {
+          arguments = String(ptr);
+          boost::trim(arguments);
+        }
+      }
+      else
+        name = algorithm_spec;
+      boost::to_lower(name);
+    }
+
+    if (name == "offload")
+      algo = new BalanceAlgorithmOffload(m_context, m_statistics, arguments);
+    else if (name == "table_ranges")
+      algo = new BalanceAlgorithmEvenRanges(m_context, m_statistics);
+    else
+      HT_THROWF(Error::MASTER_BALANCE_PREVENTED,
+                "Unrecognized algorithm - %s", name.c_str());
+  }
+
+  algo->compute_plan(plan, balanced);
+
+  {
+    ScopedLock lock(m_add_mutex);
+    m_paused = true;
+  }
+  return;
+
+    /**
+
+  if (algorithm == "load") {
+
+    foreach_ht(const RangeServerStatistics &server_stats, statistics) {
+      if (!server_stats.stats->live) {
+        HT_INFOF("Aborting balance because '%s' not yet live",
+                 server_stats.location.c_str());
+        return false;
+      }
+    }
+
+    size_t total_ranges = 0;
+    get_unbalanced_servers(statistics);
+      size_t num_unbalanced_servers=m_unbalanced_servers.size();
+      foreach_ht(const RangeServerStatistics &server_stats, statistics) {
+        total_ranges += server_stats.stats->range_count;
+      }
+      // 3 ranges shd always be in the system (2 metadata, 1 rs_metrics)
+      if (num_unbalanced_servers > 0
+          && total_ranges > 3 + statistics.size()) {
+        HT_INFO_OUT << "Found " << num_unbalanced_servers
+            << " new/unbalanced servers, " << "total ranges=" << total_ranges
+            << ", total rangeservers=" << statistics.size() << HT_END;
+        mode = BALANCE_MODE_DISTRIBUTE_TABLE_RANGES;
+        m_wait_time_start = now;
+        m_waiting_for_servers = true;
+      }
+    }
+    else
+      mode = BALANCE_MODE_DISTRIBUTE_TABLE_RANGES;
+  }
   else {
-    if (!Utility::next_available_server(m_context, location))
-      return false;
-  }
-  return true;
-}
-
-
-bool LoadBalancer::move_complete(const TableIdentifier &table, const RangeSpec &range, int32_t error) {
-  ScopedLock lock(m_mutex);
-  RangeMoveSpecPtr move_spec = new RangeMoveSpec();
-
-  move_spec->table = table;
-  move_spec->table.generation = 0;
-  move_spec->range = range;
-
-  MoveSetT::iterator iter;
-
-  if ((iter = m_current_set.find(move_spec)) != m_current_set.end()) {
-    (*iter)->complete = true;
-    (*iter)->error = error;
-    m_cond.notify_all();
-  }
-  else if ((iter = m_incomplete_set.find(move_spec)) != m_incomplete_set.end()) {
-    (*iter)->complete = true;
-    (*iter)->error = error;
-    m_cond.notify_all();
+    if (algorithm.compare("table_ranges") == 0) {
+      mode = BALANCE_MODE_DISTRIBUTE_TABLE_RANGES;
+      m_waiting_for_servers = false;
+    }
+    else if (algorithm.compare("load") == 0)
+      mode = BALANCE_MODE_DISTRIBUTE_LOAD;
+    else if (boost::starts_with(algorithm, "offload ")) {
+      String list(algorithm, 8);
+      boost::trim(list);
+      boost::split(offload, list, boost::is_any_of(","));
+      mode = BALANCE_MODE_OFFLOAD_SERVERS;
+    }
+    else
+      HT_THROW(Error::NOT_IMPLEMENTED,
+            (String)"Unknown LoadBalancer algorithm '" + algorithm
+            + "' supported algorithms are 'TABLE_RANGES', 'LOAD'");
   }
 
-  return true;
-}
+  // TODO: write a factory class to create the sub balancer objects
 
-
-bool LoadBalancer::wait_for_complete(RangeMoveSpecPtr &move, uint32_t timeout_millis) {
-  ScopedLock lock(m_mutex);
-  boost::xtime expire_time;
-  MoveSetT::iterator iter;
-
-  boost::xtime_get(&expire_time, boost::TIME_UTC_);
-  expire_time.sec += timeout_millis/1000;
-  expire_time.nsec += (int32_t)((double)(timeout_millis-(timeout_millis/1000)) * 1000000.0);
-
-  while ((iter = m_current_set.find(move)) != m_current_set.end() &&
-         (*iter)->complete == false) {
-    if (!m_cond.timed_wait(lock, expire_time))
-      return false;
+  if (mode == BALANCE_MODE_DISTRIBUTE_LOAD && !m_waiting_for_servers) {
+    distribute_load(now, statistics, balance_plan);
+  }
+  else if (mode == BALANCE_MODE_DISTRIBUTE_TABLE_RANGES) {
+    time_duration td = now - m_wait_time_start;
+    if (m_waiting_for_servers && td.total_milliseconds() > m_balance_wait)
+      m_waiting_for_servers = false;
+    if (!m_waiting_for_servers)
+      distribute_table_ranges(statistics, balance_plan);
+  }
+  else if (mode == BALANCE_MODE_OFFLOAD_SERVERS) {
+    offload_servers(statistics, offload, balance_plan);
   }
 
-  return true;
+  if (balance_plan->moves.size()) {
+    get_unbalanced_servers(statistics);
+    if (mode == BALANCE_MODE_DISTRIBUTE_LOAD) {
+      HT_INFO_OUT << "LoadBalancerBasic mode=BALANCE_MODE_DISTRIBUTE_LOAD"
+              << HT_END;
+    }
+    else
+      HT_INFO_OUT << "LoadBalancerBasic mode=BALANCE_MODE_DISTRIBUTE_TABLE_RANGES" << HT_END;
+    HT_INFO_OUT << "BalancePlan created, move " << balance_plan->moves.size()
+                << " ranges" << HT_END;
+  }
+
+    */
+
+  // remember to return unbalanced_servers
+  // set next_balance_time (if we didn't abort)
 }
 
-void LoadBalancer::set_balanced() {
-    m_context->set_servers_balanced(m_unbalanced_servers);
-}
-
-void LoadBalancer::get_root_location(String &location) {
-  location = Utility::root_range_location(m_context);
+void Hypertable::reenable_balancer(LoadBalancer *balancer) {
+  
 }

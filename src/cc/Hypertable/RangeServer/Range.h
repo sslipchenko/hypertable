@@ -36,6 +36,7 @@
 #include "Hypertable/Lib/Schema.h"
 #include "Hypertable/Lib/Timestamp.h"
 #include "Hypertable/Lib/Types.h"
+#include "Hypertable/Lib/MetaLogEntityRange.h"
 
 #include "AccessGroup.h"
 #include "CellStore.h"
@@ -123,6 +124,8 @@ namespace Hypertable {
 
     void lock();
     void unlock();
+
+    MetaLog::EntityRange *metalog_entity() { return m_metalog_entity.get(); }
 
     uint64_t disk_usage();
 
@@ -263,6 +266,8 @@ namespace Hypertable {
 
     bool is_root() { return m_is_root; }
 
+    bool is_metadata() { return m_is_metadata; }
+
     void drop() {
       Barrier::ScopedActivator block_updates(m_update_barrier);
       Barrier::ScopedActivator block_scans(m_scan_barrier);
@@ -368,6 +373,7 @@ namespace Hypertable {
     Barrier          m_update_barrier;
     Barrier          m_scan_barrier;
     bool             m_is_root;
+    bool             m_is_metadata;
     uint64_t         m_added_deletes[KEYSPEC_DELETE_MAX];
     uint64_t         m_added_inserts;
     RangeSet        *m_range_set;

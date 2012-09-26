@@ -272,7 +272,7 @@ void create_table_write_metadata(ContextPtr &context, TableIdentifier *table) {
 
 bool next_available_server(ContextPtr &context, String &location) {
   RangeServerConnectionPtr rsc;
-  if (!context->next_available_server(rsc))
+  if (!context->rsc_manager->next_available_server(rsc))
     return false;
   location = rsc->location();
   return true;
@@ -286,7 +286,7 @@ void create_table_load_range(ContextPtr &context, const String &location, TableI
   if (context->test_mode) {
     RangeServerConnectionPtr rsc;
     HT_WARNF("Skipping %s::load_range() because in TEST MODE", location.c_str());
-    HT_ASSERT(context->find_server_by_location(location, rsc));
+    HT_ASSERT(context->rsc_manager->find_server_by_location(location, rsc));
     if (!rsc->connected())
       HT_THROW(Error::COMM_NOT_CONNECTED, "");
     return;
@@ -303,7 +303,7 @@ void create_table_load_range(ContextPtr &context, const String &location, TableI
     else {
       range_state.soft_limit = split_size;
       if (context->props->get_bool("Hypertable.Master.Split.SoftLimitEnabled"))
-        range_state.soft_limit /= std::min(64, (int)context->server_count()*2);
+        range_state.soft_limit /= std::min(64, (int)context->rsc_manager->server_count()*2);
     }
       
     rsc.load_range(addr, *table, range, range_state, needs_compaction);
@@ -315,7 +315,15 @@ void create_table_load_range(ContextPtr &context, const String &location, TableI
   }
 
   try {
-    rsc.acknowledge_load(addr, *table, range);
+    QualifiedRangeSpec qrs(*table, range);
+    vector<QualifiedRangeSpec *> range_vec;
+    map<QualifiedRangeSpec, int> response_map;
+    range_vec.push_back(&qrs);
+    rsc.acknowledge_load(addr, range_vec, response_map);
+    map<QualifiedRangeSpec, int>::iterator it = response_map.begin();
+    if (it->second != Error::OK)
+      HT_THROW(it->second, "Problem acknowledging load range");
+
   }
   catch (Exception &e) {
     if (e.code() != Error::RANGESERVER_TABLE_DROPPED &&

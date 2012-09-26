@@ -103,9 +103,7 @@ namespace Hypertable {
               const TableIdentifier *identifier,
               SchemaPtr &schema);
 
-    virtual ~TableInfo() {
-      HT_INFOF("%p: destructor", (void *)this);
-    }
+    virtual ~TableInfo() { }
 
     virtual bool remove(const String &start_row, const String &end_row);
     virtual bool change_end_row(const String &start_row, const String &old_end_row,
@@ -185,7 +183,7 @@ namespace Hypertable {
      *
      * @param range smart pointer to range object
      */
-    void add_range(RangePtr &range);
+    void add_range(RangePtr &range, bool remove_if_exists = false);
 
     /**
      * Finds the range that the given row belongs to

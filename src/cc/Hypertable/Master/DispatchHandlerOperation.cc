@@ -35,7 +35,7 @@ using namespace Hypertable;
  *
  */
 DispatchHandlerOperation::DispatchHandlerOperation(ContextPtr &context)
-  : m_context(context), m_rsclient(context->comm), m_outstanding(0), m_error_count(0) {
+  : m_context(context), m_rsclient(Comm::instance()), m_outstanding(0), m_error_count(0) {
 }
 
 
@@ -90,7 +90,7 @@ void DispatchHandlerOperation::process_events() {
 
   foreach_ht (EventPtr &event, m_events) {
 
-    if (m_context->find_server_by_local_addr(event->addr, rsc)) {
+    if (m_context->rsc_manager->find_server_by_local_addr(event->addr, rsc)) {
       result.location = rsc->location();
       if (event->type == Event::MESSAGE) {
         if ((result.error = Protocol::response_code(event)) != Error::OK) {

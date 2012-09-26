@@ -45,7 +45,7 @@ OperationProcessor::ThreadContext::~ThreadContext() {
 }
 
 
-OperationProcessor::OperationProcessor(ContextPtr &context, size_t thread_count) 
+OperationProcessor::OperationProcessor(ContextPtr &context, size_t thread_count)
   : m_context(context) {
   m_context.execution_order_iter = m_context.execution_order.end();
   m_context.op = this;
@@ -178,11 +178,6 @@ void OperationProcessor::unblock(const String &name) {
     if (m_context.ops[bound.first->second]->unblock())
       unblocked_something = true;
 
-  for (bound = m_context.dependency_index.equal_range(name);
-       bound.first != bound.second; ++bound.first)
-    if (m_context.ops[bound.first->second]->unblock())
-      unblocked_something = true;
-
   if (unblocked_something) {
     m_context.current_blocked = 0;
     m_context.need_order_recompute = true;
@@ -198,7 +193,7 @@ void OperationProcessor::Worker::operator()() {
   Vertex vertex;
   OperationPtr operation;
   bool current_needs_loading = true;
-  
+
   try {
 
     while (true) {
@@ -212,7 +207,7 @@ void OperationProcessor::Worker::operator()() {
             current_needs_loading = true;
           }
           else
-            current_needs_loading = 
+            current_needs_loading =
               m_context.current_active.empty() && m_context.current_blocked == 0;
 
           if (current_needs_loading &&
@@ -489,6 +484,106 @@ void OperationProcessor::graphviz_output(String &output) {
   output = oss.str();
 }
 
+void OperationProcessor::state_description(String &output) {
+  ScopedLock lock(m_context.mutex);
+  std::ostringstream oss;
+  DependencySet names;
+
+  oss << "Num vertices = " << num_vertices(m_context.graph) << "\n";
+  oss << "Busy count = " << m_context.busy_count << "\n";
+  oss << "Active set size = " << m_context.current_active.size() << "\n";
+  oss << "Need order recompute = " << (m_context.need_order_recompute ? "true\n" : "false\n");
+  oss << "Shutdown = " << (m_context.shutdown ? "true\n" : "false\n");
+  oss << "Paused = " << (m_context.paused ? "true\n" : "false\n");
+  oss << "\n";
+
+  std::pair<GraphTraits::vertex_iterator, GraphTraits::vertex_iterator> vp;
+  std::set<Vertex> vset;
+  size_t i = 0;
+  bool first;
+  for (vp = vertices(m_context.graph); vp.first != vp.second; ++vp.first) {
+    vset.insert(*vp.first);
+    oss << i << ": " << m_context.ops[*vp.first]->label() << "\n";
+    oss << "  active: " << ((m_context.current_active.count(*vp.first) > 0) ? "true\n" : "false\n");
+    oss << "  live: " << ((m_context.live.count(*vp.first) > 0) ? "true\n" : "false\n");
+    oss << "  exclusive: " << (m_context.ops[*vp.first]->exclusive() ? "true\n" : "false\n");
+    oss << "  perpetual: " << (m_context.ops[*vp.first]->is_perpetual() ? "true\n" : "false\n");
+    oss << "  blocked: " << (m_context.ops[*vp.first]->is_blocked() ? "true\n" : "false\n");
+    oss << "  state: " << OperationState::get_text(m_context.ops[*vp.first]->get_state()) << "\n";
+    oss << "  dependencies: (";
+    first = true;
+    names.clear();
+    m_context.ops[*vp.first]->dependencies(names);
+    foreach_ht (const String &str, names) {
+      if (!first) {
+        oss << ",";
+        first = false;
+      }
+      oss << str;
+    }
+    oss << ")\n";
+    oss << "  obstructions: (";
+    first = true;
+    names.clear();
+    m_context.ops[*vp.first]->obstructions(names);
+    foreach_ht (const String &str, names) {
+      if (!first) {
+        oss << ",";
+        first = false;
+      }
+      oss << str;
+    }
+    oss << ")\n";
+    oss << "  exclusivities: (";
+    first = true;
+    names.clear();
+    m_context.ops[*vp.first]->exclusivities(names);
+    foreach_ht (const String &str, names) {
+      if (!first) {
+        oss << ",";
+        first = false;
+      }
+      oss << str;
+    }
+    oss << ")\n";
+    oss << "\n";
+  }
+  
+  oss << "Current:\n";
+  for (ExecutionList::iterator iter = m_context.current.begin();
+       iter != m_context.current.end(); ++iter) {
+    if (iter == m_context.current_iter)
+      oss << "*";
+    if (vset.count(iter->vertex))
+      oss << m_context.ops[iter->vertex]->label() << "\n";
+    else
+      oss << "[retired]\n" ;
+  }
+  if (m_context.current_iter == m_context.current.end())
+    oss << "*\n";
+  oss << "\n";
+
+  oss << "Execution order:\n";
+  for (ExecutionList::iterator iter = m_context.execution_order.begin();
+       iter != m_context.execution_order.end(); ++iter) {
+    if (iter == m_context.execution_order_iter)
+      oss << "*";
+    if (vset.count(iter->vertex)) {
+      oss << m_context.ops[iter->vertex]->label() << " (time=";
+      oss << m_context.exec_time[iter->vertex] << ")\n";
+    }
+    else
+      oss << "[retired]\n" ;
+  }
+  if (m_context.execution_order_iter == m_context.execution_order.end())
+    oss << "*\n";
+  oss << "\n";
+
+  oss << "Graphviz:\n";
+  write_graphviz(oss, m_context.graph, make_label_writer(m_context.label));
+  output = oss.str();
+}
+
 
 void OperationProcessor::Worker::retire_operation(Vertex v, OperationPtr &operation) {
   m_context.op->purge_from_obstruction_index(v);
@@ -523,7 +618,6 @@ void OperationProcessor::Worker::update_operation(Vertex v, OperationPtr &operat
   remove_out_edge_if(v, np, m_context.graph);
 
   m_context.op->add_dependencies(v, operation);
-  
   m_context.need_order_recompute = true;
   m_context.current_iter = m_context.current.end();
   m_context.cond.notify_all();
@@ -626,3 +720,4 @@ bool OperationProcessor::Worker::load_current() {
   }
   return false;
 }
+
