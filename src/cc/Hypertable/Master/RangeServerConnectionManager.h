@@ -62,7 +62,7 @@ namespace Hypertable {
                                 std::vector<RangeServerConnectionPtr> &unbalanced);
     void set_servers_balanced(const std::vector<RangeServerConnectionPtr> &servers);
     bool exist_unbalanced_servers();
-    size_t server_count() { ScopedLock lock(mutex); return m_server_list.size(); }
+    size_t server_count();
     size_t connected_server_count();
     void get_servers(std::vector<RangeServerConnectionPtr> &servers);
     void get_valid_connections(StringSet &locations,

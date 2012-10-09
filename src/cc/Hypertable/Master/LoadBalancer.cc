@@ -77,10 +77,13 @@ bool LoadBalancer::balance_needed() {
 
 void LoadBalancer::unpause() {
   ScopedLock lock(m_add_mutex);
+  time_t now = time(0);
+  m_new_server_added = false;
   if (m_context->rsc_manager->exist_unbalanced_servers()) {
     m_new_server_added = true;
-    m_next_balance_time_new_server = time(0) + m_new_server_balance_delay;
+    m_next_balance_time_new_server = now + m_new_server_balance_delay;
   }
+  m_next_balance_time_load = m_crontab->next_event(now);
   m_paused = false;
 }
 
@@ -101,9 +104,22 @@ void LoadBalancer::create_plan(BalancePlanPtr &plan,
     ScopedLock lock(m_add_mutex);
     String algorithm_spec = plan->algorithm;
 
-    if (m_statistics.size() <= 1)
-      HT_THROWF(Error::MASTER_BALANCE_PREVENTED,
-                "Too few servers (%u)", (unsigned)m_statistics.size());
+    if (m_statistics.empty())
+      HT_THROW(Error::MASTER_BALANCE_PREVENTED, "Statistics vector is empty");
+
+    if (m_statistics.size() == 1) {
+      if (m_context->rsc_manager->server_count() == 1) {
+        if (m_new_server_added) {
+          RangeServerConnectionPtr rsc;
+          if (m_context->rsc_manager->find_server_by_location(m_statistics[0].location, rsc))
+            balanced.push_back(rsc);
+        }
+        plan->clear();
+        m_paused = true;
+        return;
+      }
+      HT_THROW(Error::MASTER_BALANCE_PREVENTED, "Not enough server statistics");
+    }
 
     /**
      * Split algorithm spec into algorithm name + arguments

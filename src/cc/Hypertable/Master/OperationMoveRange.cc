@@ -227,8 +227,8 @@ void OperationMoveRange::execute() {
               e.code() != Error::RANGESERVER_RANGE_NOT_FOUND) {
             // otherwise the server might be down - go back to the initial state
             HT_WARNF("Problem acknowledging load range %s: %s - %s (dest %s)",
-                    m_range_name.c_str(), Error::get_text(e.code()),
-                    e.what(), m_destination.c_str());
+                     m_range_name.c_str(), Error::get_text(e.code()),
+                     e.what(), m_destination.c_str());
             poll(0, 0, 5000);
             set_state(OperationState::INITIAL);
             return;

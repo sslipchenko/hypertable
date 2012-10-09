@@ -253,6 +253,17 @@ bool RangeServerConnectionManager::next_available_server(RangeServerConnectionPt
   return false;
 }
 
+size_t RangeServerConnectionManager::server_count() {
+  ScopedLock lock(mutex);
+  size_t count = 0;
+  for (ServerList::iterator iter = m_server_list.begin(); iter != m_server_list.end(); ++iter) {
+    if (!iter->removed())
+      count++;
+  }
+  return count;
+}
+
+
 void RangeServerConnectionManager::get_servers(std::vector<RangeServerConnectionPtr> &servers) {
   ScopedLock lock(mutex);
   for (ServerList::iterator iter = m_server_list.begin(); iter != m_server_list.end(); ++iter) {

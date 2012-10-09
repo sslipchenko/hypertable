@@ -223,7 +223,7 @@ int main(int argc, char **argv) {
         if (operation->remove_explicitly())
           context->reference_manager->add(operation);
         // master was interrupted in the middle of rangeserver failover
-        else if (dynamic_cast<OperationRecover *>(operation.get())) {
+        if (dynamic_cast<OperationRecover *>(operation.get())) {
           HT_INFO("Recovery was interrupted; continuing");
           OperationRecover *op =
               dynamic_cast<OperationRecover *>(operation.get());
