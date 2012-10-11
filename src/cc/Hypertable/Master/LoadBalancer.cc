@@ -21,6 +21,7 @@
 #include "Common/Compat.h"
 
 #include "BalanceAlgorithmEvenRanges.h"
+#include "BalanceAlgorithmLoad.h"
 #include "BalanceAlgorithmOffload.h"
 #include "LoadBalancer.h"
 #include "Utility.h"
@@ -153,6 +154,8 @@ void LoadBalancer::create_plan(BalancePlanPtr &plan,
       algo = new BalanceAlgorithmOffload(m_context, m_statistics, arguments);
     else if (name == "table_ranges")
       algo = new BalanceAlgorithmEvenRanges(m_context, m_statistics);
+    else if (name == "load")
+      algo = new BalanceAlgorithmLoad(m_context, m_statistics);
     else
       HT_THROWF(Error::MASTER_BALANCE_PREVENTED,
                 "Unrecognized algorithm - %s", name.c_str());

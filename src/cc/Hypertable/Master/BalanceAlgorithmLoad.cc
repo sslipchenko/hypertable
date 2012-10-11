@@ -20,12 +20,25 @@
  */
 #include "Common/Compat.h"
 
-#include "BalanceLoad.h"
+#include "BalanceAlgorithmLoad.h"
 
 using namespace Hypertable;
 using namespace std;
 
-void BalanceLoad::compute_plan(BalancePlanPtr &balance_plan) {
+
+BalanceAlgorithmLoad::BalanceAlgorithmLoad(ContextPtr &context,
+                                           std::vector<RangeServerStatistics> &statistics)
+  : m_context(context) {
+
+  m_loadavg_deviation_threshold = m_context->props->get_f64("Hypertable.LoadBalancer.LoadavgThreshold");
+
+  foreach_ht (RangeServerStatistics &rs, statistics)
+    m_rsstats[rs.location] = rs;
+}
+
+
+void BalanceAlgorithmLoad::compute_plan(BalancePlanPtr &plan,
+                                        std::vector<RangeServerConnectionPtr> &balanced) {
   vector<ServerMetrics> server_metrics;
   RSMetrics rs_metrics(m_context->rs_metrics_table);
   rs_metrics.get_server_metrics(server_metrics);
@@ -103,7 +116,7 @@ void BalanceLoad::compute_plan(BalancePlanPtr &balance_plan) {
             lightest.server_id, ranges_desc_load_it->table_id,
             ranges_desc_load_it->start_row, ranges_desc_load_it->end_row);
         HT_DEBUG_OUT << "Added move to plan: " << *(move.get()) << HT_END;
-        balance_plan->moves.push_back(move);
+        plan->moves.push_back(move);
 
         // recompute loadavgs
         heaviest.loadavg -=
@@ -136,7 +149,7 @@ void BalanceLoad::compute_plan(BalancePlanPtr &balance_plan) {
   }
 }
 
-void BalanceLoad::calculate_server_summary(const ServerMetrics &metrics,
+void BalanceAlgorithmLoad::calculate_server_summary(const ServerMetrics &metrics,
     ServerMetricSummary &summary) {
   summary.server_id = metrics.get_id().c_str();
   double loadestimate = 0;
@@ -159,7 +172,7 @@ void BalanceLoad::calculate_server_summary(const ServerMetrics &metrics,
     summary.disk_full = !m_context->can_accept_ranges(it->second);
 }
 
-void BalanceLoad::calculate_range_summary(const RangeMetrics &metrics,
+void BalanceAlgorithmLoad::calculate_range_summary(const RangeMetrics &metrics,
     RangeMetricSummary &summary) {
 
   bool start_row_set;
@@ -177,7 +190,7 @@ void BalanceLoad::calculate_range_summary(const RangeMetrics &metrics,
 }
 
 
-void BalanceLoad::populate_range_load_set(const RangeMetricsMap &range_metrics, RangeSetDescLoad &ranges_desc_load) {
+void BalanceAlgorithmLoad::populate_range_load_set(const RangeMetricsMap &range_metrics, RangeSetDescLoad &ranges_desc_load) {
 
   ranges_desc_load.clear();
   foreach_ht(const RangeMetricsMap::value_type &vv, range_metrics) {
@@ -190,7 +203,7 @@ void BalanceLoad::populate_range_load_set(const RangeMetricsMap &range_metrics, 
   }
 }
 
-bool BalanceLoad::check_move(const ServerMetricSummary &source,
+bool BalanceAlgorithmLoad::check_move(const ServerMetricSummary &source,
     const ServerMetricSummary &destination, double range_loadestimate,
     double mean_loadavg) {
   // make sure that this move doesn't increase the loadavg of the target more than that of the source
@@ -203,7 +216,7 @@ bool BalanceLoad::check_move(const ServerMetricSummary &source,
 }
 
 ostream &Hypertable::operator<<(ostream &out,
-    const BalanceLoad::ServerMetricSummary &summary) {
+    const BalanceAlgorithmLoad::ServerMetricSummary &summary) {
   out << "{ServerMetricSummary: server_id=" << summary.server_id << ", loadavg="
       << summary.loadavg << ", loadavg_per_loadestimate=" << summary.loadavg_per_loadestimate
       << "}";
@@ -211,7 +224,7 @@ ostream &Hypertable::operator<<(ostream &out,
 }
 
 ostream &Hypertable::operator<<(ostream &out,
-    const BalanceLoad::RangeMetricSummary &summary) {
+    const BalanceAlgorithmLoad::RangeMetricSummary &summary) {
   out << "{RangeMetricSummary: table_id=" << summary.table_id << ", start_row="
       << summary.start_row  << ", end_row=" << summary.end_row
       << ", loadestimate=" << summary.loadestimate << "}";

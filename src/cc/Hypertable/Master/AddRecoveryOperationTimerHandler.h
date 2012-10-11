@@ -41,7 +41,12 @@ namespace Hypertable {
 
     virtual void handle(EventPtr &event_ptr) {
       OperationPtr operation = new OperationRecover(m_context, m_rsc);
-      m_context->op->add_operation(operation);
+      try {
+        m_context->op->add_operation(operation);
+      }
+      catch (Exception &e) {
+        HT_INFO_OUT << e << HT_END;
+      }
     }
 
   private:

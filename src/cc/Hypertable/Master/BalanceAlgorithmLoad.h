@@ -19,35 +19,31 @@
  * 02110-1301, USA.
  */
 
-#ifndef HYPERTABLE_BALANCELOAD_H
-#define HYPERTABLE_BALANCELOAD_H
+#ifndef HYPERTABLE_BALANCEALGORITHMLOAD_H
+#define HYPERTABLE_BALANCEALGORITHMLOAD_H
 
 #include <set>
 #include <map>
 #include <iostream>
+#include <vector>
 
-#include "Common/String.h"
-#include "Hypertable/Lib/Client.h"
-
+#include "BalanceAlgorithm.h"
 #include "RSMetrics.h"
 #include "RangeServerStatistics.h"
 #include "Context.h"
 
+
 namespace Hypertable {
 
-  class BalanceLoad {
+  class BalanceAlgorithmLoad : public BalanceAlgorithm {
     public:
-      BalanceLoad(double max_load_deviation,
-              vector<RangeServerStatistics> &range_server_stats,
-              ContextPtr context)
-        : m_loadavg_deviation_threshold(max_load_deviation),
-          m_context(context) {
-        foreach_ht (RangeServerStatistics &rs, range_server_stats)
-          m_rsstats[rs.location] = rs;
-      }
 
-      void compute_plan(BalancePlanPtr &balance_plan);
+    BalanceAlgorithmLoad(ContextPtr &context,
+                         std::vector<RangeServerStatistics> &statistics);
 
+    virtual void compute_plan(BalancePlanPtr &plan,
+                              std::vector<RangeServerConnectionPtr> &balanced);
+    
     public:
       class ServerMetricSummary {
       public:
@@ -107,12 +103,12 @@ namespace Hypertable {
       StatisticsSet m_rsstats;
       double m_loadavg_deviation_threshold;
       ContextPtr m_context;
-  }; // BalanceLoad
+  };
 
   std::ostream &operator<<(std::ostream &out,
-                const BalanceLoad::ServerMetricSummary &summary);
+                const BalanceAlgorithmLoad::ServerMetricSummary &summary);
   std::ostream &operator<<(std::ostream &out,
-                const BalanceLoad::RangeMetricSummary &summary);
+                const BalanceAlgorithmLoad::RangeMetricSummary &summary);
 } // namespace Hypertable
 
-#endif // HYPERTABLE_BALANCELOAD_H
+#endif // HYPERTABLE_BALANCEALGORITHMLOAD_H
