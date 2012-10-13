@@ -76,6 +76,7 @@ namespace Hypertable {
     extern const char *SYSTEM;
     extern const char *RECOVER_SERVER;
     extern const char *RECOVERY_BLOCKER;
+    extern const char *RECOVERY;
   }
 
   namespace NamespaceFlag {

@@ -54,7 +54,7 @@ namespace Hypertable {
     // make sure all recovery participants are available
     bool validate_recovery_plan();
     void initialize_obstructions_dependencies();
-    void wait_for_quorum(bool &blocked);
+    bool wait_for_quorum();
     bool get_new_recovery_plan();
     bool prepare_to_commit();
     bool replay_fragments();

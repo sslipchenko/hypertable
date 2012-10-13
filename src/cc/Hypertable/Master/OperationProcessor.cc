@@ -186,6 +186,39 @@ void OperationProcessor::unblock(const String &name) {
 
 }
 
+void OperationProcessor::activate(const String &name) {
+  ScopedLock lock(m_context.mutex);
+
+  if (!m_context.perpetual_ops.empty()) {
+    DependencySet names;
+    PerpetualSet::iterator iter = m_context.perpetual_ops.begin();
+    OperationPtr operation;
+    while (iter != m_context.perpetual_ops.end()) {
+      (*iter)->obstructions(names);
+#if 0      
+      {
+        String str;
+        foreach_ht (const String &tag, names)
+          str += tag + " ";
+        HT_INFOF("Activating %s with obstructions %s", (*iter)->label().c_str(), str.c_str());
+      }
+#endif
+      if (names.count(name) > 0) {
+        PerpetualSet::iterator rm_iter = iter;
+        operation = *iter++;
+        m_context.perpetual_ops.erase(rm_iter);
+        operation->set_state(OperationState::INITIAL);
+        add_operation_internal(operation);
+        m_context.need_order_recompute = true;
+        m_context.current_iter = m_context.current.end();
+        m_context.cond.notify_all();
+      }
+      else
+        ++iter;
+    }
+  }
+}
+
 /**
  *
  */
@@ -375,7 +408,9 @@ void OperationProcessor::add_dependency(Vertex v, const String &name) {
     while (iter != m_context.perpetual_ops.end()) {
       (*iter)->obstructions(names);
       if (names.count(name) > 0) {
+        PerpetualSet::iterator rm_iter = iter;
         operation = *iter++;
+        m_context.perpetual_ops.erase(rm_iter);
         operation->set_state(OperationState::INITIAL);
         add_operation_internal(operation);
       }

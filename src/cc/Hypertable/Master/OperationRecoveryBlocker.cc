@@ -51,12 +51,15 @@ void OperationRecoveryBlocker::execute() {
 
   if (connected_servers < quorum || connected_servers == 0) {
     block();
+    HT_INFO_OUT << "Only " << connected_servers
+        << " servers ready, total servers=" << total_servers << " quorum="
+        << quorum << ", wait for servers" << HT_END;
     HT_INFOF("Leaving RecoveryBlocker-%lld state=%s-BLOCKED", (Lld)header.id,
              OperationState::get_text(get_state()));
     return;
   }
 
-  complete_ok_no_log();
+  set_state(OperationState::COMPLETE);
 
   HT_INFOF("Leaving RecoveryBlocker-%lld state=%s", (Lld)header.id,
            OperationState::get_text(get_state()));

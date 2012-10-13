@@ -76,7 +76,8 @@ namespace Hypertable {
         OPERATION_RECOVER_SERVER_RANGES      = 0x00030015,
         OPERATION_RECOVERY_BLOCKER           = 0x00030016,
         OPERATION_STOP                       = 0x00030017,
-        OPERATION_BALANCE                    = 0x00030018
+        OPERATION_BALANCE                    = 0x00030018,
+        OPERATION_TIMED_BARRIER              = 0x00030019
       };
     }
   }

@@ -37,6 +37,7 @@ const char *Dependency::METADATA = "METADATA";
 const char *Dependency::SYSTEM = "SYSTEM";
 const char *Dependency::RECOVER_SERVER = "RECOVER_SERVER";
 const char *Dependency::RECOVERY_BLOCKER= "RECOVERY_BLOCKER";
+const char *Dependency::RECOVERY = "RECOVERY";
 
 
 const char *OperationState::get_text(int32_t state);

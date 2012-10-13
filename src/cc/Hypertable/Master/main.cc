@@ -42,13 +42,14 @@ extern "C" {
 #include "Context.h"
 #include "LoadBalancer.h"
 #include "MetaLogDefinitionMaster.h"
+#include "OperationBalance.h"
 #include "OperationInitialize.h"
 #include "OperationProcessor.h"
 #include "OperationRecover.h"
 #include "OperationRecoveryBlocker.h"
 #include "OperationSystemUpgrade.h"
+#include "OperationTimedBarrier.h"
 #include "OperationWaitForServers.h"
-#include "OperationBalance.h"
 #include "ReferenceManager.h"
 #include "ResponseManager.h"
 #include "BalancePlanAuthority.h"
@@ -286,6 +287,9 @@ int main(int argc, char **argv) {
     operation = new OperationWaitForServers(context);
     operations.push_back(operation);
     operation = new OperationRecoveryBlocker(context);
+    operations.push_back(operation);
+    context->recovery_barrier_op = new OperationTimedBarrier(context, Dependency::RECOVERY, Dependency::RECOVERY_BLOCKER);
+    operation = context->recovery_barrier_op;
     operations.push_back(operation);
 
     context->op->add_operations(operations);

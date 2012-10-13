@@ -58,7 +58,6 @@ void OperationRecoverRanges::execute() {
   bool issue_done = false;
   bool prepare_done = false;
   bool commit_done = false;
-  bool blocked = false;
 
   HT_INFOF("Entering RecoverServerRanges (%p) %s type=%d attempt=%d state=%s",
           (void *)this, m_location.c_str(), m_type, m_attempt,
@@ -74,7 +73,6 @@ void OperationRecoverRanges::execute() {
     issue_done = false;
     prepare_done = false;
     commit_done = false;
-    blocked = false;
     set_state(OperationState::INITIAL);
     m_context->mml_writer->record_state(this);
     state = get_state();
@@ -83,8 +81,7 @@ void OperationRecoverRanges::execute() {
   switch (state) {
   case OperationState::INITIAL:
     // make sure that enough servers are connected
-    wait_for_quorum(blocked);
-    if (blocked)
+    if (!wait_for_quorum())
       break;
 
     // if there are no ranges then there is nothing to do
@@ -106,8 +103,7 @@ void OperationRecoverRanges::execute() {
 
   case OperationState::PHANTOM_LOAD:
     // make sure that enough servers are connected
-    wait_for_quorum(blocked);
-    if (blocked)
+    if (!wait_for_quorum())
       break;
 
     // First ask the destination servers to load the phantom ranges. In 
@@ -140,8 +136,7 @@ void OperationRecoverRanges::execute() {
 
   case OperationState::REPLAY_FRAGMENTS:
     // make sure that enough servers are connected
-    wait_for_quorum(blocked);
-    if (blocked)
+    if (!wait_for_quorum())
       break;
 
     // issue play requests to the destination servers. If the
@@ -177,8 +172,7 @@ void OperationRecoverRanges::execute() {
 
   case OperationState::PREPARE:
     // make sure that enough servers are connected
-    wait_for_quorum(blocked);
-    if (blocked)
+    if (!wait_for_quorum())
       break;
 
     if (!issue_done && !validate_recovery_plan()) {
@@ -210,8 +204,7 @@ void OperationRecoverRanges::execute() {
 
   case OperationState::COMMIT:
     // make sure that enough servers are connected
-    wait_for_quorum(blocked);
-    if (blocked)
+    if (!wait_for_quorum())
       break;
 
     // Tell destination servers to update metadata and flip ranges live.
@@ -238,8 +231,7 @@ void OperationRecoverRanges::execute() {
 
   case OperationState::ACKNOWLEDGE:
     // make sure that enough servers are connected
-    wait_for_quorum(blocked);
-    if (blocked)
+    if (!wait_for_quorum())
       break;
 
     if (!commit_done && !validate_recovery_plan()) {
@@ -450,8 +442,7 @@ bool OperationRecoverRanges::validate_recovery_plan() {
           == m_context->get_balance_plan_authority()->get_generation());
 }
 
-void OperationRecoverRanges::wait_for_quorum(bool &blocked) {
-  blocked = false;
+bool OperationRecoverRanges::wait_for_quorum() {
   StringSet active_locations;
   m_context->rsc_manager->get_connected_servers(active_locations);
   size_t total_servers = m_context->rsc_manager->server_count();
@@ -460,15 +451,15 @@ void OperationRecoverRanges::wait_for_quorum(bool &blocked) {
             / 100;
 
   if (active_locations.size() < quorum || active_locations.size() == 0) {
-    blocked = true;
     // wait for at least half the servers to be up before proceeding
     HT_INFO_OUT << "Only " << active_locations.size()
         << " servers ready, total servers=" << total_servers << " quorum="
         << quorum << ", wait for servers" << HT_END;
 
-    OperationPtr op = new OperationRecoveryBlocker(m_context);
-    m_context->op->add_operation(op);
+    m_context->op->activate(Dependency::RECOVERY_BLOCKER);
+    return false;
   }
+  return true;
 }
 
 bool OperationRecoverRanges::get_new_recovery_plan() {

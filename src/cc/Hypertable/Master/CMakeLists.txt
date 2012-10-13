@@ -50,6 +50,7 @@ OperationRelinquishAcknowledge.cc
 OperationRenameTable.cc
 OperationStatus.cc
 OperationSystemUpgrade.cc
+OperationTimedBarrier.cc
 OperationWaitForServers.cc
 OperationStop.cc
 RangeServerConnection.cc

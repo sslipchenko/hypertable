@@ -41,6 +41,7 @@ OperationRecover::OperationRecover(ContextPtr &context,
     m_location(rsc->location()), m_rsc(rsc), m_hyperspace_handle(0), 
     m_lock_acquired(false) {
   m_dependencies.insert(Dependency::RECOVERY_BLOCKER);
+  m_dependencies.insert(Dependency::RECOVERY);
   m_exclusivities.insert(m_rsc->location());
   m_obstructions.insert(Dependency::RECOVER_SERVER);
   m_hash_code = md5_hash("RecoverServer") ^ md5_hash(m_rsc->location().c_str());

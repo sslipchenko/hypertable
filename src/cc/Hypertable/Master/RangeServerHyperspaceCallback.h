@@ -24,8 +24,10 @@
 
 #include "Hyperspace/Session.h"
 
-#include "AddRecoveryOperationTimerHandler.h"
 #include "Context.h"
+#include "OperationProcessor.h"
+#include "OperationRecover.h"
+#include "OperationTimedBarrier.h"
 #include "RangeServerConnection.h"
 
 namespace Hypertable {
@@ -45,12 +47,17 @@ namespace Hypertable {
 
     virtual void lock_released() {
       if (m_context->rsc_manager->disconnect_server(m_rsc)) {
+
         uint32_t millis = m_context->props->get_i32("Hypertable.Failover.GracePeriod");
-        HT_INFOF("Scheduling recovery operation for %s in %ld milliseconds",
-                 m_rsc->location().c_str(), (long)millis);
-        DispatchHandlerPtr handler
-          = new AddRecoveryOperationTimerHandler(m_context, m_rsc);
-        m_context->comm->set_timer(millis, handler.get());
+        m_context->recovery_barrier_op->advance_into_future(millis);
+
+        OperationPtr operation = new OperationRecover(m_context, m_rsc);
+        try {
+          m_context->op->add_operation(operation);
+        }
+        catch (Exception &e) {
+          HT_INFO_OUT << e << HT_END;
+        }
       }
     }
 
