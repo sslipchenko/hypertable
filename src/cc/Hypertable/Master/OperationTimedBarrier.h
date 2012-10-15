@@ -55,6 +55,7 @@ namespace Hypertable {
   private:
     boost::condition m_cond;
     HiResTime m_expire_time;
+    String m_block_dependency;
     String m_wakeup_dependency;
   };
   typedef intrusive_ptr<OperationTimedBarrier> OperationTimedBarrierPtr;

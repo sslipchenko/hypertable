@@ -321,7 +321,7 @@ RangeServer::RangeServer(PropertiesPtr &props, ConnectionManagerPtr &conn_mgr,
   m_master_client->initiate_connection(m_master_connection_handler, Global::location_initializer);
   Global::master_client = m_master_client;
 
-  Global::location_initializer->wait_until_assigned();
+  Global::location_initializer->wait_for_handshake();
 
   initialize(props);
 

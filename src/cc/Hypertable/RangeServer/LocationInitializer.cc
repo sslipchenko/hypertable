@@ -40,7 +40,7 @@ using namespace Hypertable;
 using namespace Serialization;
 
 LocationInitializer::LocationInitializer(PropertiesPtr &props)
-  : m_props(props), m_location_persisted(false) {
+  : m_props(props), m_location_persisted(false), m_handshake_complete(false) {
 
   Path data_dir = m_props->get_str("Hypertable.DataDirectory");
   data_dir /= "/run";
@@ -141,6 +141,7 @@ bool LocationInitializer::process_initialization_response(Event *event) {
     else
       HT_ASSERT(m_location == location);
     location_persisted = m_location_persisted;
+    m_handshake_complete = true;
   }
 
   if (!location_persisted) {
@@ -162,8 +163,8 @@ String LocationInitializer::get() {
   return m_location;
 }
 
-void LocationInitializer::wait_until_assigned() {
+void LocationInitializer::wait_for_handshake() {
   ScopedLock lock(m_mutex);
-  while (m_location == "")
+  while (!m_handshake_complete)
     m_cond.wait(lock);
 }

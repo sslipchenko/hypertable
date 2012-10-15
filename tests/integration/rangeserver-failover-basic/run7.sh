@@ -113,13 +113,11 @@ then
   exit 1
 fi
 
-# The "Waiting for grace period" message must be printed 3 times:
-#   1. when the grace period of rs1 started
-#   2. when the grace period of rs2 started
-#   3. when the grace period of rs1 was repeated, because rs2 went down in the
-#       meantime
-L=`grep "Waiting for grace period..." $MASTER_LOG  | wc -l`
-if [ "$L" -ne "3" ]
+# The "Barrier for RECOVERY will be up" will be printed twice:
+#   1. When rs1 is stopped
+#   2. When barrier is pushed back by 5 seconds after rs2 is stopped
+L=`grep "Barrier for RECOVERY will be up" $MASTER_LOG  | wc -l`
+if [ "$L" -ne "2" ]
 then
   echo "Test failed"
   exit 1

@@ -42,7 +42,7 @@ namespace Hypertable {
     virtual bool process_initialization_response(Event *event);
     virtual uint64_t initialization_command() { return RangeServerProtocol::COMMAND_INITIALIZE; }
     String get();
-    void wait_until_assigned();
+    void wait_for_handshake();
 
   private:
     Mutex m_mutex;
@@ -51,6 +51,7 @@ namespace Hypertable {
     String m_location;
     String m_location_file;
     bool m_location_persisted;
+    bool m_handshake_complete;
   };
   typedef boost::intrusive_ptr<LocationInitializer> LocationInitializerPtr;
 

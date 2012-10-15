@@ -31,7 +31,7 @@ OperationTimedBarrier::OperationTimedBarrier(ContextPtr &context,
                                              const String &block_dependency,
                                              const String &wakeup_dependency)
   : Operation(context, MetaLog::EntityType::OPERATION_TIMED_BARRIER),
-    m_wakeup_dependency(wakeup_dependency) {
+    m_block_dependency(block_dependency), m_wakeup_dependency(wakeup_dependency) {
   m_obstructions.insert(block_dependency);
   boost::xtime_get(&m_expire_time, boost::TIME_UTC_);
 }
@@ -50,6 +50,8 @@ void OperationTimedBarrier::execute() {
            OperationState::get_text(m_state));
 
   while (now < m_expire_time) {
+    HT_INFOF("Barrier for %s will be up for %lld milliseconds",
+             m_block_dependency.c_str(), (Lld)xtime_diff_millis(now, m_expire_time));
     m_cond.timed_wait(lock, (boost::xtime)m_expire_time);
     now.reset();
   }

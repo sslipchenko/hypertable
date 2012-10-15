@@ -31,8 +31,13 @@ wait_for_recovery() {
   done
 }
 
-stop_rs1() {
+pause_rs1() {
   kill -STOP `cat $HT_HOME/run/Hypertable.RangeServer.rs1.pid`
+}
+
+stop_rs1() {
+  kill -CONT `cat $HT_HOME/run/Hypertable.RangeServer.rs1.pid`
+  kill -9 `cat $HT_HOME/run/Hypertable.RangeServer.rs1.pid`
 }
 
 stop_rs2() {
@@ -75,8 +80,8 @@ $HT_HOME/bin/ht ht_load_generator update \
 # dump keys
 ${HT_HOME}/bin/ht shell --config=${SCRIPT_DIR}/test.cfg --no-prompt --exec "use '/'; select * from LoadTest KEYS_ONLY into file '${RUN_DIR}/keys.pre';"
 
-# kill rs1 with sigstop
-stop_rs1
+# suspend rs1 with sigstop
+pause_rs1
 
 # wait for recovery to complete 
 wait_for_recovery
@@ -97,6 +102,7 @@ sleep 10
 ${HT_HOME}/bin/ht shell --config=${SCRIPT_DIR}/test.cfg --no-prompt --exec "use '/'; select * from LoadTest KEYS_ONLY into file '${RUN_DIR}/keys.post';"
 
 $HT_HOME/bin/stop-servers.sh
+stop_rs1
 stop_rs2
 
 # check output
