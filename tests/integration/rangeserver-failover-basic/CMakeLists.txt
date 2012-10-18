@@ -43,22 +43,6 @@ add_test(RangeServer-failover-sigstop env INSTALL_DIR=${INSTALL_DIR}
 add_test(RangeServer-failover-bad-fragments env INSTALL_DIR=${INSTALL_DIR}
          bash -x ${CMAKE_CURRENT_SOURCE_DIR}/run9.sh)
 
-# 2 RangeServers, 1 crashes during a MoveRange operation and is recovered.
-add_test(RangeServer-failover-move-range-1 env INSTALL_DIR=${INSTALL_DIR}
-         bash -x ${CMAKE_CURRENT_SOURCE_DIR}/run10.sh)
-
-# 2 RangeServers, 1 crashes during a MoveRange operation and is recovered.
-add_test(RangeServer-failover-move-range-2 env INSTALL_DIR=${INSTALL_DIR}
-         bash -x ${CMAKE_CURRENT_SOURCE_DIR}/run11.sh)
-
-# 2 RangeServers, 1 crashes during a MoveRange operation and is recovered.
-add_test(RangeServer-failover-move-range-3 env INSTALL_DIR=${INSTALL_DIR}
-         bash -x ${CMAKE_CURRENT_SOURCE_DIR}/run12.sh)
-
-# 2 RangeServers, 1 crashes during a MoveRange operation and is recovered.
-add_test(RangeServer-failover-move-range-4 env INSTALL_DIR=${INSTALL_DIR}
-         bash -x ${CMAKE_CURRENT_SOURCE_DIR}/run13.sh)
-
 # 2 RangeServers, cluster is filled and then shutdown. Cluster is
 # restarted, but one RangeServer is missing.
 add_test(RangeServer-failover-restart env INSTALL_DIR=${INSTALL_DIR}

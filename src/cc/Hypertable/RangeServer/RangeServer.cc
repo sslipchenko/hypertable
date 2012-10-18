@@ -3625,6 +3625,7 @@ void RangeServer::replay_fragments(ResponseCallback *cb, int64_t op_id,
   }
 
   HT_MAYBE_FAIL("replay-fragments-1");
+  HT_MAYBE_FAIL_X("replay-fragments-user-1", type==RangeSpec::USER);
 
   replay_buffer.finish_fragment();
   HT_DEBUG_OUT << "replayed " << num_kv_pairs << " k/v pairs from fragment "
@@ -3675,7 +3676,10 @@ void RangeServer::phantom_load(ResponseCallback *cb, const String &location,
       return;
   }
 
-  HT_MAYBE_FAIL("phantom-receive-1");
+  HT_ASSERT(!ranges.empty());
+
+  HT_MAYBE_FAIL("phantom-load-1");
+  HT_MAYBE_FAIL_X("phantom-load-user-1", ranges[0].qualified_range.table.is_user());
 
   {
     ScopedLock lock(m_failover_mutex);
@@ -3743,7 +3747,7 @@ void RangeServer::phantom_load(ResponseCallback *cb, const String &location,
     return;
   }
 
-  HT_MAYBE_FAIL("phantom-receive-2");
+  HT_MAYBE_FAIL_X("phantom-load-user-2", ranges[0].qualified_range.table.is_user());
 
   cb->response_ok();
 }
@@ -3876,6 +3880,8 @@ void RangeServer::phantom_prepare_ranges(ResponseCallback *cb, int64_t op_id,
               Global::log_dir, &is_empty);
 
       HT_MAYBE_FAIL("phantom-prepare-ranges-1");
+      HT_MAYBE_FAIL_X("phantom-prepare-ranges-root-1", rr.is_root());
+      HT_MAYBE_FAIL_X("phantom-prepare-ranges-user-1", rr.table.is_user());
 
       HT_DEBUG_OUT << "populated range and log for range " << rr << HT_END;
 
@@ -4082,6 +4088,7 @@ void RangeServer::phantom_commit_ranges(ResponseCallback *cb, int64_t op_id,
         phantom_table_info_map[rr] = phantom_table_info;
 
       HT_MAYBE_FAIL("phantom-commit-1");
+      HT_MAYBE_FAIL_X("phantom-commit-user-1", rr.table.is_user());
 
       /**
        * Take ownership of the range by writing the 'Location' column in the

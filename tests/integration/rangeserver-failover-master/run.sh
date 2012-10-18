@@ -103,12 +103,12 @@ run_test1() {
   $HT_HOME/bin/ht Hypertable.RangeServer --verbose --pidfile=$RS1_PIDFILE \
      --Hypertable.RangeServer.ProxyName=rs1 \
      --Hypertable.RangeServer.Port=38060 \
-     --config=${SCRIPT_DIR}/test.cfg 2>1 > rangeserver.rs1.output.$TEST_ID &
+     --config=${SCRIPT_DIR}/test.cfg 2>&1 > rangeserver.rs1.output.$TEST_ID &
   sleep 5
   $HT_HOME/bin/ht Hypertable.RangeServer --verbose --pidfile=$RS2_PIDFILE \
     --Hypertable.RangeServer.ProxyName=rs2 \
     --Hypertable.RangeServer.Port=38061 \
-    --config=${SCRIPT_DIR}/test.cfg 2>1 > rangeserver.rs2.output.$TEST_ID &
+    --config=${SCRIPT_DIR}/test.cfg 2>&1 > rangeserver.rs2.output.$TEST_ID &
 
   $HT_SHELL --batch < $SCRIPT_DIR/create-test-table.hql
   if [ $? != 0 ] ; then
@@ -128,12 +128,19 @@ run_test1() {
   sleep 10
   $HT_SHELL --namespace 'sys' --batch --exec \
      'select Location from METADATA revs=1;' > locations.$TEST_ID  
-  
-  # kill rs1
-  stop_rs1
+
+  ROOT_LOCATION=`echo "open /hypertable/root; attrget /hypertable/root Location;" | /opt/hypertable/doug/current/bin/ht hyperspace --batch | tail -1`
+
+  kill -9 `cat $HT_HOME/run/Hypertable.RangeServer.$ROOT_LOCATION.pid`  
   
   # wait for recovery to complete 
-  wait_for_recovery "rs1"
+  wait_for_recovery $ROOT_LOCATION
+
+  fgrep "CRASH" master.output.$TEST_ID
+  if [ $? != 0 ] ; then
+    echo "ERROR: Failure was not induced."
+    exit 1
+  fi
   
   # dump keys
   $HT_SHELL -l error --batch < $SCRIPT_DIR/dump-test-table.hql \
@@ -144,7 +151,7 @@ run_test1() {
   fi
   
   # shut everything down
-  stop_rs2
+  kill -9 `cat $HT_HOME/run/Hypertable.RangeServer.*.pid`  
   $HT_HOME/bin/stop-servers.sh
 
   $DIGEST < dbdump.$TEST_ID > dbdump.md5
@@ -189,16 +196,16 @@ run_test2() {
   $HT_HOME/bin/ht Hypertable.RangeServer --verbose --pidfile=$RS1_PIDFILE \
      --Hypertable.RangeServer.ProxyName=rs1 \
      --Hypertable.RangeServer.Port=38060 \
-     --config=${SCRIPT_DIR}/test.cfg 2>1 > rangeserver.rs1.output.$TEST_ID &
+     --config=${SCRIPT_DIR}/test.cfg 2>&1 > rangeserver.rs1.output.$TEST_ID &
   sleep 5
   $HT_HOME/bin/ht Hypertable.RangeServer --verbose --pidfile=$RS2_PIDFILE \
     --Hypertable.RangeServer.ProxyName=rs2 \
     --Hypertable.RangeServer.Port=38061 $RS_IND \
-    --config=${SCRIPT_DIR}/test.cfg 2>1 > rangeserver.rs2.output.$TEST_ID &
+    --config=${SCRIPT_DIR}/test.cfg 2>&1 > rangeserver.rs2.output.$TEST_ID &
   $HT_HOME/bin/ht Hypertable.RangeServer --verbose --pidfile=$RS3_PIDFILE \
     --Hypertable.RangeServer.ProxyName=rs3 \
     --Hypertable.RangeServer.Port=38062 \
-    --config=${SCRIPT_DIR}/test.cfg 2>1 > rangeserver.rs3.output.$TEST_ID &
+    --config=${SCRIPT_DIR}/test.cfg 2>&1 > rangeserver.rs3.output.$TEST_ID &
 
   $HT_SHELL --batch < $SCRIPT_DIR/create-test-table.hql
   if [ $? != 0 ] ; then
@@ -225,6 +232,18 @@ run_test2() {
   # wait for recovery to complete 
   wait_for_recovery "rs1"
   wait_for_recovery "rs2"
+
+  fgrep "CRASH" master.output.$TEST_ID
+  if [ $? != 0 ] ; then
+    echo "ERROR: Failure was not induced in Master."
+    exit 1
+  fi
+
+  fgrep "induced failure" rangeserver.rs2.output.$TEST_ID
+  if [ $? != 0 ] ; then
+    echo "ERROR: Failure was not induced in RangeServer."
+    exit 1
+  fi
   
   # dump keys
   $HT_SHELL -l error --batch < $SCRIPT_DIR/dump-test-table.hql \
@@ -280,16 +299,16 @@ run_test3() {
   $HT_HOME/bin/ht Hypertable.RangeServer --verbose --pidfile=$RS1_PIDFILE \
      --Hypertable.RangeServer.ProxyName=rs1 \
      --Hypertable.RangeServer.Port=38060 \
-     --config=${SCRIPT_DIR}/test.cfg 2>1 > rangeserver.rs1.output.$TEST_ID &
+     --config=${SCRIPT_DIR}/test.cfg 2>&1 > rangeserver.rs1.output.$TEST_ID &
   sleep 5
   $HT_HOME/bin/ht Hypertable.RangeServer --verbose --pidfile=$RS2_PIDFILE \
     --Hypertable.RangeServer.ProxyName=rs2 \
     --Hypertable.RangeServer.Port=38061 $RS_IND \
-    --config=${SCRIPT_DIR}/test.cfg 2>1 > rangeserver.rs2.output.$TEST_ID &
+    --config=${SCRIPT_DIR}/test.cfg 2>&1 > rangeserver.rs2.output.$TEST_ID &
   $HT_HOME/bin/ht Hypertable.RangeServer --verbose --pidfile=$RS3_PIDFILE \
     --Hypertable.RangeServer.ProxyName=rs3 \
     --Hypertable.RangeServer.Port=38062 \
-    --config=${SCRIPT_DIR}/test.cfg 2>1 > rangeserver.rs3.output.$TEST_ID &
+    --config=${SCRIPT_DIR}/test.cfg 2>&1 > rangeserver.rs3.output.$TEST_ID &
 
   $HT_SHELL --batch < $SCRIPT_DIR/create-test-table.hql
   if [ $? != 0 ] ; then
@@ -372,16 +391,16 @@ run_test4() {
   $HT_HOME/bin/ht Hypertable.RangeServer --verbose --pidfile=$RS1_PIDFILE \
      --Hypertable.RangeServer.ProxyName=rs1 \
      --Hypertable.RangeServer.Port=38060 \
-     --config=${SCRIPT_DIR}/test.cfg 2>1 > rangeserver.rs1.output.$TEST_ID &
+     --config=${SCRIPT_DIR}/test.cfg 2>&1 > rangeserver.rs1.output.$TEST_ID &
   sleep 5
   $HT_HOME/bin/ht Hypertable.RangeServer --verbose --pidfile=$RS2_PIDFILE \
     --Hypertable.RangeServer.ProxyName=rs2 \
     --Hypertable.RangeServer.Port=38061 \
-    --config=${SCRIPT_DIR}/test.cfg 2>1 > rangeserver.rs2.output.$TEST_ID &
+    --config=${SCRIPT_DIR}/test.cfg 2>&1 > rangeserver.rs2.output.$TEST_ID &
   $HT_HOME/bin/ht Hypertable.RangeServer --verbose --pidfile=$RS3_PIDFILE \
     --Hypertable.RangeServer.ProxyName=rs3 \
     --Hypertable.RangeServer.Port=38062 \
-    --config=${SCRIPT_DIR}/test.cfg 2>1 > rangeserver.rs3.output.$TEST_ID &
+    --config=${SCRIPT_DIR}/test.cfg 2>&1 > rangeserver.rs3.output.$TEST_ID &
 
   $HT_SHELL --batch < $SCRIPT_DIR/create-test-table.hql
   if [ $? != 0 ] ; then
@@ -471,19 +490,19 @@ env | grep '^TEST_[1-9][0-9]\?=' || set_tests 1 2 3 4 5 6 7 8 9 10 11 12 13 14 1
 [ "$TEST_19" ] && run_test1 19 "--induce-failure=recover-server-4:exit:0"
 [ "$TEST_20" ] && run_test1 20 "--induce-failure=recover-server-5:exit:0"
 [ "$TEST_21" ] && run_test1 21 "--induce-failure=recover-server-6:exit:0"
-[ "$TEST_22" ] && run_test1 22 "--induce-failure=recover-server-ranges-root-replay-commit-logs:throw"
+[ "$TEST_22" ] && run_test1 22 "--induce-failure=recover-server-ranges-root-replay-commit-log:throw"
 [ "$TEST_23" ] && run_test1 23 "--induce-failure=recover-server-ranges-user-12:exit:0;recover-server-ranges-user-14:throw" 
 
-[ "$TEST_24" ] && run_test2 24 "--induce-failure=recover-server-ranges-user-3.1:exit:0" "--induce-failure=replay-fragments-1:exit:0"
-[ "$TEST_25" ] && run_test2 25 "--induce-failure=recover-server-ranges-user-3.1:exit:0" "--induce-failure=phantom-receive-1:exit:0"
-[ "$TEST_26" ] && run_test2 26 "--induce-failure=recover-server-ranges-user-3.1:exit:0" "--induce-failure=phantom-receive-2:exit:0"
-[ "$TEST_27" ] && run_test2 27 "--induce-failure=recover-server-ranges-root-6:exit:0" "--induce-failure=phantom-prepare-ranges-1:exit:0"
-[ "$TEST_28" ] && run_test2 28 "--induce-failure=recover-server-ranges-user-6:exit:0" "--induce-failure=phantom-prepare-ranges-1:exit:0"
-[ "$TEST_29" ] && run_test2 29 "--induce-failure=recover-server-ranges-user-9:exit:0" "--induce-failure=phantom-commit-1:exit:0"
+[ "$TEST_24" ] && run_test2 24 "--induce-failure=recover-server-ranges-user-3.2:exit:0" "--induce-failure=replay-fragments-user-1:exit:0"
+[ "$TEST_25" ] && run_test2 25 "--induce-failure=recover-server-ranges-user-3.1:exit:0" "--induce-failure=phantom-load-user-1:exit:0"
+[ "$TEST_26" ] && run_test2 26 "--induce-failure=recover-server-ranges-user-3.1:exit:0" "--induce-failure=phantom-load-user-2:exit:0"
+[ "$TEST_27" ] && run_test2 27 "--induce-failure=recover-server-ranges-root-6:exit:0" "--induce-failure=phantom-prepare-ranges-root-1:exit:0"
+[ "$TEST_28" ] && run_test2 28 "--induce-failure=recover-server-ranges-user-6:exit:0" "--induce-failure=phantom-prepare-ranges-user-1:exit:0"
+[ "$TEST_29" ] && run_test2 29 "--induce-failure=recover-server-ranges-user-9:exit:0" "--induce-failure=phantom-commit-user-1:exit:0"
 
 [ "$TEST_30" ] && run_test3 30 "--induce-failure=replay-fragments-1:exit:0"
 [ "$TEST_31" ] && run_test3 31 "--induce-failure=replay-fragments-2:exit:0"
-[ "$TEST_32" ] && run_test3 32 "--induce-failure=phantom-receive-1:exit:0"
+[ "$TEST_32" ] && run_test3 32 "--induce-failure=phantom-load-1:exit:0"
 [ "$TEST_33" ] && run_test3 33 "--induce-failure=phantom-prepare-ranges-1:exit:0"
 [ "$TEST_34" ] && run_test3 34 "--induce-failure=phantom-prepare-ranges-2:exit:0"
 [ "$TEST_35" ] && run_test3 35 "--induce-failure=phantom-prepare-ranges-3:exit:0"
