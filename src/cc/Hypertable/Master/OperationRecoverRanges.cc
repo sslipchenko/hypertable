@@ -36,16 +36,16 @@
 using namespace Hypertable;
 
 OperationRecoverRanges::OperationRecoverRanges(ContextPtr &context,
-        const String &location, int type,
-        vector<QualifiedRangeStateSpecManaged> &ranges)
+        const String &location, int type)
   : Operation(context, MetaLog::EntityType::OPERATION_RECOVER_SERVER_RANGES),
-    m_location(location), m_type(type), m_attempt(0), m_ranges(ranges),
+    m_location(location), m_type(type), m_attempt(0),
     m_plan_generation(0) {
   HT_ASSERT(type != RangeSpec::UNKNOWN);
   set_type_str();
   m_timeout = m_context->props->get_i32("Hypertable.Failover.Timeout");
   m_dependencies.insert(Dependency::RECOVERY_BLOCKER);
   initialize_obstructions_dependencies();
+  get_new_recovery_plan();  
 }
 
 OperationRecoverRanges::OperationRecoverRanges(ContextPtr &context,
@@ -80,12 +80,9 @@ void OperationRecoverRanges::execute() {
 
   switch (state) {
   case OperationState::INITIAL:
-    // make sure that enough servers are connected
-    if (!wait_for_quorum())
-      break;
 
     // if there are no ranges then there is nothing to do
-    if (m_ranges.size() == 0) {
+    if (m_ranges.empty()) {
       String label_str = label();
       HT_INFO_OUT << label_str << " num_fragments=" << m_fragments.size()
           << ", num_ranges=" << m_ranges.size()

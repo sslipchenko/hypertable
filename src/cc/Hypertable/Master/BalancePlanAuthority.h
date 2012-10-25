@@ -104,7 +104,36 @@ namespace Hypertable {
     RangeRecoveryPlan *create_range_plan(const String &location, int type,
             const vector<QualifiedRangeStateSpecManaged> &ranges);
 
-    void update_range_plan(RangeRecoveryPlanPtr &plan, const String &location);
+    struct lt_qrrs {
+      bool operator()(const QualifiedRangeStateSpec *qrss1,
+                      const QualifiedRangeStateSpec *qrss2) const  {
+        int cmp = strcmp(qrss1->qualified_range.table.id,
+                         qrss2->qualified_range.table.id);
+        if (cmp < 0)
+          return true;
+        else if (cmp > 0)
+          return false;
+
+        return qrss1->qualified_range.range < qrss2->qualified_range.range;
+      }
+    };
+    typedef std::set<const QualifiedRangeStateSpec *, lt_qrrs> QualifiedRangeSetT;
+
+    void populate_purge_set(const vector<QualifiedRangeStateSpecManaged> &qualified_ranges,
+                            QualifiedRangeSetT &purge_set);
+
+    /**
+     * This method modifies the given recovery plan by replacing
+     * references to <code>location</code> with other active
+     * servers.
+     *
+     * @param plan recovery plan for (range-server, commit-log-type) combo
+     * @param location proxy name of server being recovered
+     * @param purge_set set of QualifiedRangeStateSpec object to purge from
+     *        receiver plan
+     */
+    void update_range_plan(RangeRecoveryPlanPtr &plan, const String &location,
+                           QualifiedRangeSetT &purge_set);
 
     Mutex m_mutex;
     ContextPtr m_context;

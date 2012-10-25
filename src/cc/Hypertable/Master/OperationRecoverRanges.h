@@ -36,7 +36,7 @@ namespace Hypertable {
   class OperationRecoverRanges : public Operation {
   public:
     OperationRecoverRanges(ContextPtr &context, const String &location,
-            int type, vector<QualifiedRangeStateSpecManaged> &ranges);
+                           int type);
 
     OperationRecoverRanges(ContextPtr &context,
             const MetaLog::EntityHeader &header_);

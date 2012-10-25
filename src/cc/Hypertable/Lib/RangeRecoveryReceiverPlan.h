@@ -45,6 +45,7 @@ namespace Hypertable {
 
     void insert(const char *location, const TableIdentifier &table,
             const RangeSpec &range, const RangeState &state);
+    void remove(const QualifiedRangeStateSpec &qrss);
     void get_locations(StringSet &locations) const;
     bool get_location(const TableIdentifier &table, const char *row,
             String &location) const;
@@ -65,6 +66,7 @@ namespace Hypertable {
     void decode(const uint8_t **bufp, size_t *remainp);
 
     void clear() { m_plan.clear(); }
+    bool empty() { return m_plan.empty(); }
     void copy(RangeRecoveryReceiverPlan &other) const;
 
   private:

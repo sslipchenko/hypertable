@@ -36,6 +36,15 @@ void RangeRecoveryReceiverPlan::insert(const char *location,
   m_plan.insert(entry);
 }
 
+
+void RangeRecoveryReceiverPlan::remove(const QualifiedRangeStateSpec &qrss) {
+  RangeIndex &range_index = m_plan.get<ByRange>();
+  RangeIndex::iterator range_it = range_index.find(qrss);
+  if (range_it != range_index.end())
+    range_index.erase(range_it);
+}
+
+
 bool RangeRecoveryReceiverPlan::get_location(const TableIdentifier &table,
     const char *row, String &location) const {
   QualifiedRangeStateSpec state_spec(table, RangeSpec("",row));

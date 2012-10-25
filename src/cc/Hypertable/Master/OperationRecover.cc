@@ -133,7 +133,6 @@ void OperationRecover::execute() {
   std::vector<Entity *> entities;
   Operation *sub_op;
   int state = get_state();
-  int type;
 
   HT_INFOF("Entering RecoverServer %s state=%s this=%p",
            m_location.c_str(), OperationState::get_text(state), (void *)this);
@@ -169,9 +168,8 @@ void OperationRecover::execute() {
 
   case OperationState::ISSUE_REQUESTS:
     if (m_root_range.size()) {
-      type = RangeSpec::ROOT;
-      sub_op = new OperationRecoverRanges(m_context, m_location, type,
-                                          m_root_range);
+      sub_op = new OperationRecoverRanges(m_context, m_location, 
+                                          RangeSpec::ROOT);
       HT_INFO_OUT << "Number of root ranges to recover for location " 
           << m_location << "="
           << m_root_range.size() << HT_END;
@@ -183,9 +181,8 @@ void OperationRecover::execute() {
       entities.push_back(sub_op);
     }
     if (m_metadata_ranges.size()) {
-      type = RangeSpec::METADATA;
-      sub_op = new OperationRecoverRanges(m_context, m_location, type,
-                                          m_metadata_ranges);
+      sub_op = new OperationRecoverRanges(m_context, m_location,
+                                          RangeSpec::METADATA);
       HT_INFO_OUT << "Number of metadata ranges to recover for location "
           << m_location << "="
           << m_metadata_ranges.size() << HT_END;
@@ -197,9 +194,8 @@ void OperationRecover::execute() {
       entities.push_back(sub_op);
     }
     if (m_system_ranges.size()) {
-      type = RangeSpec::SYSTEM;
-      sub_op = new OperationRecoverRanges(m_context, m_location, type,
-                                          m_system_ranges);
+      sub_op = new OperationRecoverRanges(m_context, m_location,
+                                          RangeSpec::SYSTEM);
       HT_INFO_OUT << "Number of system ranges to recover for location "
           << m_location << "="
           << m_system_ranges.size() << HT_END;
@@ -211,9 +207,8 @@ void OperationRecover::execute() {
       entities.push_back(sub_op);
     }
     if (m_user_ranges.size()) {
-      type = RangeSpec::USER;
-      sub_op = new OperationRecoverRanges(m_context, m_location, type,
-                                          m_user_ranges);
+      sub_op = new OperationRecoverRanges(m_context, m_location,
+                                          RangeSpec::USER);
       HT_INFO_OUT << "Number of user ranges to recover for location " 
           << m_location << "="
           << m_user_ranges.size() << HT_END;

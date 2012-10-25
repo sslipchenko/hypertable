@@ -137,7 +137,7 @@ BalancePlanAuthority::copy_recovery_plan(const String &location, int type,
   ScopedLock lock(m_mutex);
   HT_ASSERT(m_map.find(location) != m_map.end());
   RangeRecoveryPlanPtr plan = m_map[location].plans[type];
-  HT_ASSERT(plan->type == type);
+  HT_ASSERT(!plan || plan->type == type);
 
   out.type = type;
   out.replay_plan = plan->replay_plan;
@@ -170,6 +170,7 @@ BalancePlanAuthority::create_recovery_plan(const String &location,
         const vector<QualifiedRangeStateSpecManaged> &user_ranges)
 {
   ScopedLock lock(m_mutex);
+  QualifiedRangeSetT purge_set;
 
   HT_INFO_OUT << "Creating recovery plan for " << location << HT_END;
 
@@ -182,14 +183,22 @@ BalancePlanAuthority::create_recovery_plan(const String &location,
   // to other servers
   RecoveryPlanMap::iterator it;
   for (it = m_map.begin(); it != m_map.end(); ++it) {
-    if (it->second.plans[RangeSpec::ROOT])
-      update_range_plan(it->second.plans[RangeSpec::ROOT], location);
-    if (it->second.plans[RangeSpec::METADATA])
-      update_range_plan(it->second.plans[RangeSpec::METADATA], location);
-    if (it->second.plans[RangeSpec::SYSTEM])
-      update_range_plan(it->second.plans[RangeSpec::SYSTEM], location);
-    if (it->second.plans[RangeSpec::USER])
-      update_range_plan(it->second.plans[RangeSpec::USER], location);
+    if (it->second.plans[RangeSpec::ROOT]) {
+      populate_purge_set(root_ranges, purge_set);
+      update_range_plan(it->second.plans[RangeSpec::ROOT], location, purge_set);
+    }
+    if (it->second.plans[RangeSpec::METADATA]) {
+      populate_purge_set(metadata_ranges, purge_set);
+      update_range_plan(it->second.plans[RangeSpec::METADATA], location, purge_set);
+    }
+    if (it->second.plans[RangeSpec::SYSTEM]) {
+      populate_purge_set(system_ranges, purge_set);
+      update_range_plan(it->second.plans[RangeSpec::SYSTEM], location, purge_set);
+    }
+    if (it->second.plans[RangeSpec::USER]) {
+      populate_purge_set(user_ranges, purge_set);
+      update_range_plan(it->second.plans[RangeSpec::USER], location, purge_set);
+    }
   }
 
   // then create the new plan for the failed server
@@ -288,9 +297,17 @@ BalancePlanAuthority::create_range_plan(const String &location, int type,
   return plan;
 }
 
+
+void BalancePlanAuthority::populate_purge_set(const vector<QualifiedRangeStateSpecManaged> &qualified_ranges, QualifiedRangeSetT &purge_set) {
+  purge_set.clear();
+  for (size_t i=0; i<qualified_ranges.size(); i++)
+    purge_set.insert(&qualified_ranges[i]);
+}
+
+
 void
 BalancePlanAuthority::update_range_plan(RangeRecoveryPlanPtr &plan,
-        const String &location)
+                   const String &location, QualifiedRangeSetT &purge_set)
 {
   StringSet active_locations;
   m_context->rsc_manager->get_connected_servers(active_locations);
@@ -314,13 +331,20 @@ BalancePlanAuthority::update_range_plan(RangeRecoveryPlanPtr &plan,
   plan->receiver_plan.get_range_state_specs(location.c_str(), ranges);
   // round robin through the locations and assign the ranges
   foreach_ht (const QualifiedRangeStateSpec &range, ranges) {
-    if (location_it == active_locations.end())
-      location_it = active_locations.begin();
-    plan->receiver_plan.insert(location_it->c_str(),
-            range.qualified_range.table,
-            range.qualified_range.range, range.state);
-    ++location_it;
+    if (purge_set.count(&range) > 0)
+      plan->receiver_plan.remove(range);
+    else {
+      if (location_it == active_locations.end())
+        location_it = active_locations.begin();
+      plan->receiver_plan.insert(location_it->c_str(),
+                                 range.qualified_range.table,
+                                 range.qualified_range.range, range.state);
+      ++location_it;
+    }
   }
+
+  if (plan->receiver_plan.empty())
+    plan = 0;
 }
 
 bool
