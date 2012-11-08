@@ -148,6 +148,7 @@ namespace Hypertable {
     bool m_timed_out;
     std::vector<Result> m_results;
     std::set<QualifiedRangeSpec> m_outstanding_ranges;
+    std::set<QualifiedRangeSpec> m_success;
   };
   typedef intrusive_ptr<RecoveryCounter> RecoveryCounterPtr;
 }

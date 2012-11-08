@@ -501,11 +501,18 @@ bool OperationRecoverRanges::prepare_to_commit() {
   StringSet locations;
   RangeServerClient rsc(m_context->comm);
   CommAddress addr;
-  bool success = true;
+
+  RecoveryStepFuturePtr future = 
+    m_context->recovery_state().get_prepare_future(id());
+
+  if (!future) {
+    future = new RecoveryStepFuture("prepare");
+    m_context->recovery_state().install_prepare_future(id(), future);
+  }
 
   m_plan.receiver_plan.get_locations(locations);
-  RecoveryCounterPtr counter = 
-      m_context->recovery_state().create_prepare_counter(id(), m_attempt);
+
+  future->register_locations(locations);
 
   foreach_ht(const String &location, locations) {
     addr.set_proxy(location);
@@ -515,34 +522,38 @@ bool OperationRecoverRanges::prepare_to_commit() {
     HT_INFO_OUT << "Issue phantom_prepare_ranges for " << ranges.size()
         << " ranges to " << location << " (" << m_type_str << ")" << HT_END;
     try {
-      counter->add(ranges);
-      rsc.phantom_prepare_ranges(addr, id(), m_attempt, m_location,
-              ranges, m_timeout);
+      rsc.phantom_prepare_ranges(addr, id(), m_location, ranges, m_timeout);
     }
     catch (Exception &e) {
-      success = false;
-      counter->set_range_errors(ranges, e.code());
       HT_ERROR_OUT << e << HT_END;
     }
   }
+
   Timer tt(m_timeout);
-  if (!counter->wait_for_completion(tt))
-    success = false;
-  m_context->recovery_state().erase_prepare_counter(id());
-  // at this point all the players have prepared or failed in
-  // creating phantom ranges
-  return success;
+  if (!future->wait_for_completion(tt))
+    return false;
+
+  m_context->recovery_state().erase_prepare_future(id());
+
+  return true;
 }
 
 bool OperationRecoverRanges::commit() {
   StringSet locations;
   RangeServerClient rsc(m_context->comm);
   CommAddress addr;
-  bool success = true;
+
+  RecoveryStepFuturePtr future = 
+    m_context->recovery_state().get_commit_future(id());
+
+  if (!future) {
+    future = new RecoveryStepFuture("commit");
+    m_context->recovery_state().install_commit_future(id(), future);
+  }
 
   m_plan.receiver_plan.get_locations(locations);
-  RecoveryCounterPtr counter = 
-      m_context->recovery_state().create_commit_counter(id(), m_attempt);
+
+  future->register_locations(locations);
 
   foreach_ht(const String &location, locations) {
     addr.set_proxy(location);
@@ -550,25 +561,22 @@ bool OperationRecoverRanges::commit() {
     m_plan.receiver_plan.get_qualified_range_specs(location.c_str(), ranges);
 
    try {
-      counter->add(ranges);
       HT_INFO_OUT << "Issue phantom_commit_ranges for " << ranges.size()
           << " ranges to " << location << HT_END;
-      rsc.phantom_commit_ranges(addr, id(), m_attempt, m_location,
-              ranges, m_timeout);
+      rsc.phantom_commit_ranges(addr, id(), m_location, ranges, m_timeout);
     }
     catch (Exception &e) {
-      success = false;
-      counter->set_range_errors(ranges, e.code());
       HT_ERROR_OUT << e << HT_END;
     }
   }
+
   Timer tt(m_timeout);
-  if (!counter->wait_for_completion(tt))
-    success = false;
-  m_context->recovery_state().erase_commit_counter(id());
-  // at this point all the players have prepared or failed in creating
-  // phantom ranges
-  return success;
+  if (!future->wait_for_completion(tt))
+    return false;
+
+  m_context->recovery_state().erase_commit_future(id());
+
+  return true;
 }
 
 bool OperationRecoverRanges::acknowledge() {

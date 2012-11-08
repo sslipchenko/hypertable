@@ -645,8 +645,9 @@ void RangeServerClient::replay_fragments(const CommAddress &addr, int64_t op_id,
 
 }
 
-void RangeServerClient::phantom_load(const CommAddress &addr, const String &location,
-    const vector<uint32_t> &fragments, const vector<QualifiedRangeStateSpec> &ranges) {
+void RangeServerClient::phantom_load(const CommAddress &addr,
+    const String &location, const vector<uint32_t> &fragments,
+    const vector<QualifiedRangeStateSpec> &ranges) {
   DispatchHandlerSynchronizer sync_handler;
   EventPtr event;
   CommBufPtr cbp(RangeServerProtocol::create_request_phantom_load(location, fragments, ranges));
@@ -667,12 +668,11 @@ void RangeServerClient::phantom_update(const CommAddress &addr, const String &lo
 }
 
 void RangeServerClient::phantom_prepare_ranges(const CommAddress &addr, int64_t op_id,
-    uint32_t attempt, const String &location, const vector<QualifiedRangeSpec> &ranges,
-    uint32_t timeout_ms) {
+    const String &location, const vector<QualifiedRangeSpec> &ranges, uint32_t timeout_ms) {
   DispatchHandlerSynchronizer sync_handler;
   EventPtr event;
-  CommBufPtr cbp(RangeServerProtocol::create_request_phantom_prepare_ranges(op_id, attempt,
-      location, ranges, timeout_ms));
+  CommBufPtr cbp(RangeServerProtocol::create_request_phantom_prepare_ranges(op_id, location, ranges));
+
   send_message(addr, cbp, &sync_handler, timeout_ms);
 
   if (!sync_handler.wait_for_reply(event))
@@ -683,12 +683,11 @@ void RangeServerClient::phantom_prepare_ranges(const CommAddress &addr, int64_t 
 }
 
 void RangeServerClient::phantom_commit_ranges(const CommAddress &addr, int64_t op_id,
-    uint32_t attempt, const String &location, const vector<QualifiedRangeSpec> &ranges,
+    const String &location, const vector<QualifiedRangeSpec> &ranges,
     uint32_t timeout_ms) {
   DispatchHandlerSynchronizer sync_handler;
   EventPtr event;
-  CommBufPtr cbp(RangeServerProtocol::create_request_phantom_commit_ranges(op_id, attempt,
-      location, ranges, timeout_ms));
+  CommBufPtr cbp(RangeServerProtocol::create_request_phantom_commit_ranges(op_id, location, ranges));
   send_message(addr, cbp, &sync_handler, timeout_ms);
 
   if (!sync_handler.wait_for_reply(event))

@@ -599,24 +599,28 @@ namespace Hypertable {
     /** Issues a "phantom_prepare_ranges" synchronous request.
      *
      * @param addr address of RangeServer
+     * @param op_id ID of Master recovery operation 
      * @param location location of server being recovered
-     * @param attempt id of the replay attempt -- needed in case of master failure
-     * @param range range spec to be loaded
+     * @param ranges range specs to be prepared
+     * @param timeout timeout
      */
-    void phantom_prepare_ranges(const CommAddress &addr, int64_t op_id, uint32_t attempt,
+    void phantom_prepare_ranges(const CommAddress &addr, int64_t op_id,
                                 const String &location,
-                                const vector<QualifiedRangeSpec> &ranges, uint32_t timeout);
+                                const vector<QualifiedRangeSpec> &ranges,
+                                uint32_t timeout);
 
     /** Issues a "phantom_commit_ranges" synchronous request.
      *
      * @param addr address of RangeServer
+     * @param op_id ID of Master recovery operation 
      * @param location location of server being recovered
-     * @param attempt id of the replay attempt -- needed in case of master failure
-     * @param range range spec to be loaded
+     * @param ranges range specs to be committed
+     * @param timeout timeout
      */
-    void phantom_commit_ranges(const CommAddress &addr, int64_t op_id, uint32_t attempt,
+    void phantom_commit_ranges(const CommAddress &addr, int64_t op_id,
                                const String &location,
-                               const vector<QualifiedRangeSpec> &ranges, uint32_t timeout);
+                               const vector<QualifiedRangeSpec> &ranges,
+                               uint32_t timeout);
 
 
   private:

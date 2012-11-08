@@ -122,18 +122,18 @@ namespace Hypertable {
         RangeRecoveryReceiverPlan &receiver_plan, uint32_t replay_timeout);
 
     void phantom_load(ResponseCallback *, const String &location,
-        const vector<uint32_t> &fragments, 
-        const vector<QualifiedRangeStateSpec> &ranges);
+                      const vector<uint32_t> &fragments, 
+                      const vector<QualifiedRangeStateSpec> &ranges);
 
     void phantom_update(ResponseCallbackPhantomUpdate *, const String &location,
                         QualifiedRangeSpec &range, uint32_t fragment, bool more,
                         EventPtr &event);
 
-    void phantom_prepare_ranges(ResponseCallback *, int64_t op_id, uint32_t attempt,
-        const String &location, const vector<QualifiedRangeSpec> &ranges, uint32_t timeout_ms);
+    void phantom_prepare_ranges(ResponseCallback *, int64_t op_id,
+        const String &location, const vector<QualifiedRangeSpec> &ranges);
 
-    void phantom_commit_ranges(ResponseCallback *, int64_t op_id, uint32_t attempt,
-        const String &location, const vector<QualifiedRangeSpec> &ranges, uint32_t timeout_ms);
+    void phantom_commit_ranges(ResponseCallback *, int64_t op_id,
+        const String &location, const vector<QualifiedRangeSpec> &ranges);
 
     /**
      * Blocks while the maintenance queue is non-empty
@@ -254,7 +254,6 @@ namespace Hypertable {
     Comm                  *m_comm;
     TableInfoMapPtr        m_live_map;
     TableInfoMapPtr        m_replay_map;
-    TableInfoMapPtr        m_phantom_map;
     typedef map<String, PhantomRangeMapPtr> FailoverPhantomRangeMap;
     FailoverPhantomRangeMap m_failover_map;
     Mutex                  m_failover_mutex;

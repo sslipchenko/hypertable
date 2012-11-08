@@ -54,6 +54,7 @@ namespace Hypertable {
             vector<QualifiedRangeStateSpec> &ranges);
     void get_qualified_range_specs(const char *location,
             vector<QualifiedRangeSpec> &ranges);
+    void get_qualified_range_specs(vector<QualifiedRangeSpec> &ranges);
     void get_qualified_range_specs(const char *location,
             vector<QualifiedRangeStateSpecManaged> &ranges) const;
     bool get_qualified_range_state_spec(const TableIdentifier &table,

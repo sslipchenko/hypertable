@@ -967,21 +967,18 @@ MasterClient::replay_complete(int64_t op_id, int type, const String &location,
 }
 
 void
-MasterClient::phantom_prepare_complete(int64_t op_id, uint32_t attempt, const String &location,
-    const map<QualifiedRangeSpec, int> &error_map, Timer *timer) {
-  Timer tmp_timer(m_timeout_ms);
+MasterClient::phantom_prepare_complete(int64_t op_id, const String &location,
+                                       int32_t error, const String message) {
+  Timer timer(m_timeout_ms, true);
   CommBufPtr cbp;
   EventPtr event;
   String label = format("phantom_prepare_complete op_id=%llu location=%s "
-          "attempt=%d num_ranges=%d", (Llu)op_id, location.c_str(), 
-          attempt, (int)error_map.size());
+                        "error=%s", (Llu)op_id, location.c_str(), Error::get_text(error));
 
-  initialize(timer, tmp_timer);
-  while (!timer->expired()) {
-    cbp = MasterProtocol::create_phantom_prepare_complete_request(op_id, 
-            attempt, error_map);
-    if (!send_message(cbp, timer, event, label)) {
-      poll(0, 0, std::min(timer->remaining(), (System::rand32() % 3000)));
+  while (!timer.expired()) {
+    cbp = MasterProtocol::create_phantom_prepare_complete_request(op_id, location, error, message);
+    if (!send_message(cbp, &timer, event, label)) {
+      poll(0, 0, std::min(timer.remaining(), (System::rand32() % 3000)));
       continue;
     }
     return;
@@ -996,21 +993,18 @@ MasterClient::phantom_prepare_complete(int64_t op_id, uint32_t attempt, const St
 }
 
 void
-MasterClient::phantom_commit_complete(int64_t op_id, uint32_t attempt, const String &location,
-    const map<QualifiedRangeSpec, int> &error_map, Timer *timer) {
-  Timer tmp_timer(m_timeout_ms);
+MasterClient::phantom_commit_complete(int64_t op_id, const String &location,
+                                       int32_t error, const String message) {
+  Timer timer(m_timeout_ms, true);
   CommBufPtr cbp;
   EventPtr event;
   String label = format("phantom_commit_complete op_id=%llu location=%s "
-          "attempt=%d num_ranges=%d", (Llu)op_id, location.c_str(), 
-          attempt, (int)error_map.size());
+                        "error=%s", (Llu)op_id, location.c_str(), Error::get_text(error));
 
-  initialize(timer, tmp_timer);
-  while (!timer->expired()) {
-    cbp = MasterProtocol::create_phantom_commit_complete_request(op_id, 
-            attempt, error_map);
-    if (!send_message(cbp, timer, event, label)) {
-      poll(0, 0, std::min(timer->remaining(), (System::rand32() % 3000)));
+  while (!timer.expired()) {
+    cbp = MasterProtocol::create_phantom_commit_complete_request(op_id, location, error, message);
+    if (!send_message(cbp, &timer, event, label)) {
+      poll(0, 0, std::min(timer.remaining(), (System::rand32() % 3000)));
       continue;
     }
     return;
@@ -1018,8 +1012,6 @@ MasterClient::phantom_commit_complete(int64_t op_id, uint32_t attempt, const Str
 
   {
     ScopedLock lock(m_mutex);
-    HT_ERRORF("MasterClient operation %s to master %s failed", label.c_str(),
-        m_master_addr.format().c_str());
     HT_THROWF(Error::REQUEST_TIMEOUT,
         "MasterClient operation %s to master %s failed", label.c_str(),
         m_master_addr.format().c_str());

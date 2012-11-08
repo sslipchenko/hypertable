@@ -65,6 +65,14 @@ void TableInfoMap::set(const String &name, TableInfoPtr &info) {
   m_map[name] = info;
 }
 
+bool TableInfoMap::insert(const String &name, TableInfoPtr &info) {
+  ScopedLock lock(m_mutex);
+  if (m_map.find(name) != m_map.end())
+    return false;
+  m_map[name] = info;
+  return true;
+}
+
 
 void TableInfoMap::stage_range(const TableIdentifier *table, const RangeSpec *range_spec) {
   ScopedLock lock(m_mutex);

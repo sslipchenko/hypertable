@@ -78,6 +78,8 @@ namespace Hypertable {
     void populate_range_and_log(FilesystemPtr &log_dfs, const String &log_dir, bool *is_empty);
     CommitLogPtr get_phantom_log();
     const String &get_phantom_logname();
+    void set_staged();
+    bool staged();
 
   private:
     typedef std::map<uint32_t, FragmentDataPtr> FragmentMap;
@@ -90,6 +92,7 @@ namespace Hypertable {
     CommitLogPtr     m_phantom_log;
     String           m_phantom_logname;
     int              m_state;
+    bool             m_staged;
   };
 
   typedef intrusive_ptr<PhantomRange> PhantomRangePtr;

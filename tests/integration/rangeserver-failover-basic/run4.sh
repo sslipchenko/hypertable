@@ -106,20 +106,20 @@ $HT_HOME/bin/start-test-servers.sh --no-rangeserver --no-thriftbroker \
 #   $HT_HOME/bin/Hypertable.RangeServer --verbose --pidfile=$RS1_PIDFILE \
 $HT_HOME/bin/ht Hypertable.RangeServer --verbose --pidfile=$RS1_PIDFILE \
    --Hypertable.RangeServer.ProxyName=rs1 \
-   --Hypertable.RangeServer.Port=38060 --config=${SCRIPT_DIR}/test.cfg 2>1 > rangeserver.rs1.output&
+   --Hypertable.RangeServer.Port=38060 --config=${SCRIPT_DIR}/test.cfg 2>&1 > rangeserver.rs1.output&
 sleep 10
 $HT_HOME/bin/ht Hypertable.RangeServer --verbose --pidfile=$RS2_PIDFILE \
    --Hypertable.RangeServer.ProxyName=rs2 \
-   --Hypertable.RangeServer.Port=38061 --config=${SCRIPT_DIR}/test.cfg 2>1 > rangeserver.rs2.output&
+   --Hypertable.RangeServer.Port=38061 --config=${SCRIPT_DIR}/test.cfg 2>&1 > rangeserver.rs2.output&
 $HT_HOME/bin/ht Hypertable.RangeServer --verbose --pidfile=$RS3_PIDFILE \
    --Hypertable.RangeServer.ProxyName=rs3 \
-   --Hypertable.RangeServer.Port=38062 --config=${SCRIPT_DIR}/test.cfg 2>1 > rangeserver.rs3.output&
+   --Hypertable.RangeServer.Port=38062 --config=${SCRIPT_DIR}/test.cfg 2>&1 > rangeserver.rs3.output&
 $HT_HOME/bin/ht Hypertable.RangeServer --verbose --pidfile=$RS4_PIDFILE \
    --Hypertable.RangeServer.ProxyName=rs4 \
-   --Hypertable.RangeServer.Port=38063 --config=${SCRIPT_DIR}/test.cfg 2>1 > rangeserver.rs4.output&
+   --Hypertable.RangeServer.Port=38063 --config=${SCRIPT_DIR}/test.cfg 2>&1 > rangeserver.rs4.output&
 $HT_HOME/bin/ht Hypertable.RangeServer --verbose --pidfile=$RS5_PIDFILE \
    --Hypertable.RangeServer.ProxyName=rs5 \
-   --Hypertable.RangeServer.Port=38064 --config=${SCRIPT_DIR}/test.cfg 2>1 > rangeserver.rs5.output&
+   --Hypertable.RangeServer.Port=38064 --config=${SCRIPT_DIR}/test.cfg 2>&1 > rangeserver.rs5.output&
 
 # create table
 $HT_HOME/bin/ht shell --no-prompt < $SCRIPT_DIR/create-table.hql
@@ -152,7 +152,7 @@ wait_for_quorum
 # start one more range server
 $HT_HOME/bin/ht Hypertable.RangeServer --verbose --pidfile=$RS6_PIDFILE \
    --Hypertable.RangeServer.ProxyName=rs6 \
-   --Hypertable.RangeServer.Port=38065 --config=${SCRIPT_DIR}/test.cfg 2>1 > rangeserver.rs6.output&
+   --Hypertable.RangeServer.Port=38065 --config=${SCRIPT_DIR}/test.cfg 2>&1 > rangeserver.rs6.output&
 
 # wait for recovery to complete 
 wait_for_recovery
@@ -172,10 +172,10 @@ $HT_HOME/bin/start-test-servers.sh --no-rangeserver --no-thriftbroker \
     --config=${SCRIPT_DIR}/test.cfg
 $HT_HOME/bin/ht Hypertable.RangeServer --verbose --pidfile=$RS5_PIDFILE \
    --Hypertable.RangeServer.ProxyName=rs5 \
-   --Hypertable.RangeServer.Port=38064 --config=${SCRIPT_DIR}/test.cfg 2>1 >> rangeserver.rs5.output&
+   --Hypertable.RangeServer.Port=38064 --config=${SCRIPT_DIR}/test.cfg 2>&1 >> rangeserver.rs5.output&
 $HT_HOME/bin/ht Hypertable.RangeServer --verbose --pidfile=$RS6_PIDFILE \
    --Hypertable.RangeServer.ProxyName=rs6 \
-   --Hypertable.RangeServer.Port=38065 --config=${SCRIPT_DIR}/test.cfg 2>1 >> rangeserver.rs6.output&
+   --Hypertable.RangeServer.Port=38065 --config=${SCRIPT_DIR}/test.cfg 2>&1 >> rangeserver.rs6.output&
 
 sleep 10
 

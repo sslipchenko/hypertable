@@ -135,11 +135,11 @@ namespace Hypertable {
             uint32_t attempt, bool success,
             const std::map<uint32_t, int> &error_map, Timer *timer=0);
 
-    void phantom_prepare_complete(int64_t op_id, uint32_t attempt, const String &location,
-        const std::map<QualifiedRangeSpec, int> &error_map, Timer *timer=0);
+    void phantom_prepare_complete(int64_t op_id, const String &location,
+                                  int32_t error, const String message);
 
-    void phantom_commit_complete(int64_t op_id, uint32_t attempt, const String &location,
-        const std::map<QualifiedRangeSpec, int> &error_map, Timer *timer=0);
+    void phantom_commit_complete(int64_t op_id, const String &location,
+                                 int32_t error, const String message);
 
 
   private:

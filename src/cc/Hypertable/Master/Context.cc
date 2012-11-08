@@ -163,38 +163,27 @@ void Context::replay_complete(EventPtr &event) {
 void Context::prepare_complete(EventPtr &event) {
   const uint8_t *decode_ptr = event->payload;
   size_t decode_remain = event->payload_len;
-  int64_t id;
-  uint32_t attempt;
-  int nn;
-  RecoveryCounter::Result rr;
-  vector<RecoveryCounter::Result> results;
 
-  id       = Serialization::decode_vi64(&decode_ptr, &decode_remain);
-  attempt  = Serialization::decode_vi32(&decode_ptr, &decode_remain);
-  nn       = Serialization::decode_vi32(&decode_ptr, &decode_remain);
+  int64_t id       = Serialization::decode_i64(&decode_ptr, &decode_remain);
+  String location  = Serialization::decode_vstr(&decode_ptr, &decode_remain);
+  int32_t error    = Serialization::decode_i32(&decode_ptr, &decode_remain);
+  String error_msg = Serialization::decode_vstr(&decode_ptr, &decode_remain);
 
-  HT_DEBUG_OUT << "Received prepare_complete for op_id=" << id << " attempt="
-      << attempt << " num_ranges=" << nn << " from " << event->proxy << HT_END;
+  HT_INFOF("prepare_complete(%lld, %s) = %s", (Lld)id, location.c_str(), Error::get_text(error));
 
-  for (int ii=0; ii<nn; ++ii) {
-    rr.range.decode(&decode_ptr, &decode_remain);
-    rr.error    = Serialization::decode_vi32(&decode_ptr, &decode_remain);
-    results.push_back(rr);
+  if (error != Error::OK) {
+    HT_WARN_OUT << "prepare_complete(" << id << ", " << location << ") received from " << event->proxy
+                << " reports error " << Error::get_text(error) << " (" << error_msg << ")" << HT_END;
+    // TODO: Notify administrator
+    return;
   }
 
-  {
-    ScopedLock lock(m_recovery_state.m_mutex);
-    RecoveryState::CounterMap::iterator it = m_recovery_state.m_prepare_map.find(id);
-    RecoveryCounterPtr prepare_counter;
-    if (it != m_recovery_state.m_prepare_map.end()) {
-      prepare_counter = it->second;
-      prepare_counter->result_callback(attempt, results);
-    }
-    else
-      HT_WARN_OUT << "No RecoveryCounter found for operation=" << id << HT_END;
-  }
-  HT_DEBUG_OUT << "Exitting prepare_complete for op_id=" << id << " attempt="
-      << attempt << " num_ranges=" << nn << " from " << event->proxy << HT_END;
+  RecoveryStepFuturePtr future = m_recovery_state.get_prepare_future(id);
+
+  if (future)
+    future->success(event->proxy);
+  else
+    HT_WARN_OUT << "No Recovery prepare step future found for operation=" << id << HT_END;
 
   return;
 }
@@ -202,40 +191,26 @@ void Context::prepare_complete(EventPtr &event) {
 void Context::commit_complete(EventPtr &event) {
   const uint8_t *decode_ptr = event->payload;
   size_t decode_remain = event->payload_len;
-  int64_t id;
-  uint32_t attempt;
-  int nn;
-  RecoveryCounter::Result rr;
-  vector<RecoveryCounter::Result> results;
 
-  id       = Serialization::decode_vi64(&decode_ptr, &decode_remain);
-  attempt  = Serialization::decode_vi32(&decode_ptr, &decode_remain);
-  nn       = Serialization::decode_vi32(&decode_ptr, &decode_remain);
-  for (int ii = 0; ii < nn; ++ii) {
-    rr.range.decode(&decode_ptr, &decode_remain);
-    rr.error    = Serialization::decode_vi32(&decode_ptr, &decode_remain);
-    results.push_back(rr);
+  int64_t id       = Serialization::decode_i64(&decode_ptr, &decode_remain);
+  String location  = Serialization::decode_vstr(&decode_ptr, &decode_remain);
+  int32_t error    = Serialization::decode_i32(&decode_ptr, &decode_remain);
+  String error_msg = Serialization::decode_vstr(&decode_ptr, &decode_remain);
+
+  if (error != Error::OK) {
+    HT_WARN_OUT << "commit_complete(" << id << ", " << location << ") received from " << event->proxy
+                << " reports error " << Error::get_text(error) << " (" << error_msg << ")" << HT_END;
+    // TODO: Notify administrator
+    return;
   }
 
-  HT_DEBUG_OUT << "Received phantom_commit_complete for op_id=" << id
-      << " attempt=" << attempt << " num_ranges=" << nn << " from "
-      << event->proxy << HT_END;
-  {
-    ScopedLock lock(m_recovery_state.m_mutex);
-    RecoveryState::CounterMap::iterator it = m_recovery_state.m_commit_map.find(id);
-    RecoveryCounterPtr commit_counter;
-    if (it != m_recovery_state.m_commit_map.end()) {
-      commit_counter = it->second;
-      commit_counter->result_callback(attempt, results);
-    }
-    else
-      HT_WARN_OUT << "No RecoveryCounter found for operation=" << id
-          << HT_END;
-  }
+  RecoveryStepFuturePtr future = m_recovery_state.get_commit_future(id);
 
-  HT_DEBUG_OUT << "Exitting phantom_commit_complete for op_id=" << id
-      << " attempt=" << attempt << " num_ranges=" << nn << " from "
-      << event->proxy << HT_END;
+  if (future)
+    future->success(event->proxy);
+  else
+    HT_WARN_OUT << "No Recovery commit step future found for operation=" << id << HT_END;
+
   return;
 }
 
@@ -291,44 +266,50 @@ Context::RecoveryState::erase_replay_counter(int64_t id)
   m_replay_map.erase(id);
 }
 
-RecoveryCounterPtr
-Context::RecoveryState::create_prepare_counter(int64_t id, uint32_t attempt)
-{
+void
+Context::RecoveryState::install_prepare_future(int64_t id,
+                                               RecoveryStepFuturePtr &future) {
   ScopedLock lock(m_mutex);
+  HT_ASSERT(m_prepare_map.find(id) == m_prepare_map.end());
+  m_prepare_map.insert(make_pair(id, future));    
+}
 
-  RecoveryCounterPtr counter = new RecoveryCounter(attempt);
-
+RecoveryStepFuturePtr
+Context::RecoveryState::get_prepare_future(int64_t id) {
+  ScopedLock lock(m_mutex);
+  RecoveryStepFuturePtr future;
   if (m_prepare_map.find(id) != m_prepare_map.end())
-    m_prepare_map.erase(id);
-
-  m_prepare_map.insert(make_pair(id, counter));
-  return counter;
+    future = m_prepare_map[id];
+  return future;
 }
 
 void
-Context::RecoveryState::erase_prepare_counter(int64_t id)
-{
+Context::RecoveryState::erase_prepare_future(int64_t id) {
   ScopedLock lock(m_mutex);
   m_prepare_map.erase(id);
 }
 
-RecoveryCounterPtr
-Context::RecoveryState::create_commit_counter(int64_t id, uint32_t attempt)
-{
+
+void
+Context::RecoveryState::install_commit_future(int64_t id,
+                                               RecoveryStepFuturePtr &future) {
   ScopedLock lock(m_mutex);
+  HT_ASSERT(m_commit_map.find(id) == m_commit_map.end());
+  m_commit_map.insert(make_pair(id, future));    
+}
 
-  RecoveryCounterPtr counter = new RecoveryCounter(attempt);
-
+RecoveryStepFuturePtr
+Context::RecoveryState::get_commit_future(int64_t id) {
+  ScopedLock lock(m_mutex);
+  RecoveryStepFuturePtr future;
   if (m_commit_map.find(id) != m_commit_map.end())
-    m_commit_map.erase(id);
-
-  m_commit_map.insert(make_pair(id, counter));
-  return counter;
+    future = m_commit_map[id];
+  return future;
 }
 
 void
-Context::RecoveryState::erase_commit_counter(int64_t id)
-{
+Context::RecoveryState::erase_commit_future(int64_t id) {
   ScopedLock lock(m_mutex);
   m_commit_map.erase(id);
 }
+

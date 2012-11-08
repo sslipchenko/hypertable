@@ -39,7 +39,6 @@ using namespace Serialization;
 void RequestHandlerPhantomPrepareRanges::run() {
   ResponseCallback cb(m_comm, m_event_ptr);
   int64_t op_id;
-  uint32_t attempt, timeout_ms;
   String location;
   vector<QualifiedRangeSpec> ranges;
   QualifiedRangeSpec range;
@@ -50,14 +49,12 @@ void RequestHandlerPhantomPrepareRanges::run() {
 
   try {
     op_id     = Serialization::decode_i64(&decode_ptr, &decode_remain);
-    attempt   = Serialization::decode_i32(&decode_ptr, &decode_remain);
     location  = Serialization::decode_vstr(&decode_ptr, &decode_remain);
     nn        = Serialization::decode_i32(&decode_ptr, &decode_remain);
     for(uint32_t ii = 0; ii < nn; ++ii) {
       range.decode(&decode_ptr, &decode_remain);
       ranges.push_back(range);
     }
-    timeout_ms = Serialization::decode_i32(&decode_ptr, &decode_remain);
   }
   catch (Exception &e) {
     HT_ERROR_OUT << e << HT_END;
@@ -66,11 +63,9 @@ void RequestHandlerPhantomPrepareRanges::run() {
   }
 
   try {
-    m_range_server->phantom_prepare_ranges(&cb, op_id, attempt, location, 
-            ranges, timeout_ms);
+    m_range_server->phantom_prepare_ranges(&cb, op_id, location, ranges);
   }
   catch (Exception &e) {
-    HT_ERROR_OUT << e << HT_END;
-    cb.error(e.code(), e.what());
+    HT_FATAL_OUT << e << HT_END;
   }
 }

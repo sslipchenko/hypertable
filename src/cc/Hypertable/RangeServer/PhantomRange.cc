@@ -30,7 +30,7 @@ using namespace std;
 PhantomRange::PhantomRange(const QualifiedRangeStateSpec &range, 
         SchemaPtr &schema, const vector<uint32_t> &fragments) 
   : m_spec(range), m_schema(schema), m_outstanding(fragments.size()), 
-    m_state(INIT) {
+    m_state(INIT), m_staged(false) {
   foreach_ht(uint32_t fragment, fragments) {
     HT_ASSERT(m_fragments.count(fragment) == 0);
     FragmentDataPtr data = new FragmentData(fragment);
@@ -157,4 +157,14 @@ const String & PhantomRange::get_phantom_logname() {
 CommitLogPtr PhantomRange::get_phantom_log() {
   ScopedLock lock(m_mutex);
   return m_phantom_log;
+}
+
+void PhantomRange::set_staged() {
+  ScopedLock lock(m_mutex);
+  m_staged = true;
+}
+
+bool PhantomRange::staged() {
+  ScopedLock lock(m_mutex);
+  return m_staged;
 }

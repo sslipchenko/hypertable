@@ -106,6 +106,12 @@ void RangeRecoveryReceiverPlan::get_qualified_range_specs(const char *location,
   }
 }
 
+void RangeRecoveryReceiverPlan::get_qualified_range_specs(vector<QualifiedRangeSpec> &ranges) {
+  LocationIndex &location_index = m_plan.get<ByLocation>();
+  for (LocationIndex::iterator iter=location_index.begin(); iter!=location_index.end(); ++iter)
+    ranges.push_back(iter->state_spec.qualified_range);
+}
+
 void RangeRecoveryReceiverPlan::get_qualified_range_specs(const char *location,
     vector<QualifiedRangeStateSpecManaged> &ranges) const {
 

@@ -117,7 +117,7 @@ namespace Hypertable {
      *
      * @return reference to the smart pointer to the schema object
      */
-    SchemaPtr &get_schema() {
+    SchemaPtr get_schema() {
       ScopedLock lock(m_mutex);
       return m_schema;
     }

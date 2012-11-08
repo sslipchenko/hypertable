@@ -51,11 +51,11 @@ $HT_HOME/bin/start-test-servers.sh --no-rangeserver --no-thriftbroker \
 # start both rangeservers
 $HT_HOME/bin/ht Hypertable.RangeServer --verbose --pidfile=$RS1_PIDFILE \
    --Hypertable.RangeServer.ProxyName=rs1 \
-   --Hypertable.RangeServer.Port=38060 --config=${SCRIPT_DIR}/test.cfg 2>1 > rangeserver.rs1.output&
+   --Hypertable.RangeServer.Port=38060 --config=${SCRIPT_DIR}/test.cfg 2>&1 > rangeserver.rs1.output&
 sleep 10
 $HT_HOME/bin/ht Hypertable.RangeServer --verbose --pidfile=$RS2_PIDFILE \
    --Hypertable.RangeServer.ProxyName=rs2 \
-   --Hypertable.RangeServer.Port=38061 --config=${SCRIPT_DIR}/test.cfg 2>1 > rangeserver.rs2.output&
+   --Hypertable.RangeServer.Port=38061 --config=${SCRIPT_DIR}/test.cfg 2>&1 > rangeserver.rs2.output&
 
 # create table
 $HT_HOME/bin/ht shell --no-prompt < $SCRIPT_DIR/create-table.hql
@@ -67,7 +67,6 @@ fi
 
 # write data 
 $HT_HOME/bin/ht ht_load_generator update \
-    --Hypertable.Mutator.FlushDelay=50 \
     --rowkey.component.0.order=random \
     --rowkey.component.0.type=integer \
     --rowkey.component.0.format="%020lld" \
@@ -75,7 +74,11 @@ $HT_HOME/bin/ht ht_load_generator update \
     --rowkey.component.0.max=10000000000 \
     --row-seed=1 \
     --Field.value.size=200 \
-    --max-keys=$MAX_KEYS
+    --max-keys=$MAX_KEYS \
+    --Hypertable.Mutator.ScatterBuffer.FlushLimit.PerServer=2M \
+    --Hypertable.Mutator.FlushDelay=250
+
+sleep 4
 
 # dump keys
 ${HT_HOME}/bin/ht shell --config=${SCRIPT_DIR}/test.cfg --no-prompt --exec "use '/'; select * from LoadTest KEYS_ONLY into file '${RUN_DIR}/keys.pre';"
@@ -94,7 +97,7 @@ $HT_HOME/bin/start-test-servers.sh --no-rangeserver --no-thriftbroker \
     --config=${SCRIPT_DIR}/test.cfg
 $HT_HOME/bin/ht Hypertable.RangeServer --verbose --pidfile=$RS2_PIDFILE \
    --Hypertable.RangeServer.ProxyName=rs2 \
-   --Hypertable.RangeServer.Port=38061 --config=${SCRIPT_DIR}/test.cfg 2>1 >> rangeserver.rs2.output&
+   --Hypertable.RangeServer.Port=38061 --config=${SCRIPT_DIR}/test.cfg 2>&1 >> rangeserver.rs2.output&
 
 sleep 10
 

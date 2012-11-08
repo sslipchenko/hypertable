@@ -25,11 +25,14 @@
 #include <map>
 #include <string>
 
+#include <boost/thread/condition.hpp>
+
 #include "Common/ReferenceCount.h"
 #include "Common/Mutex.h"
 
 #include "Hypertable/Lib/Types.h"
 
+#include "TableInfoMap.h"
 #include "PhantomRange.h"
 
 namespace Hypertable {
@@ -39,8 +42,10 @@ namespace Hypertable {
    */
   class PhantomRangeMap : public ReferenceCount {
   public:
-    PhantomRangeMap() { }
+    PhantomRangeMap();
     virtual ~PhantomRangeMap() { }
+
+    TableInfoMapPtr get_tableinfo_map() { return m_tableinfo_map; }
 
     /**
      * Insert range in map
@@ -97,15 +102,37 @@ namespace Hypertable {
      */
     size_t size();
 
+    void load_start();
+    void load_finish();
+
+    bool prepare_start();
+    void prepare_abort();
+    void prepare_finish();
+    bool is_prepared();
+
+    bool commit_start();
+    void commit_abort();
+    void commit_finish();
+    bool is_committed();
+
+
   private:
     typedef std::map<QualifiedRangeStateSpec, PhantomRangePtr> Map;
     typedef std::pair<Map::iterator, bool> MapInsRec;
 
-    Mutex         m_mutex;
-    Map           m_map;
+    Mutex            m_mutex;
+    boost::condition m_load_cond;
+    TableInfoMapPtr  m_tableinfo_map;
+    Map              m_map;
+    int              m_state;
+    bool             m_load_in_progress;
+    bool             m_prepare_in_progress;
+    bool             m_commit_in_progress;
   };
 
   typedef boost::intrusive_ptr<PhantomRangeMap> PhantomRangeMapPtr;
+
+  void call_load_finish(PhantomRangeMapPtr phantom_range_map);
 }
 
 #endif // HYPERTABLE_PHANTOMRANGEMAP_H

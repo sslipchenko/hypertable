@@ -203,16 +203,28 @@ namespace Hypertable {
     return cbuf;
   }
 
-  CommBuf *MasterProtocol::create_phantom_prepare_complete_request(int64_t op_id,
-      uint32_t attempt, const map<QualifiedRangeSpec, int> &error_map) {
-    return create_phantom_reply(COMMAND_PHANTOM_PREPARE_COMPLETE, op_id, 
-            attempt, error_map);
+  CommBuf *MasterProtocol::create_phantom_prepare_complete_request(int64_t op_id, const String &location,
+                                                                   int code, const String &message) {
+    CommHeader header(COMMAND_PHANTOM_PREPARE_COMPLETE);
+    size_t len = 8 + encoded_length_vstr(location) + 4 + encoded_length_vstr(message);
+    CommBuf *cbuf = new CommBuf(header, len);
+    cbuf->append_i64(op_id);
+    cbuf->append_vstr(location);
+    cbuf->append_i32(code);
+    cbuf->append_vstr(message);
+    return cbuf;
   }
 
-  CommBuf *MasterProtocol::create_phantom_commit_complete_request(int64_t op_id,
-      uint32_t attempt, const map<QualifiedRangeSpec, int> &error_map) {
-    return create_phantom_reply(COMMAND_PHANTOM_COMMIT_COMPLETE, op_id, 
-            attempt, error_map);
+  CommBuf *MasterProtocol::create_phantom_commit_complete_request(int64_t op_id, const String &location,
+                                                                  int code, const String &message) {
+    CommHeader header(COMMAND_PHANTOM_COMMIT_COMPLETE);
+    size_t len = 8 + encoded_length_vstr(location) + 4 + encoded_length_vstr(message);
+    CommBuf *cbuf = new CommBuf(header, len);
+    cbuf->append_i64(op_id);
+    cbuf->append_vstr(location);
+    cbuf->append_i32(code);
+    cbuf->append_vstr(message);
+    return cbuf;
   }
 
   const char *MasterProtocol::m_command_strings[] = {
@@ -243,31 +255,5 @@ namespace Hypertable {
     return m_command_strings[command];
   }
 
-  CommBuf *MasterProtocol::create_phantom_reply(int64_t command_id,
-          int64_t op_id, uint32_t attempt, 
-          const map<QualifiedRangeSpec, int> &error_map) {
-    CommHeader header(command_id);
-    size_t len = Serialization::encoded_length_vi64(op_id) +
-        Serialization::encoded_length_vi32(attempt) +
-        Serialization::encoded_length_vi32(error_map.size());
-
-    map<QualifiedRangeSpec, int>::const_iterator it = error_map.begin();
-    while(it != error_map.end()) {
-      len += it->first.encoded_length() 
-          + Serialization::encoded_length_vi32(it->second);
-      ++it;
-    }
-    CommBuf *cbuf = new CommBuf(header, len);
-    Serialization::encode_vi64(cbuf->get_data_ptr_address(), op_id);
-    Serialization::encode_vi32(cbuf->get_data_ptr_address(), attempt);
-    Serialization::encode_vi32(cbuf->get_data_ptr_address(), error_map.size());
-    it = error_map.begin();
-    while(it != error_map.end()) {
-      it->first.encode(cbuf->get_data_ptr_address());
-      Serialization::encode_vi32(cbuf->get_data_ptr_address(), it->second);
-      ++it;
-    }
-    return cbuf;
-  }
 }
 

@@ -416,37 +416,33 @@ namespace Hypertable {
   }
 
   CommBuf *RangeServerProtocol::create_request_phantom_prepare_ranges(int64_t op_id,
-          uint32_t attempt, const String &location,
-          const vector<QualifiedRangeSpec> &ranges, uint32_t timeout_ms) {
+          const String &location, const vector<QualifiedRangeSpec> &ranges) {
     return create_request_phantom_ranges(COMMAND_PHANTOM_PREPARE_RANGES,
-            op_id, attempt, location, ranges, timeout_ms);
+            op_id, location, ranges);
   }
 
   CommBuf *RangeServerProtocol::create_request_phantom_commit_ranges(int64_t op_id,
-          uint32_t attempt, const String &location,
-          const vector<QualifiedRangeSpec> &ranges, uint32_t timeout_ms) {
+          const String &location, const vector<QualifiedRangeSpec> &ranges) {
     return create_request_phantom_ranges(COMMAND_PHANTOM_COMMIT_RANGES,
-            op_id, attempt, location, ranges, timeout_ms);
+            op_id, location, ranges);
   }
 
   CommBuf *RangeServerProtocol::create_request_phantom_ranges(uint64_t cmd_id,
-          int64_t op_id, uint32_t attempt, const String &location,
-          const vector<QualifiedRangeSpec> &ranges, uint32_t timeout_ms) {
+          int64_t op_id, const String &location,
+          const vector<QualifiedRangeSpec> &ranges) {
     CommHeader header(cmd_id);
     header.flags |= CommHeader::FLAGS_BIT_URGENT;
-    size_t len = 8 + 4 + encoded_length_vstr(location) + 4;
+    size_t len = 8 + encoded_length_vstr(location);
     for (size_t ii = 0; ii < ranges.size(); ++ii)
       len += ranges[ii].encoded_length();
     len += 4;
 
     CommBuf *cbuf = new CommBuf(header, len);
     cbuf->append_i64(op_id);
-    cbuf->append_i32(attempt);
     cbuf->append_vstr(location);
     cbuf->append_i32(ranges.size());
     for(size_t ii = 0; ii < ranges.size(); ++ii)
       ranges[ii].encode(cbuf->get_data_ptr_address());
-    cbuf->append_i32(timeout_ms);
 
     return cbuf;
   }

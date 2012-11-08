@@ -50,7 +50,7 @@
 #include "RangeServerConnection.h"
 #include "RangeServerConnectionManager.h"
 #include "RecoveryReplayCounter.h"
-#include "RecoveryCounter.h"
+#include "RecoveryStepFuture.h"
 
 namespace Hypertable {
 
@@ -78,26 +78,24 @@ namespace Hypertable {
 
         void erase_replay_counter(int64_t id);
 
-        RecoveryCounterPtr create_prepare_counter(int64_t id,
-            uint32_t attempt);
+        void install_prepare_future(int64_t id, RecoveryStepFuturePtr &future);
+        RecoveryStepFuturePtr get_prepare_future(int64_t id);
+        void erase_prepare_future(int64_t id);
 
-        void erase_prepare_counter(int64_t id);
-
-        RecoveryCounterPtr create_commit_counter(int64_t id,
-            uint32_t attempt);
-
-        void erase_commit_counter(int64_t id);
+        void install_commit_future(int64_t id, RecoveryStepFuturePtr &future);
+        RecoveryStepFuturePtr get_commit_future(int64_t id);
+        void erase_commit_future(int64_t id);
 
       private:
         friend class Context;
 
         typedef std::map<int64_t, RecoveryReplayCounterPtr> ReplayMap;
-        typedef std::map<int64_t, RecoveryCounterPtr> CounterMap;
+        typedef std::map<int64_t, RecoveryStepFuturePtr> FutureMap;
 
         Mutex m_mutex;
         ReplayMap m_replay_map;
-        CounterMap m_prepare_map;
-        CounterMap m_commit_map;
+        FutureMap  m_prepare_map;
+        FutureMap m_commit_map;
     };
 
   public:
@@ -153,9 +151,6 @@ namespace Hypertable {
     void replay_complete(EventPtr &event);
     void prepare_complete(EventPtr &event);
     void commit_complete(EventPtr &event);
-    void install_rs_recovery_commit_counter(int64_t id,
-        RecoveryCounterPtr &commit_counter);
-    void erase_rs_recovery_commit_counter(int64_t id);
 
     // spawn notification hook
     void notification_hook(int type, const String &message);

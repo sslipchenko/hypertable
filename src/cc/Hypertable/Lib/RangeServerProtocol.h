@@ -335,33 +335,27 @@ namespace Hypertable {
     /** Creates a "phantom_prepare_ranges" request message.
      *
      * @param op_id id of the calling recovery operation
-     * @param attempt id of the replay attempt -- needed in case of master failure
      * @param location location of the server being recovered
      * @param ranges ranges to be prepared
-     * @param timeout_ms timeout
      */
-    static CommBuf *create_request_phantom_prepare_ranges(int64_t op_id, uint32_t attempt,
-        const String &location, const std::vector<QualifiedRangeSpec> &ranges,
-        uint32_t timeout_ms);
+    static CommBuf *create_request_phantom_prepare_ranges(int64_t op_id,
+            const String &location, const std::vector<QualifiedRangeSpec> &ranges);
 
     /** Creates a "phantom_commit_ranges" request message.
      *
      * @param op_id id of the calling recovery operation
-     * @param attempt id of the replay attempt -- needed in case of master failure
      * @param location location of the server being recovered
      * @param ranges ranges to be commit
-     * @param timeout_ms timeout
      */
-    static CommBuf *create_request_phantom_commit_ranges(int64_t op_id, uint32_t attempt,
-        const String &location, const std::vector<QualifiedRangeSpec> &ranges,
-        uint32_t timeout_ms);
+    static CommBuf *create_request_phantom_commit_ranges(int64_t op_id,
+        const String &location, const std::vector<QualifiedRangeSpec> &ranges);
 
     virtual const char *command_text(uint64_t command);
 
   private:
     static CommBuf *create_request_phantom_ranges(uint64_t cmd_id,
-          int64_t op_id, uint32_t attempt, const String &location,
-          const vector<QualifiedRangeSpec> &ranges, uint32_t timeout_ms);
+          int64_t op_id, const String &location,
+          const vector<QualifiedRangeSpec> &ranges);
   };
 }
 

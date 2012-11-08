@@ -102,17 +102,14 @@ namespace Hypertable {
             uint32_t attempt, const std::map<uint32_t, int> &error_map,
             bool success);
 
-    static CommBuf *create_phantom_prepare_complete_request(int64_t op_id, uint32_t attempt,
-        const std::map<QualifiedRangeSpec, int> &error_map);
+    static CommBuf *create_phantom_prepare_complete_request(int64_t op_id, const String &location,
+                                                            int code, const String &message);
 
-    static CommBuf *create_phantom_commit_complete_request(int64_t op_id, uint32_t attempt,
-        const std::map<QualifiedRangeSpec, int> &error_map);
+    static CommBuf *create_phantom_commit_complete_request(int64_t op_id, const String &location,
+                                                           int code, const String &message);
 
     virtual const char *command_text(uint64_t command);
 
-  private:
-    static CommBuf *create_phantom_reply(int64_t command_id, int64_t op_id, 
-          uint32_t attempt, const std::map<QualifiedRangeSpec, int> &error_map);
   };
 
 }
