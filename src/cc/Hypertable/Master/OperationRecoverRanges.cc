@@ -39,17 +39,17 @@ OperationRecoverRanges::OperationRecoverRanges(ContextPtr &context,
         const String &location, int type)
   : Operation(context, MetaLog::EntityType::OPERATION_RECOVER_SERVER_RANGES),
     m_location(location), m_type(type), m_attempt(0),
-    m_plan_generation(0) {
+    m_plan_generation(0), m_plan_initialized(false) {
   HT_ASSERT(type != RangeSpec::UNKNOWN);
   set_type_str();
   m_timeout = m_context->props->get_i32("Hypertable.Failover.Timeout");
   m_dependencies.insert(Dependency::RECOVERY_BLOCKER);
   initialize_obstructions_dependencies();
-  get_new_recovery_plan();  
 }
 
 OperationRecoverRanges::OperationRecoverRanges(ContextPtr &context,
-        const MetaLog::EntityHeader &header_) : Operation(context, header_) {
+        const MetaLog::EntityHeader &header_) : Operation(context, header_),
+            m_attempt(0), m_plan_generation(0), m_plan_initialized(false) {
 }
 
 void OperationRecoverRanges::execute() {
@@ -62,6 +62,11 @@ void OperationRecoverRanges::execute() {
   HT_INFOF("Entering RecoverServerRanges (%p) %s type=%d attempt=%d state=%s",
           (void *)this, m_location.c_str(), m_type, m_attempt,
           OperationState::get_text(state));
+
+  if (!m_plan_initialized) {
+    get_new_recovery_plan();
+    m_plan_initialized = true;
+  }
 
   if (m_timeout == 0)
     m_timeout = m_context->props->get_i32("Hypertable.Failover.Timeout");
@@ -359,9 +364,15 @@ bool OperationRecoverRanges::phantom_load_ranges() {
       rsc.phantom_load(addr, m_location, fragments, ranges);
     }
     catch (Exception &e) {
-      success = false;
-      HT_ERROR_OUT << e << HT_END;
-      break;
+      if (e.code() == Error::RANGESERVER_RANGES_ALREADY_LIVE) {
+        m_context->get_balance_plan_authority()->remove_from_replay_plan(m_location, m_type, location);
+        get_new_recovery_plan(false);
+      }
+      else {
+        success = false;
+        HT_ERROR_OUT << e << HT_END;
+        break;
+      }
     }
   }
   if (!success)
@@ -459,9 +470,9 @@ bool OperationRecoverRanges::wait_for_quorum() {
   return true;
 }
 
-bool OperationRecoverRanges::get_new_recovery_plan() {
-  if (m_plan_generation ==
-          m_context->get_balance_plan_authority()->get_generation()) {
+bool OperationRecoverRanges::get_new_recovery_plan(bool check) {
+  if (check && m_plan_generation ==
+      m_context->get_balance_plan_authority()->get_generation()) {
     HT_INFOF("Balance plan generation is still at %d, not fetching a new one",
             m_plan_generation);
     return false;
@@ -584,6 +595,8 @@ bool OperationRecoverRanges::acknowledge() {
   RangeServerClient rsc(m_context->comm);
   CommAddress addr;
   bool success = true;
+  vector<QualifiedRangeSpecManaged> acknowledged;
+
   m_plan.receiver_plan.get_locations(locations);
 
   foreach_ht(const String &location, locations) {
@@ -604,11 +617,13 @@ bool OperationRecoverRanges::acknowledge() {
       response_map_it = response_map.begin();
       while (response_map_it != response_map.end()) {
         if (response_map_it->second != Error::OK)
-          HT_WARNF("Problem acknowledging load for %s[%s..%s] - %s",
+          HT_ERRORF("Problem acknowledging load for %s[%s..%s] - %s",
                   response_map_it->first.table.id,
                   response_map_it->first.range.start_row,
                   response_map_it->first.range.end_row,
                   Error::get_text(response_map_it->second));
+        else
+          acknowledged.push_back(response_map_it->first);
         ++response_map_it;
       }
       HT_INFO_OUT << "acknowledge_load complete for " << range_ptrs.size()
@@ -619,6 +634,17 @@ bool OperationRecoverRanges::acknowledge() {
       HT_ERROR_OUT << e << HT_END;
     }
   }
+
+  // Purge successfully acknowledged ranges from recovery plan
+  if (!acknowledged.empty()) {
+    BalancePlanAuthority *bpa = m_context->get_balance_plan_authority();
+    vector<QualifiedRangeSpec *> specs;
+    foreach_ht (QualifiedRangeSpecManaged &qrsm, acknowledged)
+      specs.push_back(&qrsm);
+    bpa->remove_from_receiver_plan(m_location, m_type, specs);
+    get_new_recovery_plan(false);
+  }
+
   // at this point all the players have prepared or failed in
   // creating phantom ranges
   return success;

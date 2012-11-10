@@ -137,7 +137,7 @@ BalancePlanAuthority::copy_recovery_plan(const String &location, int type,
   ScopedLock lock(m_mutex);
   HT_ASSERT(m_map.find(location) != m_map.end());
   RangeRecoveryPlanPtr plan = m_map[location].plans[type];
-  HT_ASSERT(!plan || plan->type == type);
+  HT_ASSERT(plan && plan->type == type);
 
   out.type = type;
   out.replay_plan = plan->replay_plan;
@@ -155,6 +155,35 @@ BalancePlanAuthority::remove_recovery_plan(const String &location)
   m_map.erase(it);
   m_mml_writer->record_state(this);
 }
+
+void BalancePlanAuthority::remove_from_receiver_plan(const String &location, int type,
+                                                     const vector<QualifiedRangeSpec *> &specs) {
+  ScopedLock lock(m_mutex);
+  HT_ASSERT(m_map.find(location) != m_map.end());
+  RangeRecoveryPlanPtr plan = m_map[location].plans[type];
+  HT_ASSERT(plan && plan->type == type);
+
+  foreach_ht (const QualifiedRangeSpec *rspec, specs) {
+    QualifiedRangeStateSpec qrss(rspec->table, rspec->range);
+    plan->receiver_plan.remove(qrss);
+  }
+
+  m_mml_writer->record_state(this);
+}
+
+void BalancePlanAuthority::remove_from_replay_plan(const String &recovery_location, int type,
+                                                   const String &replay_location) {
+
+  ScopedLock lock(m_mutex);
+  HT_ASSERT(m_map.find(recovery_location) != m_map.end());
+  RangeRecoveryPlanPtr plan = m_map[recovery_location].plans[type];
+  HT_ASSERT(plan && plan->type == type);
+
+  plan->replay_plan.remove_location(replay_location);
+
+  m_mml_writer->record_state(this);  
+}
+
 
 bool
 BalancePlanAuthority::is_empty()

@@ -3674,6 +3674,11 @@ void RangeServer::phantom_load(ResponseCallback *cb, const String &location,
       return;
   }
 
+  if (already_live(ranges)) {
+    cb->error(Error::RANGESERVER_RANGES_ALREADY_LIVE, "");
+    return;
+  }
+
   HT_ASSERT(!ranges.empty());
 
   HT_MAYBE_FAIL("phantom-load-1");
@@ -3805,6 +3810,16 @@ void RangeServer::phantom_prepare_ranges(ResponseCallback *cb, int64_t op_id,
   }
 
   cb->response_ok();
+
+  if (already_live(ranges)) {
+    try {
+      m_master_client->phantom_prepare_complete(op_id, location, Error::OK, "");
+    }
+    catch (Exception &e) {
+      HT_ERROR_OUT << e << HT_END;
+    }
+    return;
+  }
 
   {
     // make sure we have data for this recovery op
@@ -4029,6 +4044,16 @@ void RangeServer::phantom_commit_ranges(ResponseCallback *cb, int64_t op_id,
 
   cb->response_ok();
 
+  if (already_live(ranges)) {
+    try {
+      m_master_client->phantom_commit_complete(op_id, location, Error::OK, "");
+    }
+    catch (Exception &e) {
+      HT_ERROR_OUT << e << HT_END;
+    }
+    return;
+  }
+
   {
     // make sure we have data for this recovery op
     ScopedLock lock(m_failover_mutex);
@@ -4136,8 +4161,21 @@ void RangeServer::phantom_commit_ranges(ResponseCallback *cb, int64_t op_id,
         HT_THROW(Error::SERVER_SHUTTING_DOWN,
                  Global::location_initializer->get());
 
-      phantom_range_map->commit_finish();
+      HT_MAYBE_FAIL("phantom-commit-3");
 
+      // make ranges live
+      HT_INFOF("Merging phantom map into live map for recovery of %s (ID=%lld)",
+               recovery_location.c_str(), (Lld)op_id);
+      m_live_map->merge(phantom_map);
+
+      HT_MAYBE_FAIL("phantom-commit-4");
+
+      {
+        ScopedLock lock(m_failover_mutex);
+        m_failover_map.erase(recovery_location);
+      }
+
+      phantom_range_map->commit_finish();
     }
     catch (Exception &e) {
       phantom_range_map->commit_abort();
@@ -4151,20 +4189,10 @@ void RangeServer::phantom_commit_ranges(ResponseCallback *cb, int64_t op_id,
       return;
     }
   }
+  else if(!phantom_range_map->is_committed())
+    return;
 
   try {
-
-    HT_MAYBE_FAIL("phantom-commit-3");
-
-    // make ranges live
-    m_live_map->merge(phantom_map);
-
-    HT_MAYBE_FAIL("phantom-commit-4");
-
-    {
-      ScopedLock lock(m_failover_mutex);
-      m_failover_map.erase(recovery_location);
-    }
     
     HT_MAYBE_FAIL("phantom-commit-5");
 
@@ -4220,6 +4248,39 @@ void RangeServer::phantom_commit_ranges(ResponseCallback *cb, int64_t op_id,
     // that is not expected
   }
 }
+
+bool RangeServer::already_live(const vector<QualifiedRangeStateSpec> &ranges) {
+  TableInfoPtr table_info;
+  size_t live_count = 0;
+  foreach_ht (const QualifiedRangeStateSpec &qrss, ranges) {
+    if (m_live_map->get(qrss.qualified_range.table.id, table_info)) {
+      if (table_info->has_range(&qrss.qualified_range.range))
+        live_count++;
+    }
+  }
+  if (live_count > 0 && live_count < ranges.size())
+    HT_FATALF("Found only a subset %d out of %d live.", 
+              (int)live_count, (int)ranges.size());
+
+  return live_count == ranges.size();
+}
+
+bool RangeServer::already_live(const vector<QualifiedRangeSpec> &ranges) {
+  TableInfoPtr table_info;
+  size_t live_count = 0;
+  foreach_ht (const QualifiedRangeSpec &qrs, ranges) {
+    if (m_live_map->get(qrs.table.id, table_info)) {
+      if (table_info->has_range(&qrs.range))
+        live_count++;
+    }
+  }
+  if (live_count > 0 && live_count < ranges.size())
+    HT_FATALF("Found only a subset %d out of %d live.", 
+              (int)live_count, (int)ranges.size());
+
+  return live_count == ranges.size();
+}
+
 
 void RangeServer::wait_for_maintenance(ResponseCallback *cb) {
   boost::xtime expire_time;

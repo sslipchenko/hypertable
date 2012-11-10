@@ -201,6 +201,9 @@ namespace Hypertable {
                        int64_t revision, int64_t *revisionp,
                        bool timeorder_desc);
 
+    bool already_live(const vector<QualifiedRangeStateSpec> &ranges);
+    bool already_live(const vector<QualifiedRangeSpec> &ranges);
+
     class UpdateContext {
     public:
       UpdateContext(std::vector<TableUpdate *> &tu, boost::xtime xt) : updates(tu), expire_time(xt),

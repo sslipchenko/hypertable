@@ -56,6 +56,12 @@ namespace Hypertable {
     void insert(uint32_t fragment, const String &location);
 
     /**
+     *
+     * @param location proxy name of range server to remove
+     */
+    void remove_location(const String &location);
+
+    /**
      * Fills a vector with all of the fragment numbers that are part of this
      * replay plan
      *

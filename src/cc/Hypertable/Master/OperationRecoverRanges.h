@@ -55,7 +55,7 @@ namespace Hypertable {
     bool validate_recovery_plan();
     void initialize_obstructions_dependencies();
     bool wait_for_quorum();
-    bool get_new_recovery_plan();
+    bool get_new_recovery_plan(bool check=true);
     bool prepare_to_commit();
     bool replay_fragments();
     bool phantom_load_ranges();
@@ -72,6 +72,7 @@ namespace Hypertable {
     vector<uint32_t> m_fragments;
     uint32_t m_timeout;
     int m_plan_generation;
+    bool m_plan_initialized;
   };
 
   typedef intrusive_ptr<OperationRecoverRanges> OperationRecoverRangesPtr;

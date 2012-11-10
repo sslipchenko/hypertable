@@ -70,6 +70,12 @@ namespace Hypertable {
     // deletes a recovery plan; call this after recovery finished
     void remove_recovery_plan(const String &location);
 
+    void remove_from_receiver_plan(const String &location, int type,
+                                   const vector<QualifiedRangeSpec *> &ranges);
+
+    void remove_from_replay_plan(const String &recovery_location, int type,
+                                 const String &replay_location);
+
     // returns the plan generation; increased whenever a RangeServer fails
     // and a new recovery plan is added
     int get_generation() { ScopedLock lock(m_mutex); return m_generation; }

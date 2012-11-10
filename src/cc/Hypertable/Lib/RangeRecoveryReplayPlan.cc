@@ -39,6 +39,15 @@ void RangeRecoveryReplayPlan::insert(uint32_t fragment, const String &location) 
   m_plan.insert(entry);
 }
 
+void RangeRecoveryReplayPlan::remove_location(const String &location) {
+  LocationIndex &location_index = m_plan.get<ByLocation>();
+  pair<LocationIndex::const_iterator, LocationIndex::const_iterator> bounds =
+      location_index.equal_range(location);
+  LocationIndex::const_iterator iter = bounds.first;
+  while (iter != bounds.second)
+    iter = location_index.erase(iter);
+}
+
 void RangeRecoveryReplayPlan::get_fragments(vector<uint32_t> &fragments) const {
   const FragmentIndex &fragment_index = m_plan.get<ByFragment>();
   FragmentIndex::const_iterator fragment_it = fragment_index.begin();
