@@ -64,8 +64,8 @@ namespace Hypertable {
             const vector<QualifiedRangeStateSpecManaged> &user_ranges);
 
     // Copies a recovery plan
-    void copy_recovery_plan(const String &location, int type,
-            RangeRecoveryPlan &out, int &plan_generation);
+    bool copy_recovery_plan(const String &location, int type,
+                            RangeRecoveryPlan &out, int &plan_generation);
 
     // deletes a recovery plan; call this after recovery finished
     void remove_recovery_plan(const String &location);

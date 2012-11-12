@@ -61,6 +61,7 @@ time_t Crontab::next_event(time_t now) {
   }
   if (i == 24) {
     day_increment = 1;
+    hour_increment = 0;
     goto next_day;
   }
 

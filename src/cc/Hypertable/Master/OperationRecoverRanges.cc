@@ -41,7 +41,6 @@ OperationRecoverRanges::OperationRecoverRanges(ContextPtr &context,
     m_location(location), m_type(type), m_attempt(0),
     m_plan_generation(0), m_plan_initialized(false) {
   HT_ASSERT(type != RangeSpec::UNKNOWN);
-  set_type_str();
   m_timeout = m_context->props->get_i32("Hypertable.Failover.Timeout");
   m_dependencies.insert(Dependency::RECOVERY_BLOCKER);
   initialize_obstructions_dependencies();
@@ -64,6 +63,7 @@ void OperationRecoverRanges::execute() {
           OperationState::get_text(state));
 
   if (!m_plan_initialized) {
+    set_type_str();
     get_new_recovery_plan();
     m_plan_initialized = true;
   }
@@ -326,7 +326,6 @@ void OperationRecoverRanges::decode_request(const uint8_t **bufp,
   m_location = Serialization::decode_vstr(bufp, remainp);
   m_type = Serialization::decode_i32(bufp, remainp);
   m_attempt = Serialization::decode_i32(bufp, remainp);
-  set_type_str();
   m_timeout = 0;
 }
 
@@ -367,6 +366,8 @@ bool OperationRecoverRanges::phantom_load_ranges() {
       if (e.code() == Error::RANGESERVER_RANGES_ALREADY_LIVE) {
         m_context->get_balance_plan_authority()->remove_from_replay_plan(m_location, m_type, location);
         get_new_recovery_plan(false);
+        if (m_ranges.empty())
+          return false;
       }
       else {
         success = false;
@@ -479,12 +480,19 @@ bool OperationRecoverRanges::get_new_recovery_plan(bool check) {
   }
 
   m_plan.clear();
-  m_context->get_balance_plan_authority()->copy_recovery_plan(m_location,
-            m_type, m_plan, m_plan_generation);
-  m_plan.receiver_plan.get_range_state_specs(m_ranges);
-  m_plan.replay_plan.get_fragments(m_fragments);
-  HT_INFOF("Retrieving a new balance plan (generation is %d)",
-          m_plan_generation);
+  if (!m_context->get_balance_plan_authority()->copy_recovery_plan(m_location,
+                                           m_type, m_plan, m_plan_generation)) {
+    m_ranges.clear();
+    m_fragments.clear();
+    HT_INFOF("Retrieving a new balance plan for %s (type=%s, generation=%d) came up EMPTY",
+             m_location.c_str(), m_type_str.c_str(), m_plan_generation);
+  }
+  else {
+    m_plan.receiver_plan.get_range_state_specs(m_ranges);
+    m_plan.replay_plan.get_fragments(m_fragments);
+    HT_INFOF("Retrieving a new balance plan for %s (type=%s, generation=%d)",
+             m_location.c_str(), m_type_str.c_str(), m_plan_generation);
+  }
 
   return true;
 }

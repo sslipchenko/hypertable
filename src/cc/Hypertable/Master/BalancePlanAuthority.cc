@@ -130,19 +130,24 @@ BalancePlanAuthority::set_mml_writer(MetaLog::WriterPtr &mml_writer)
   m_mml_writer = mml_writer;
 }
 
-void
+bool
 BalancePlanAuthority::copy_recovery_plan(const String &location, int type,
         RangeRecoveryPlan &out, int &generation)
 {
   ScopedLock lock(m_mutex);
   HT_ASSERT(m_map.find(location) != m_map.end());
   RangeRecoveryPlanPtr plan = m_map[location].plans[type];
-  HT_ASSERT(plan && plan->type == type);
+
+  if (!plan)
+    return false;
+
+  HT_ASSERT(plan->type == type);
 
   out.type = type;
   out.replay_plan = plan->replay_plan;
   plan->receiver_plan.copy(out.receiver_plan);
   generation = m_generation;
+  return true;
 }
 
 void

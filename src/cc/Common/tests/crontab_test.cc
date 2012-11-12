@@ -71,6 +71,20 @@ namespace {
     cout << input << " -> " << output << "\n";
   }
 
+  void display_next_event(CrontabPtr &crontab, time_t t) {
+    char input_buf[32], output_buf[32];
+    time_t next;
+    next = crontab->next_event(t);
+    ctime_r(&t, input_buf);
+    String input(input_buf);
+    boost::trim_if(input, boost::is_any_of("\n\t "));
+    ctime_r(&next, output_buf);
+    String output(output_buf);
+    boost::trim_if(output, boost::is_any_of("\n\t "));
+    cout << input << " -> " << output << "\n";
+  }
+
+
 }
 
 int main(int argc, char *argv[]) {
@@ -85,6 +99,9 @@ int main(int argc, char *argv[]) {
       cout << e.what() << " (" << specs[i] << ")\n";
     }
   }
+
+  crontab = new Crontab("0 0 * * *");
+  display_next_event(crontab, (time_t)1352793827);
 
   crontab = new Crontab("0 0 29 2 *");
   cout << crontab->entry() << "\n";
