@@ -53,7 +53,6 @@ OperationRecoverRanges::OperationRecoverRanges(ContextPtr &context,
 
 void OperationRecoverRanges::execute() {
   int state = get_state();
-  bool initial_done = false;
   bool issue_done = false;
   bool prepare_done = false;
   bool commit_done = false;
@@ -74,7 +73,6 @@ void OperationRecoverRanges::execute() {
   // fetch a copy of the recovery plan. if the plan changed: restart
   // the operation
   if (get_new_recovery_plan()) {
-    initial_done = false;
     issue_done = false;
     prepare_done = false;
     commit_done = false;
@@ -96,10 +94,10 @@ void OperationRecoverRanges::execute() {
       break;
     }
 
+    HT_MAYBE_FAIL(format("recover-server-ranges-%s-initial-1", m_type_str.c_str()));
     set_state(OperationState::PHANTOM_LOAD);
     m_context->mml_writer->record_state(this);
-    HT_MAYBE_FAIL(format("recover-server-ranges-%s-1", m_type_str.c_str()));
-    initial_done = true;
+    HT_MAYBE_FAIL(format("recover-server-ranges-%s-initial-2", m_type_str.c_str()));
 
     // fall through
 
@@ -111,7 +109,7 @@ void OperationRecoverRanges::execute() {
     // First ask the destination servers to load the phantom ranges. In 
     // case any request fails go back to INITIAL state and recreate the
     // recovery plan. 
-    if (!initial_done && !validate_recovery_plan()) {
+    if (!validate_recovery_plan()) {
       set_state(OperationState::INITIAL);
       m_context->mml_writer->record_state(this);
       HT_MAYBE_FAIL(format("recover-server-ranges-%s-2.1", m_type_str.c_str()));
@@ -120,7 +118,7 @@ void OperationRecoverRanges::execute() {
     try {
       if (!phantom_load_ranges()) {
         // repeat phantom load
-        HT_MAYBE_FAIL(format("recover-server-ranges-%s-3.1",
+        HT_MAYBE_FAIL(format("recover-server-ranges-%s-load-2",
                     m_type_str.c_str()));
         break;
       }
@@ -129,9 +127,9 @@ void OperationRecoverRanges::execute() {
       HT_ERROR_OUT << e << HT_END;
       HT_THROW(e.code(), e.what());
     }
+    HT_MAYBE_FAIL(format("recover-server-ranges-%s-load-3", m_type_str.c_str()));
     set_state(OperationState::REPLAY_FRAGMENTS);
     m_context->mml_writer->record_state(this);
-    HT_MAYBE_FAIL(format("recover-server-ranges-%s-4.1", m_type_str.c_str()));
     issue_done = true;
 
     // fall through to replay fragments
@@ -147,7 +145,7 @@ void OperationRecoverRanges::execute() {
     // The only information to persist at the end of this stage is if we
     // failed to connect to a player. That info will be used in the
     // retries state.
-    if (!initial_done && !validate_recovery_plan()) {
+    if (!validate_recovery_plan()) {
       set_state(OperationState::INITIAL);
       m_context->mml_writer->record_state(this);
       HT_MAYBE_FAIL(format("recover-server-ranges-%s-2.2", m_type_str.c_str()));
@@ -157,7 +155,7 @@ void OperationRecoverRanges::execute() {
       if (!replay_fragments()) {
         // repeat replaying fragments
         m_context->mml_writer->record_state(this);
-        HT_MAYBE_FAIL(format("recover-server-ranges-%s-3.2", m_type_str.c_str()));
+        HT_MAYBE_FAIL(format("recover-server-ranges-%s-2", m_type_str.c_str()));
         break;
       }
     }
@@ -165,9 +163,9 @@ void OperationRecoverRanges::execute() {
       HT_ERROR_OUT << e << HT_END;
       HT_THROW(e.code(), e.what());
     }
+    HT_MAYBE_FAIL(format("recover-server-ranges-%s-replay-3", m_type_str.c_str()));
     set_state(OperationState::PREPARE);
     m_context->mml_writer->record_state(this);
-    HT_MAYBE_FAIL(format("recover-server-ranges-%s-4.2", m_type_str.c_str()));
     issue_done = true;
 
     // fall through to prepare
@@ -189,7 +187,7 @@ void OperationRecoverRanges::execute() {
       if (!prepare_to_commit()) {
         // repeat prepare to commit
         m_context->mml_writer->record_state(this);
-        HT_MAYBE_FAIL(format("recover-server-ranges-%s-6", m_type_str.c_str()));
+        HT_MAYBE_FAIL(format("recover-server-ranges-%s-prepare-2", m_type_str.c_str()));
         break;
       }
     }
@@ -197,9 +195,9 @@ void OperationRecoverRanges::execute() {
       HT_ERROR_OUT << e << HT_END;
       HT_THROW(e.code(), e.what());
     }
+    HT_MAYBE_FAIL(format("recover-server-ranges-%s-prepare-3", m_type_str.c_str()));
     set_state(OperationState::COMMIT);
     m_context->mml_writer->record_state(this);
-    HT_MAYBE_FAIL(format("recover-server-ranges-%s-7", m_type_str.c_str()));
     prepare_done = true;
 
     // fall through to commit
@@ -215,18 +213,18 @@ void OperationRecoverRanges::execute() {
     if (!prepare_done && !validate_recovery_plan()) {
       set_state(OperationState::INITIAL);
       m_context->mml_writer->record_state(this);
-      HT_MAYBE_FAIL(format("recover-server-ranges-%s-8", m_type_str.c_str()));
+      HT_MAYBE_FAIL(format("recover-server-ranges-%s-commit-1", m_type_str.c_str()));
       break;
     }
     if (!commit()) {
       // repeat commit
       m_context->mml_writer->record_state(this);
-      HT_MAYBE_FAIL(format("recover-server-ranges-%s-9", m_type_str.c_str()));
+      HT_MAYBE_FAIL(format("recover-server-ranges-%s-commit-2", m_type_str.c_str()));
       break;
     }
+    HT_MAYBE_FAIL(format("recover-server-ranges-%s-commit-3", m_type_str.c_str()));
     set_state(OperationState::ACKNOWLEDGE);
     m_context->mml_writer->record_state(this);
-    HT_MAYBE_FAIL(format("recover-server-ranges-%s-10", m_type_str.c_str()));
     commit_done = true;
 
     // fall through
@@ -248,11 +246,11 @@ void OperationRecoverRanges::execute() {
       HT_MAYBE_FAIL(format("recover-server-ranges-%s-12", m_type_str.c_str()));
       break;
     }
+    HT_MAYBE_FAIL(format("recover-server-ranges-%s-ack-3", m_type_str.c_str()));
+    complete_ok();
     HT_INFOF("RecoverServerRanges complete for server %s attempt=%d type=%d "
             "state=%s", m_location.c_str(), m_attempt, m_type,
             OperationState::get_text(get_state()));
-    complete_ok();
-    HT_MAYBE_FAIL(format("recover-server-ranges-%s-13", m_type_str.c_str()));
     break;
 
   default:

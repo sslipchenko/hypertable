@@ -3681,7 +3681,6 @@ void RangeServer::phantom_load(ResponseCallback *cb, const String &location,
 
   HT_ASSERT(!ranges.empty());
 
-  HT_MAYBE_FAIL("phantom-load-1");
   HT_MAYBE_FAIL_X("phantom-load-user-1", ranges[0].qualified_range.table.is_user());
 
   {
@@ -3896,8 +3895,6 @@ void RangeServer::phantom_prepare_ranges(ResponseCallback *cb, int64_t op_id,
         phantom_range->populate_range_and_log(Global::log_dfs,
                                               Global::log_dir, &is_empty);
 
-        HT_MAYBE_FAIL("phantom-prepare-ranges-1");
-        HT_MAYBE_FAIL_X("phantom-prepare-ranges-root-1", rr.is_root());
         HT_MAYBE_FAIL_X("phantom-prepare-ranges-user-1", rr.table.is_user());
 
         HT_DEBUG_OUT << "populated range and log for range " << rr << HT_END;
@@ -3945,8 +3942,6 @@ void RangeServer::phantom_prepare_ranges(ResponseCallback *cb, int64_t op_id,
             log = Global::user_log;
         }
 
-        HT_MAYBE_FAIL("phantom-prepare-ranges-2");
-
         CommitLogPtr phantom_log = phantom_range->get_phantom_log();
         HT_ASSERT(phantom_log && log);
         int error = Error::OK;
@@ -3973,14 +3968,15 @@ void RangeServer::phantom_prepare_ranges(ResponseCallback *cb, int64_t op_id,
 
         HT_ASSERT(phantom_map->get(rr.table.id, phantom_table_info));
 
-        HT_INFO("adding range");
+        HT_INFO("phantom adding range");
 
         phantom_table_info->add_range(range, true);
         
         phantom_range->set_staged();
       }
 
-      HT_MAYBE_FAIL("phantom-prepare-ranges-3");
+      HT_MAYBE_FAIL_X("phantom-prepare-ranges-user-2", ranges.back().table.is_user());
+
       HT_DEBUG_OUT << "write all range entries to rsml" << HT_END;
       // write metalog entities
       if (Global::rsml_writer)
@@ -3988,6 +3984,8 @@ void RangeServer::phantom_prepare_ranges(ResponseCallback *cb, int64_t op_id,
       else
         HT_THROW(Error::SERVER_SHUTTING_DOWN,
                  Global::location_initializer->get());
+
+      HT_MAYBE_FAIL_X("phantom-prepare-ranges-user-3", ranges.back().table.is_user());
 
       phantom_range_map->prepare_finish();
 
@@ -4109,7 +4107,6 @@ void RangeServer::phantom_commit_ranges(ResponseCallback *cb, int64_t op_id,
         entity->state.state = entity->state.state & (~RangeState::PHANTOM);
         entities.push_back(entity);
 
-        HT_MAYBE_FAIL("phantom-commit-1");
         HT_MAYBE_FAIL_X("phantom-commit-user-1", rr.table.is_user());
 
         /**
@@ -4153,7 +4150,8 @@ void RangeServer::phantom_commit_ranges(ResponseCallback *cb, int64_t op_id,
       HT_DEBUG_OUT << "flush metadata updates" << HT_END;
       mutator->flush();
 
-      HT_MAYBE_FAIL("phantom-commit-2");
+      HT_MAYBE_FAIL_X("phantom-commit-user-2", ranges.back().table.is_user());
+
       // persist RSML entities
       if (Global::rsml_writer)
         Global::rsml_writer->record_state(entities);
@@ -4161,14 +4159,12 @@ void RangeServer::phantom_commit_ranges(ResponseCallback *cb, int64_t op_id,
         HT_THROW(Error::SERVER_SHUTTING_DOWN,
                  Global::location_initializer->get());
 
-      HT_MAYBE_FAIL("phantom-commit-3");
+      HT_MAYBE_FAIL_X("phantom-commit-user-3", ranges.back().table.is_user());
 
       // make ranges live
       HT_INFOF("Merging phantom map into live map for recovery of %s (ID=%lld)",
                recovery_location.c_str(), (Lld)op_id);
       m_live_map->merge(phantom_map);
-
-      HT_MAYBE_FAIL("phantom-commit-4");
 
       {
         ScopedLock lock(m_failover_mutex);
@@ -4176,6 +4172,8 @@ void RangeServer::phantom_commit_ranges(ResponseCallback *cb, int64_t op_id,
       }
 
       phantom_range_map->commit_finish();
+
+      HT_MAYBE_FAIL_X("phantom-commit-user-4", ranges.back().table.is_user());
     }
     catch (Exception &e) {
       phantom_range_map->commit_abort();
@@ -4194,14 +4192,10 @@ void RangeServer::phantom_commit_ranges(ResponseCallback *cb, int64_t op_id,
 
   try {
     
-    HT_MAYBE_FAIL("phantom-commit-5");
-
     m_master_client->phantom_commit_complete(op_id, recovery_location, Error::OK, "");
 
     HT_DEBUG_OUT << "phantom_commit_complete sent to master for num_ranges="
         << ranges.size() << HT_END;
-
-    HT_MAYBE_FAIL("phantom-commit-6");
 
 
     // Wake up maintenance scheduler to handle any "in progress" operations

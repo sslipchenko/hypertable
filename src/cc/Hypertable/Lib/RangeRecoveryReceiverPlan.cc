@@ -82,7 +82,6 @@ void RangeRecoveryReceiverPlan::get_range_state_specs(vector<QualifiedRangeState
 
   for(; range_it != range_index.end(); ++range_it)
     ranges.push_back(range_it->state_spec);
-  HT_ASSERT(ranges.size());
 }
 
 void RangeRecoveryReceiverPlan::get_range_state_specs(const char *location,
