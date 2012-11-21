@@ -575,11 +575,13 @@ namespace Hypertable {
      * @param addr address of RangeServer
      * @param location location of server being recovered
      * @param fragments fragments being replayed
-     * @param range range spec to be loaded
+     * @param specs range specs to be loaded
+     * @param states parallel range states array
      */
     void phantom_load(const CommAddress &addr, const String &location,
                       const vector<uint32_t> &fragments,
-                      const vector<QualifiedRangeStateSpec> &ranges);
+                      const vector<QualifiedRangeSpec> &specs,
+                      const vector<RangeState> &states);
 
     /** Issues a "phantom_update" asynchronous request.
      *

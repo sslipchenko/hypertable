@@ -42,25 +42,18 @@ PhantomRangeMap::PhantomRangeMap() : m_state(0), m_load_in_progress(false),
   m_tableinfo_map = new TableInfoMap();
 }
 
-void PhantomRangeMap::insert(const QualifiedRangeStateSpec &range_spec, SchemaPtr &schema,
-    const vector<uint32_t> &fragments) {
-  ScopedLock lock(m_mutex);
-  PhantomRangePtr phantom_range = new PhantomRange(range_spec, schema, fragments);
-  const QualifiedRangeStateSpec &qrs = phantom_range->get_qualified_range_state_spec();
-  MapInsRec ins_rec;
-  ins_rec = m_map.insert(make_pair(qrs, phantom_range));
-  HT_ASSERT(ins_rec.second);
-}
 
-void PhantomRangeMap::get(const QualifiedRangeStateSpec &range, SchemaPtr &schema,
-    const vector<uint32_t> &fragments, PhantomRangePtr &phantom_range) {
+void PhantomRangeMap::get(const QualifiedRangeSpec &spec, const RangeState &state, 
+                          SchemaPtr &schema, const vector<uint32_t> &fragments,
+                          PhantomRangePtr &phantom_range) {
   ScopedLock lock(m_mutex);
-  Map::iterator it = m_map.find(range);
+  Map::iterator it = m_map.find(spec);
   if (it == m_map.end()) {
-    phantom_range = new PhantomRange(range, schema, fragments);
-    QualifiedRangeStateSpec qrs = phantom_range->get_qualified_range_state_spec();
-    MapInsRec ins_rec;
-    ins_rec = m_map.insert(make_pair(qrs, phantom_range));
+    QualifiedRangeSpec copied_spec(m_arena, spec);
+    phantom_range = new PhantomRange(copied_spec,
+                                     RangeState(m_arena, state),
+                                     schema, fragments);
+    MapInsRec ins_rec = m_map.insert(make_pair(copied_spec, phantom_range));
     HT_ASSERT(ins_rec.second);
   }
   else
@@ -68,24 +61,13 @@ void PhantomRangeMap::get(const QualifiedRangeStateSpec &range, SchemaPtr &schem
   return;
 }
 
-void PhantomRangeMap::get(const QualifiedRangeStateSpec &range, PhantomRangePtr &phantom_range) {
+void PhantomRangeMap::get(const QualifiedRangeSpec &spec, PhantomRangePtr &phantom_range) {
   ScopedLock lock(m_mutex);
-  Map::iterator it = m_map.find(range);
+  Map::iterator it = m_map.find(spec);
   if (it == m_map.end())
     phantom_range = 0;
   else
     phantom_range = it->second;
-}
-
-void PhantomRangeMap::remove(const QualifiedRangeStateSpec &range) {
-  ScopedLock lock(m_mutex);
-  m_map.erase(range);
-}
-
-void PhantomRangeMap::remove(const QualifiedRangeSpec &range) {
-  ScopedLock lock(m_mutex);
-  QualifiedRangeStateSpec qrss(range);
-  m_map.erase(qrss);
 }
 
 void PhantomRangeMap::get_all(vector<PhantomRangePtr> &range_vec) {

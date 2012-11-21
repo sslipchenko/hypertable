@@ -647,10 +647,11 @@ void RangeServerClient::replay_fragments(const CommAddress &addr, int64_t op_id,
 
 void RangeServerClient::phantom_load(const CommAddress &addr,
     const String &location, const vector<uint32_t> &fragments,
-    const vector<QualifiedRangeStateSpec> &ranges) {
+    const vector<QualifiedRangeSpec> &specs,
+    const vector<RangeState> &states) {
   DispatchHandlerSynchronizer sync_handler;
   EventPtr event;
-  CommBufPtr cbp(RangeServerProtocol::create_request_phantom_load(location, fragments, ranges));
+  CommBufPtr cbp(RangeServerProtocol::create_request_phantom_load(location, fragments, specs, states));
   send_message(addr, cbp, &sync_handler, m_default_timeout_ms);
 
   if (!sync_handler.wait_for_reply(event))

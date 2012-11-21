@@ -37,6 +37,7 @@ namespace Hypertable {
   class RangeRecoveryPlan : public ReferenceCount {
   public:
     RangeRecoveryPlan() : type(RangeSpec::UNKNOWN) { }
+    RangeRecoveryPlan(int type_) : type(type_) { }
 
     size_t encoded_length() const {
       return 4 + replay_plan.encoded_length() + receiver_plan.encoded_length();

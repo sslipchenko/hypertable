@@ -58,20 +58,24 @@ namespace Hypertable {
 
     // creates a new recovery plan; invoked by OperationRecoverRanges
     void create_recovery_plan(const String &location,
-            const vector<QualifiedRangeStateSpecManaged> &root_range, 
-            const vector<QualifiedRangeStateSpecManaged> &metadata_ranges,
-            const vector<QualifiedRangeStateSpecManaged> &system_ranges, 
-            const vector<QualifiedRangeStateSpecManaged> &user_ranges);
+                              const vector<QualifiedRangeSpec> &root_specs,
+                              const vector<RangeState> &root_states,
+                              const vector<QualifiedRangeSpec> &metadata_specs,
+                              const vector<RangeState> &metadata_states,
+                              const vector<QualifiedRangeSpec> &system_specs, 
+                              const vector<RangeState> &system_states,
+                              const vector<QualifiedRangeSpec> &user_specs,
+                              const vector<RangeState> &user_states);
 
     // Copies a recovery plan
-    bool copy_recovery_plan(const String &location, int type,
+    void copy_recovery_plan(const String &location, int type,
                             RangeRecoveryPlan &out, int &plan_generation);
 
     // deletes a recovery plan; call this after recovery finished
     void remove_recovery_plan(const String &location);
 
     void remove_from_receiver_plan(const String &location, int type,
-                                   const vector<QualifiedRangeSpec *> &ranges);
+                                   const vector<QualifiedRangeSpec> &ranges);
 
     void remove_from_replay_plan(const String &recovery_location, int type,
                                  const String &replay_location);
@@ -108,25 +112,8 @@ namespace Hypertable {
 
   private:
     RangeRecoveryPlan *create_range_plan(const String &location, int type,
-            const vector<QualifiedRangeStateSpecManaged> &ranges);
-
-    struct lt_qrrs {
-      bool operator()(const QualifiedRangeStateSpec *qrss1,
-                      const QualifiedRangeStateSpec *qrss2) const  {
-        int cmp = strcmp(qrss1->qualified_range.table.id,
-                         qrss2->qualified_range.table.id);
-        if (cmp < 0)
-          return true;
-        else if (cmp > 0)
-          return false;
-
-        return qrss1->qualified_range.range < qrss2->qualified_range.range;
-      }
-    };
-    typedef std::set<const QualifiedRangeStateSpec *, lt_qrrs> QualifiedRangeSetT;
-
-    void populate_purge_set(const vector<QualifiedRangeStateSpecManaged> &qualified_ranges,
-                            QualifiedRangeSetT &purge_set);
+                                         const vector<QualifiedRangeSpec> &specs,
+                                         const vector<RangeState> &states);
 
     /**
      * This method modifies the given recovery plan by replacing
@@ -135,11 +122,11 @@ namespace Hypertable {
      *
      * @param plan recovery plan for (range-server, commit-log-type) combo
      * @param location proxy name of server being recovered
-     * @param purge_set set of QualifiedRangeStateSpec object to purge from
+     * @param new_specs vector of QualifiedRangeSpec objects to removed from
      *        receiver plan
      */
     void update_range_plan(RangeRecoveryPlanPtr &plan, const String &location,
-                           QualifiedRangeSetT &purge_set);
+                           const vector<QualifiedRangeSpec> &new_specs);
 
     Mutex m_mutex;
     ContextPtr m_context;

@@ -27,10 +27,12 @@
 using namespace Hypertable;
 using namespace std;
 
-PhantomRange::PhantomRange(const QualifiedRangeStateSpec &range, 
-        SchemaPtr &schema, const vector<uint32_t> &fragments) 
-  : m_spec(range), m_schema(schema), m_outstanding(fragments.size()), 
-    m_state(INIT), m_staged(false) {
+PhantomRange::PhantomRange(const QualifiedRangeSpec &spec,
+                           const RangeState &state,
+                           SchemaPtr &schema,
+                           const vector<uint32_t> &fragments) 
+  : m_range_spec(spec), m_range_state(state), m_schema(schema),
+    m_outstanding(fragments.size()), m_state(INIT), m_staged(false) {
   foreach_ht(uint32_t fragment, fragments) {
     HT_ASSERT(m_fragments.count(fragment) == 0);
     FragmentDataPtr data = new FragmentData(fragment);
@@ -83,17 +85,16 @@ void PhantomRange::create_range(MasterClientPtr &master_client,
   ScopedLock lock(m_mutex);
 
   if (m_state >= RANGE_CREATED)
-    HT_INFO_OUT << "Range already created for phantom range " << m_spec 
+    HT_INFO_OUT << "Range already created for phantom range " << m_range_spec 
         << HT_END;
   else {
-    m_range = new Range(master_client, &m_spec.qualified_range.table, m_schema,
-        &m_spec.qualified_range.range,
-        table_info.get(), &m_spec.state, true);
+    m_range = new Range(master_client, &m_range_spec.table, m_schema,
+            &m_range_spec.range, table_info.get(), &m_range_state, true);
     // replay existing transfer log
     m_range->recovery_finalize();
     m_range->metalog_entity()->state.state =
         m_range->metalog_entity()->state.state | RangeState::PHANTOM;
-    m_spec.state.state = m_spec.state.state | RangeState::PHANTOM;
+    m_range_state.state |= RangeState::PHANTOM;
     m_state = RANGE_CREATED;
   }
 }
@@ -104,7 +105,7 @@ void PhantomRange::populate_range_and_log(FilesystemPtr &log_dfs,
   *is_empty = true;
   if (m_state == RANGE_PREPARED) {
     HT_INFO_OUT << "Range already prepared for phantom range " 
-        << m_spec << HT_END;
+        << m_range_spec << HT_END;
     return ;
   }
 
@@ -129,14 +130,14 @@ void PhantomRange::populate_range_and_log(FilesystemPtr &log_dfs,
   log_dfs->mkdirs(m_phantom_logname);
 
   m_phantom_log = new CommitLog(log_dfs, m_phantom_logname, false);
-  size_t table_id_len = m_spec.qualified_range.table.encoded_length();
+  size_t table_id_len = m_range_spec.table.encoded_length();
   DynamicBuffer dbuf(table_id_len);
   int64_t latest_revision;
 
   Locker<Range> range_lock(*(m_range.get()));
   foreach_ht (FragmentMap::value_type &vv, m_fragments) {
     dbuf.clear();
-    m_spec.qualified_range.table.encode(&dbuf.ptr);
+    m_range_spec.table.encode(&dbuf.ptr);
     vv.second->merge(m_range, dbuf, &latest_revision);
     if (dbuf.fill() > table_id_len) {
       *is_empty = false;
@@ -145,7 +146,7 @@ void PhantomRange::populate_range_and_log(FilesystemPtr &log_dfs,
   }
   m_phantom_log->close();
   HT_INFO_OUT << "Created phantom log " << m_phantom_logname
-      << " for range " << m_spec << HT_END;
+      << " for range " << m_range_spec << HT_END;
   m_state = RANGE_PREPARED;
 }
 

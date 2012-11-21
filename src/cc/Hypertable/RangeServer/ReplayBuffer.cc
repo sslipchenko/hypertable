@@ -40,12 +40,12 @@ ReplayBuffer::ReplayBuffer(PropertiesPtr &props, Comm *comm,
   StringSet locations;
   m_plan.get_locations(locations);
   foreach_ht(const String &location, locations) {
-    vector<QualifiedRangeStateSpec> ranges;
-    m_plan.get_range_state_specs(location.c_str(), ranges);
-    foreach_ht(QualifiedRangeStateSpec &range, ranges) {
+    vector<QualifiedRangeSpec> specs;
+    m_plan.get_range_specs(location, specs);
+    foreach_ht(QualifiedRangeSpec &spec, specs) {
       RangeReplayBufferPtr replay_buffer
-          = new RangeReplayBuffer(location, range.qualified_range);
-      m_buffer_map[range.qualified_range] = replay_buffer;
+          = new RangeReplayBuffer(location, spec);
+      m_buffer_map[spec] = replay_buffer;
     }
   }
 }
@@ -55,7 +55,7 @@ void ReplayBuffer::add(const TableIdentifier &table, SerializedKey &key,
   const char *row = key.row();
   QualifiedRangeSpec range;
   // skip over any cells that are not in the recovery plan
-  if (m_plan.get_qualified_range_spec(table, row, range)) {
+  if (m_plan.get_range_spec(table, row, range)) {
     // skip over any ranges that have completely received data for this fragment
     if (m_completed_ranges.find(range) != m_completed_ranges.end()) {
       HT_DEBUG_OUT << "Skipping key " << row << " which is in completed range"
@@ -105,13 +105,13 @@ void ReplayBuffer::flush(bool flush /* = true */) {
   }
   if (handler.wait_for_completion()) {
     vector<String> locations;
-    vector<QualifiedRangeSpec> ranges;
-    handler.get_error_ranges(ranges);
+    vector<QualifiedRangeSpec> specs;
+    handler.get_error_ranges(specs);
     handler.get_error_locations(locations);
     foreach_ht(const String &location, locations)
-      m_plan.get_qualified_range_specs(location.c_str(), ranges);
-    foreach_ht(QualifiedRangeSpec range, ranges)
-      m_buffer_map.erase(range);
+      m_plan.get_range_specs(location, specs);
+    foreach_ht(QualifiedRangeSpec spec, specs)
+      m_buffer_map.erase(spec);
   }
 
   // update set of ranges that have already finished receiving data for

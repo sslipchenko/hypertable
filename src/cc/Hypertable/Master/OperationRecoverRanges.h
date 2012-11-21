@@ -68,8 +68,6 @@ namespace Hypertable {
     uint32_t m_attempt;
     RangeRecoveryPlan m_plan;
     String m_type_str;
-    vector<QualifiedRangeStateSpecManaged> m_ranges;
-    vector<uint32_t> m_fragments;
     uint32_t m_timeout;
     int m_plan_generation;
     bool m_plan_initialized;

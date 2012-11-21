@@ -123,7 +123,8 @@ namespace Hypertable {
 
     void phantom_load(ResponseCallback *, const String &location,
                       const vector<uint32_t> &fragments, 
-                      const vector<QualifiedRangeStateSpec> &ranges);
+                      const vector<QualifiedRangeSpec> &specs,
+                      const vector<RangeState> &states);
 
     void phantom_update(ResponseCallbackPhantomUpdate *, const String &location,
                         QualifiedRangeSpec &range, uint32_t fragment, bool more,
@@ -201,7 +202,6 @@ namespace Hypertable {
                        int64_t revision, int64_t *revisionp,
                        bool timeorder_desc);
 
-    bool already_live(const vector<QualifiedRangeStateSpec> &ranges);
     bool already_live(const vector<QualifiedRangeSpec> &ranges);
 
     class UpdateContext {

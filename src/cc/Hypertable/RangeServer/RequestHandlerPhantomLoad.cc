@@ -41,12 +41,14 @@ void RequestHandlerPhantomLoad::run() {
   ResponseCallback cb(m_comm, m_event_ptr);
   String location;
   vector<uint32_t> fragments;
-  vector<QualifiedRangeStateSpec> ranges;
+  vector<QualifiedRangeSpec> specs;
+  vector<RangeState> states;
   uint32_t nn;
 
   const uint8_t *decode_ptr = m_event_ptr->payload;
   size_t decode_remain = m_event_ptr->payload_len;
-  QualifiedRangeStateSpec range;
+  QualifiedRangeSpec spec;
+  RangeState state;
 
   try {
     location = Serialization::decode_vstr(&decode_ptr, &decode_remain);
@@ -56,8 +58,12 @@ void RequestHandlerPhantomLoad::run() {
                   &decode_remain));
     nn = Serialization::decode_i32(&decode_ptr, &decode_remain);
     for (uint32_t ii=0; ii<nn; ++ii) {
-      range.decode(&decode_ptr, &decode_remain);
-      ranges.push_back(range);
+      spec.decode(&decode_ptr, &decode_remain);
+      specs.push_back(spec);
+    }
+    for (uint32_t ii=0; ii<nn; ++ii) {
+      state.decode(&decode_ptr, &decode_remain);
+      states.push_back(state);
     }
   }
   catch (Exception &e) {
@@ -67,7 +73,7 @@ void RequestHandlerPhantomLoad::run() {
   }
 
   try {
-    m_range_server->phantom_load(&cb, location, fragments, ranges);
+    m_range_server->phantom_load(&cb, location, fragments, specs, states);
   }
   catch (Exception &e) {
     HT_ERROR_OUT << e << HT_END;

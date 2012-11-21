@@ -43,83 +43,68 @@ namespace Hypertable {
   public:
     RangeRecoveryReceiverPlan() { }
 
-    void insert(const char *location, const TableIdentifier &table,
+    void insert(const String &location, const TableIdentifier &table,
             const RangeSpec &range, const RangeState &state);
-    void remove(const QualifiedRangeStateSpec &qrss);
+
+    void insert(const String &location, const QualifiedRangeSpec &qrs,
+                const RangeState &state) {
+      insert(location, qrs.table, qrs.range, state);
+    }
+
+    void remove(const QualifiedRangeSpec &qrs);
+
     void get_locations(StringSet &locations) const;
-    bool get_location(const TableIdentifier &table, const char *row,
-            String &location) const;
-    void get_range_state_specs(vector<QualifiedRangeStateSpecManaged> &ranges) const;
-    void get_range_state_specs(const char *location,
-            vector<QualifiedRangeStateSpec> &ranges);
-    void get_qualified_range_specs(const char *location,
-            vector<QualifiedRangeSpec> &ranges);
-    void get_qualified_range_specs(vector<QualifiedRangeSpec> &ranges);
-    void get_qualified_range_specs(const char *location,
-            vector<QualifiedRangeStateSpecManaged> &ranges) const;
-    bool get_qualified_range_state_spec(const TableIdentifier &table,
-            const char *row, QualifiedRangeStateSpec &range);
-    bool get_qualified_range_spec(const TableIdentifier &table,
-            const char *row, QualifiedRangeSpec &range);
+
+
+    void get_range_specs(const String &location, vector<QualifiedRangeSpec> &specs);
+
+    void get_range_specs_and_states(const String &location,
+                                    vector<QualifiedRangeSpec> &specs,
+                                    vector<RangeState> &states);
+
+    bool get_range_spec(const TableIdentifier &table, const char *row,
+                        QualifiedRangeSpec &spec);
 
     size_t encoded_length() const;
     void encode(uint8_t **bufp) const;
     void decode(const uint8_t **bufp, size_t *remainp);
 
     void clear() { m_plan.clear(); }
-    bool empty() { return m_plan.empty(); }
+    size_t size() const { return m_plan.size(); }
+    bool empty() const { return m_plan.empty(); }
     void copy(RangeRecoveryReceiverPlan &other) const;
 
   private:
     class ReceiverEntry {
     public:
-      ReceiverEntry(CharArena &arena, const String &location_,
-          const QualifiedRangeStateSpecManaged &state_spec_) {
-        location = arena.dup(location_.c_str());
-        state_spec.qualified_range.table.id =
-            arena.dup(state_spec_.qualified_range.table.id);
-        state_spec.qualified_range.table.generation =
-            state_spec_.qualified_range.table.generation;
-        state_spec.qualified_range.range.start_row =
-            arena.dup(state_spec_.qualified_range.range.start_row);
-        state_spec.qualified_range.range.end_row =
-            arena.dup(state_spec_.qualified_range.range.end_row);
-        state_spec.state.state = state_spec_.state.state;
-        state_spec.state.timestamp = state_spec_.state.timestamp;
-        state_spec.state.soft_limit = state_spec_.state.soft_limit;
-        state_spec.state.transfer_log =
-            arena.dup(state_spec_.state.transfer_log);
-        state_spec.state.split_point = arena.dup(state_spec_.state.split_point);
-        state_spec.state.old_boundary_row =
-            arena.dup(state_spec_.state.old_boundary_row);
-      }
 
-      ReceiverEntry(CharArena &arena, const char *location_,
+      ReceiverEntry(CharArena &arena, const String &location_,
           const TableIdentifier &table_, const RangeSpec &range_,
           const RangeState &state_) {
-        location = arena.dup(location_);
-        state_spec.qualified_range.table.id = arena.dup(table_.id);
-        state_spec.qualified_range.table.generation = table_.generation;
-        state_spec.qualified_range.range.start_row = arena.dup(range_.start_row);
-        state_spec.qualified_range.range.end_row = arena.dup(range_.end_row);
-        state_spec.state.state = state_.state;
-        state_spec.state.timestamp = state_.timestamp;
-        state_spec.state.soft_limit = state_.soft_limit;
-        state_spec.state.transfer_log = arena.dup(state_.transfer_log);
-        state_spec.state.split_point = arena.dup(state_.split_point);
-        state_spec.state.old_boundary_row = arena.dup(state_.old_boundary_row);
+        location = location_;
+        spec.table.id = arena.dup(table_.id);
+        spec.table.generation = table_.generation;
+        spec.range.start_row = arena.dup(range_.start_row);
+        spec.range.end_row = arena.dup(range_.end_row);
+        state.state = state_.state;
+        state.timestamp = state_.timestamp;
+        state.soft_limit = state_.soft_limit;
+        state.transfer_log = arena.dup(state_.transfer_log);
+        state.split_point = arena.dup(state_.split_point);
+        state.old_boundary_row = arena.dup(state_.old_boundary_row);
       }
 
-      ReceiverEntry() : location(0) { }
+      ReceiverEntry() { }
 
       size_t encoded_length() const;
       void encode(uint8_t **bufp) const;
       void decode(const uint8_t **bufp, size_t *remainp);
 
-      const char *location;
-      QualifiedRangeStateSpec state_spec;
+      String location;
+      QualifiedRangeSpec spec;
+      RangeState state;
       friend ostream &operator<< (ostream &os, const ReceiverEntry &entry) {
-        os << "{ReceiverEntry:" << entry.state_spec << ", location="
+        os << "{ReceiverEntry:" << entry.spec << entry.state << ", location="
             << entry.location << "}";
         return os;
       }
@@ -131,10 +116,9 @@ namespace Hypertable {
       ReceiverEntry,
       indexed_by<
         ordered_unique<tag<ByRange>, member<ReceiverEntry,
-                  QualifiedRangeStateSpec, &ReceiverEntry::state_spec> >,
+                  QualifiedRangeSpec, &ReceiverEntry::spec> >,
         ordered_non_unique<tag<ByLocation>,
-                  member<ReceiverEntry, const char*, &ReceiverEntry::location>,
-                  LtCstr>
+                  member<ReceiverEntry, String, &ReceiverEntry::location> >
       >
     > ReceiverPlan;
     typedef ReceiverPlan::index<ByRange>::type RangeIndex;

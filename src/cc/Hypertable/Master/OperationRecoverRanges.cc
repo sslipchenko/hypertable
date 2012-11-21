@@ -22,6 +22,7 @@
 #include "Common/Compat.h"
 #include "Common/Error.h"
 #include "Common/md5.h"
+#include "Common/PageArenaAllocator.h"
 #include "Common/FailureInducer.h"
 
 #include "Hypertable/Lib/CommitLogReader.h"
@@ -85,11 +86,9 @@ void OperationRecoverRanges::execute() {
   case OperationState::INITIAL:
 
     // if there are no ranges then there is nothing to do
-    if (m_ranges.empty()) {
-      String label_str = label();
-      HT_INFO_OUT << label_str << " num_fragments=" << m_fragments.size()
-          << ", num_ranges=" << m_ranges.size()
-          << " nothing to do, recovery complete" << HT_END;
+    if (m_plan.receiver_plan.empty()) {
+      HT_INFOF("Plan for location %s, type %s is empty, nothing to do",
+               m_location.c_str(), m_type_str.c_str());
       complete_ok();
       break;
     }
@@ -265,8 +264,8 @@ void OperationRecoverRanges::execute() {
 
 void OperationRecoverRanges::display_state(std::ostream &os) {
   os << " location=" << m_location << " attempt=" << m_attempt << " type="
-     << m_type << " num_ranges=" << m_ranges.size() << " num_fragments="
-     << m_fragments.size() << " recovery_plan type=" << m_type
+     << m_type << " num_ranges=" << m_plan.receiver_plan.size()
+     << " recovery_plan type=" << m_type_str
      << " state=" << OperationState::get_text(get_state());
 }
 
@@ -351,20 +350,21 @@ bool OperationRecoverRanges::phantom_load_ranges() {
   m_plan.replay_plan.get_fragments(fragments);
   foreach_ht (const String &location, locations) {
     addr.set_proxy(location);
-    vector<QualifiedRangeStateSpec> ranges;
-    m_plan.receiver_plan.get_range_state_specs(location.c_str(), ranges);
+    vector<QualifiedRangeSpec> specs;
+    vector<RangeState> states;
+    m_plan.receiver_plan.get_range_specs_and_states(location.c_str(), specs, states);
     try {
-      HT_INFO_OUT << "Issue phantom_load for " << ranges.size()
+      HT_INFO_OUT << "Issue phantom_load for " << specs.size()
            << " ranges to " << location << HT_END;
       HT_MAYBE_FAIL(format("recover-server-ranges-%s-replay-commit-log", 
                   m_type_str.c_str()));
-      rsc.phantom_load(addr, m_location, fragments, ranges);
+      rsc.phantom_load(addr, m_location, fragments, specs, states);
     }
     catch (Exception &e) {
       if (e.code() == Error::RANGESERVER_RANGES_ALREADY_LIVE) {
         m_context->get_balance_plan_authority()->remove_from_replay_plan(m_location, m_type, location);
         get_new_recovery_plan(false);
-        if (m_ranges.empty())
+        if (m_plan.receiver_plan.empty())
           return false;
       }
       else {
@@ -477,20 +477,12 @@ bool OperationRecoverRanges::get_new_recovery_plan(bool check) {
     return false;
   }
 
-  m_plan.clear();
-  if (!m_context->get_balance_plan_authority()->copy_recovery_plan(m_location,
-                                           m_type, m_plan, m_plan_generation)) {
-    m_ranges.clear();
-    m_fragments.clear();
-    HT_INFOF("Retrieving a new balance plan for %s (type=%s, generation=%d) came up EMPTY",
-             m_location.c_str(), m_type_str.c_str(), m_plan_generation);
-  }
-  else {
-    m_plan.receiver_plan.get_range_state_specs(m_ranges);
-    m_plan.replay_plan.get_fragments(m_fragments);
-    HT_INFOF("Retrieving a new balance plan for %s (type=%s, generation=%d)",
-             m_location.c_str(), m_type_str.c_str(), m_plan_generation);
-  }
+  m_context->get_balance_plan_authority()->copy_recovery_plan(m_location,
+                                         m_type, m_plan, m_plan_generation);
+
+  HT_INFOF("Retrieved new balance plan for %s (type=%s, generation=%d) range count %d",
+           m_location.c_str(), m_type_str.c_str(), m_plan_generation,
+           (int)m_plan.receiver_plan.size());
 
   return true;
 }
@@ -533,13 +525,13 @@ bool OperationRecoverRanges::prepare_to_commit() {
 
   foreach_ht(const String &location, locations) {
     addr.set_proxy(location);
-    vector<QualifiedRangeSpec> ranges;
-    m_plan.receiver_plan.get_qualified_range_specs(location.c_str(), ranges);
+    vector<QualifiedRangeSpec> specs;
+    m_plan.receiver_plan.get_range_specs(location, specs);
 
-    HT_INFO_OUT << "Issue phantom_prepare_ranges for " << ranges.size()
+    HT_INFO_OUT << "Issue phantom_prepare_ranges for " << specs.size()
         << " ranges to " << location << " (" << m_type_str << ")" << HT_END;
     try {
-      rsc.phantom_prepare_ranges(addr, id(), m_location, ranges, m_timeout);
+      rsc.phantom_prepare_ranges(addr, id(), m_location, specs, m_timeout);
     }
     catch (Exception &e) {
       HT_ERROR_OUT << e << HT_END;
@@ -574,13 +566,13 @@ bool OperationRecoverRanges::commit() {
 
   foreach_ht(const String &location, locations) {
     addr.set_proxy(location);
-    vector<QualifiedRangeSpec> ranges;
-    m_plan.receiver_plan.get_qualified_range_specs(location.c_str(), ranges);
+    vector<QualifiedRangeSpec> specs;
+    m_plan.receiver_plan.get_range_specs(location, specs);
 
    try {
-      HT_INFO_OUT << "Issue phantom_commit_ranges for " << ranges.size()
+      HT_INFO_OUT << "Issue phantom_commit_ranges for " << specs.size()
           << " ranges to " << location << HT_END;
-      rsc.phantom_commit_ranges(addr, id(), m_location, ranges, m_timeout);
+      rsc.phantom_commit_ranges(addr, id(), m_location, specs, m_timeout);
     }
     catch (Exception &e) {
       HT_ERROR_OUT << e << HT_END;
@@ -601,19 +593,20 @@ bool OperationRecoverRanges::acknowledge() {
   RangeServerClient rsc(m_context->comm);
   CommAddress addr;
   bool success = true;
-  vector<QualifiedRangeSpecManaged> acknowledged;
+  vector<QualifiedRangeSpec> acknowledged;
+  CharArena arena;
 
   m_plan.receiver_plan.get_locations(locations);
 
   foreach_ht(const String &location, locations) {
     addr.set_proxy(location);
-    vector<QualifiedRangeSpec> ranges;
+    vector<QualifiedRangeSpec> specs;
     vector<QualifiedRangeSpec *> range_ptrs;
     map<QualifiedRangeSpec, int> response_map;
     map<QualifiedRangeSpec, int>::iterator response_map_it;
 
-    m_plan.receiver_plan.get_qualified_range_specs(location.c_str(), ranges);
-    foreach_ht(QualifiedRangeSpec &range, ranges)
+    m_plan.receiver_plan.get_range_specs(location, specs);
+    foreach_ht(QualifiedRangeSpec &range, specs)
       range_ptrs.push_back(&range);
     try {
       HT_INFO_OUT << "Issue acknowledge_load for " << range_ptrs.size()
@@ -629,7 +622,7 @@ bool OperationRecoverRanges::acknowledge() {
                   response_map_it->first.range.end_row,
                   Error::get_text(response_map_it->second));
         else
-          acknowledged.push_back(response_map_it->first);
+          acknowledged.push_back(QualifiedRangeSpec(arena, response_map_it->first));
         ++response_map_it;
       }
       HT_INFO_OUT << "acknowledge_load complete for " << range_ptrs.size()
@@ -644,10 +637,7 @@ bool OperationRecoverRanges::acknowledge() {
   // Purge successfully acknowledged ranges from recovery plan
   if (!acknowledged.empty()) {
     BalancePlanAuthority *bpa = m_context->get_balance_plan_authority();
-    vector<QualifiedRangeSpec *> specs;
-    foreach_ht (QualifiedRangeSpecManaged &qrsm, acknowledged)
-      specs.push_back(&qrsm);
-    bpa->remove_from_receiver_plan(m_location, m_type, specs);
+    bpa->remove_from_receiver_plan(m_location, m_type, acknowledged);
     get_new_recovery_plan(false);
   }
 

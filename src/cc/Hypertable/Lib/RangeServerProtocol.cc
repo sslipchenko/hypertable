@@ -381,23 +381,26 @@ namespace Hypertable {
 
   CommBuf *RangeServerProtocol::create_request_phantom_load(const String &location,
           const vector<uint32_t> &fragments,
-          const vector<QualifiedRangeStateSpec> &ranges) {
+          const vector<QualifiedRangeSpec> &specs,
+          const std::vector<RangeState> &states) {
     CommHeader header(COMMAND_PHANTOM_RECEIVE);
     header.flags |= CommHeader::FLAGS_BIT_URGENT;
     size_t len = encoded_length_vstr(location) + 4 + fragments.size() * 4;
     len += 4;
-    for (size_t ii = 0; ii < ranges.size(); ++ii)
-      len += ranges[ii].encoded_length();
+    HT_ASSERT(specs.size() == states.size());
+    for (size_t ii = 0; ii < specs.size(); ++ii)
+      len += specs[ii].encoded_length() + states[ii].encoded_length();
 
     CommBuf *cbuf = new CommBuf(header, len);
     cbuf->append_vstr(location);
     cbuf->append_i32(fragments.size());
     for (size_t ii = 0; ii < fragments.size(); ++ii)
       cbuf->append_i32(fragments[ii]);
-    cbuf->append_i32(ranges.size());
-    for (size_t ii = 0; ii < ranges.size(); ++ii)
-      ranges[ii].encode(cbuf->get_data_ptr_address());
-
+    cbuf->append_i32(specs.size());
+    for (size_t ii = 0; ii < specs.size(); ++ii)
+      specs[ii].encode(cbuf->get_data_ptr_address());
+    for (size_t ii = 0; ii < specs.size(); ++ii)
+      states[ii].encode(cbuf->get_data_ptr_address());
     return cbuf;
   }
 

@@ -29,6 +29,7 @@
 
 #include "Common/ByteString.h"
 #include "Common/MurmurHash.h"
+#include "Common/PageArenaAllocator.h"
 #include "Common/String.h"
 
 #include "Hypertable/Lib/RangeState.h"
@@ -199,6 +200,12 @@ namespace Hypertable {
   public:
     QualifiedRangeSpec(const TableIdentifier &tid, const RangeSpec &rs)
       : table(tid), range(rs) {}
+    QualifiedRangeSpec(CharArena &arena, const QualifiedRangeSpec &other) {
+      table.generation = other.table.generation;
+      table.id = arena.dup(other.table.id);
+      range.start_row = arena.dup(other.range.start_row);
+      range.end_row = arena.dup(other.range.end_row);
+    }
     QualifiedRangeSpec() { }
 
     virtual bool operator<(const QualifiedRangeSpec &other) const;
@@ -211,29 +218,6 @@ namespace Hypertable {
 
     TableIdentifier table;
     RangeSpec range;
-  };
-
-  class QualifiedRangeStateSpec {
-  public:
-    QualifiedRangeStateSpec(const TableIdentifier &tid, const RangeSpec &rs,
-        const RangeState &ss)
-      : qualified_range(tid, rs), state(ss) {}
-    QualifiedRangeStateSpec(const TableIdentifier &tid, const RangeSpec &rs)
-      : qualified_range(tid, rs) {}
-    QualifiedRangeStateSpec(const QualifiedRangeSpec &qrs)
-      : qualified_range(qrs) {}
-    QualifiedRangeStateSpec() { }
-
-    virtual bool operator<(const QualifiedRangeStateSpec &other) const;
-    virtual bool operator==(const QualifiedRangeStateSpec &other) const;
-    virtual bool is_root() const;
-
-    virtual size_t encoded_length() const;
-    virtual void encode(uint8_t **bufp) const;
-    virtual void decode(const uint8_t **bufp, size_t *remainp);
-
-    QualifiedRangeSpec qualified_range;
-    RangeState state;
   };
 
 
@@ -284,61 +268,6 @@ namespace Hypertable {
     RangeSpecManaged m_range;
   };
 
-  class QualifiedRangeStateSpecManaged : public QualifiedRangeStateSpec {
-  public:
-    QualifiedRangeStateSpecManaged() { }
-    QualifiedRangeStateSpecManaged(const QualifiedRangeStateSpecManaged &other) {
-      operator=(other);
-    }
-    QualifiedRangeStateSpecManaged(const QualifiedRangeStateSpec &other) {
-      operator=(other);
-    }
-    QualifiedRangeStateSpecManaged(const QualifiedRangeSpec &qrs, const RangeState &state) {
-      set_qualified_range(qrs);
-      set_range_state(state);
-    }
-    QualifiedRangeStateSpecManaged(const TableIdentifier &table, const RangeSpec &range,
-        const RangeState &state) {
-      QualifiedRangeSpec qrs(table, range);
-      set_qualified_range(qrs);
-      set_range_state(state);
-    }
-
-    virtual ~QualifiedRangeStateSpecManaged() { }
-
-    QualifiedRangeStateSpecManaged &operator=(const QualifiedRangeStateSpecManaged &other) {
-      const QualifiedRangeStateSpec *otherp = &other;
-      return operator=(*otherp);
-    }
-
-    QualifiedRangeStateSpecManaged &operator=(const QualifiedRangeStateSpec &other) {
-      m_qualified_range = other.qualified_range;
-      qualified_range = m_qualified_range;
-      m_state = other.state;
-      state = m_state;
-      return *this;
-    }
-
-    void set_qualified_range(const QualifiedRangeSpec &rs) {
-      m_qualified_range = rs;
-      qualified_range = m_qualified_range;
-    }
-
-    void set_range_state(const RangeState &ss) {
-      m_state = ss;
-      state = m_state;
-    }
-
-    bool operator<(const QualifiedRangeStateSpecManaged &other) const;
-    size_t encoded_length() const;
-    void encode(uint8_t **bufp) const;
-    virtual void decode(const uint8_t **bufp, size_t *remainp);
-    friend std::ostream &operator<<(std::ostream &os,
-        const QualifiedRangeStateSpecManaged &qrs);
-    private:
-    QualifiedRangeSpecManaged m_qualified_range;
-    RangeStateManaged m_state;
-  };
 
   struct LtQualifiedRangeSpecManaged {
     bool operator()(const QualifiedRangeSpecManaged *qr1,
@@ -375,10 +304,6 @@ namespace Hypertable {
   std::ostream &operator<<(std::ostream &os, const QualifiedRangeSpec &qualified_range);
 
   std::ostream &operator<<(std::ostream &os, const QualifiedRangeSpecManaged &qualified_range);
-
-  std::ostream &operator<<(std::ostream &os, const QualifiedRangeStateSpec &qualified_range);
-
-  std::ostream &operator<<(std::ostream &os, const QualifiedRangeStateSpecManaged &qualified_range);
 
 } // namespace Hypertable
 

@@ -26,43 +26,24 @@ using namespace Hypertable;
 using namespace boost::multi_index;
 using namespace std;
 
-void RangeRecoveryReceiverPlan::insert(const char *location,
+void RangeRecoveryReceiverPlan::insert(const String &location,
     const TableIdentifier &table, const RangeSpec &range, const RangeState &state) {
   ReceiverEntry entry(m_arena, location, table, range, state);
   RangeIndex &range_index = m_plan.get<ByRange>();
-  RangeIndex::iterator range_it = range_index.find(entry.state_spec);
+  RangeIndex::iterator range_it = range_index.find(entry.spec);
   if (range_it != range_index.end())
     range_index.erase(range_it);
   m_plan.insert(entry);
 }
 
 
-void RangeRecoveryReceiverPlan::remove(const QualifiedRangeStateSpec &qrss) {
+void RangeRecoveryReceiverPlan::remove(const QualifiedRangeSpec &qrs) {
   RangeIndex &range_index = m_plan.get<ByRange>();
-  RangeIndex::iterator range_it = range_index.find(qrss);
+  RangeIndex::iterator range_it = range_index.find(qrs);
   if (range_it != range_index.end())
     range_index.erase(range_it);
 }
 
-
-bool RangeRecoveryReceiverPlan::get_location(const TableIdentifier &table,
-    const char *row, String &location) const {
-  QualifiedRangeStateSpec state_spec(table, RangeSpec("",row));
-  const RangeIndex &range_index = m_plan.get<ByRange>();
-  RangeIndex::const_iterator range_it = range_index.lower_bound(state_spec);
-  bool found = false;
-
-  while(range_it != range_index.end() && table == range_it->state_spec.qualified_range.table) {
-    if (strcmp(row, range_it->state_spec.qualified_range.range.start_row) > 0 &&
-        strcmp(row, range_it->state_spec.qualified_range.range.end_row) <= 0 ) {
-      location = range_it->location;
-      found = true;
-      break;
-    }
-    ++range_it;
-  }
-  return found;
-}
 
 void RangeRecoveryReceiverPlan::get_locations(StringSet &locations) const {
   const LocationIndex &location_index = m_plan.get<ByLocation>();
@@ -76,95 +57,62 @@ void RangeRecoveryReceiverPlan::get_locations(StringSet &locations) const {
   }
 }
 
-void RangeRecoveryReceiverPlan::get_range_state_specs(vector<QualifiedRangeStateSpecManaged> &ranges) const {
-  const RangeIndex &range_index = m_plan.get<ByRange>();
-  RangeIndex::const_iterator range_it = range_index.begin();
-
-  for(; range_it != range_index.end(); ++range_it)
-    ranges.push_back(range_it->state_spec);
-}
-
-void RangeRecoveryReceiverPlan::get_range_state_specs(const char *location,
-    vector<QualifiedRangeStateSpec> &ranges) {
+void RangeRecoveryReceiverPlan::get_range_specs(const String &location, vector<QualifiedRangeSpec> &specs) {
   LocationIndex &location_index = m_plan.get<ByLocation>();
   pair<LocationIndex::iterator, LocationIndex::iterator> bounds =
-      location_index.equal_range(location);
+    location_index.equal_range(location);
   LocationIndex::iterator location_it = bounds.first;
   for(; location_it != bounds.second; ++location_it)
-    ranges.push_back(location_it->state_spec);
+    specs.push_back(location_it->spec);
 }
 
-void RangeRecoveryReceiverPlan::get_qualified_range_specs(const char *location,
-    vector<QualifiedRangeSpec> &ranges) {
+void RangeRecoveryReceiverPlan::get_range_specs_and_states(const String &location,
+                                                           vector<QualifiedRangeSpec> &specs,
+                                                           vector<RangeState> &states) {
   LocationIndex &location_index = m_plan.get<ByLocation>();
   pair<LocationIndex::iterator, LocationIndex::iterator> bounds =
-      location_index.equal_range(location);
+    location_index.equal_range(location);
   LocationIndex::iterator location_it = bounds.first;
   for(; location_it != bounds.second; ++location_it) {
-    ranges.push_back(location_it->state_spec.qualified_range);
+    specs.push_back(location_it->spec);
+    states.push_back(location_it->state);
   }
 }
 
-void RangeRecoveryReceiverPlan::get_qualified_range_specs(vector<QualifiedRangeSpec> &ranges) {
-  LocationIndex &location_index = m_plan.get<ByLocation>();
-  for (LocationIndex::iterator iter=location_index.begin(); iter!=location_index.end(); ++iter)
-    ranges.push_back(iter->state_spec.qualified_range);
-}
-
-void RangeRecoveryReceiverPlan::get_qualified_range_specs(const char *location,
-    vector<QualifiedRangeStateSpecManaged> &ranges) const {
-
-  const LocationIndex &location_index = m_plan.get<ByLocation>();
-  pair<LocationIndex::const_iterator, LocationIndex::const_iterator> bounds =
-      location_index.equal_range(location);
-  LocationIndex::const_iterator location_it = bounds.first;
-  for(; location_it != bounds.second; ++location_it)
-    ranges.push_back(location_it->state_spec);
-}
-
-bool RangeRecoveryReceiverPlan::get_qualified_range_state_spec(const TableIdentifier &table, const char *row,
-    QualifiedRangeStateSpec &range) {
+bool RangeRecoveryReceiverPlan::get_range_spec(const TableIdentifier &table, const char *row,
+                                               QualifiedRangeSpec &spec) {
   RangeIndex &range_index = m_plan.get<ByRange>();
-  QualifiedRangeStateSpec target(table, RangeSpec("",row));
+  QualifiedRangeSpec target(table, RangeSpec("",row));
   RangeIndex::iterator range_it = range_index.lower_bound(target);
 
   bool found = false;
 
-  while(range_it != range_index.end() && range_it->state_spec.qualified_range.table == table) {
-    if (strcmp(row, range_it->state_spec.qualified_range.range.start_row) > 0 &&
-        strcmp(row, range_it->state_spec.qualified_range.range.end_row) <= 0 ) {
-      range = range_it->state_spec;
+  while(range_it != range_index.end() && range_it->spec.table == table) {
+    if (strcmp(row, range_it->spec.range.start_row) > 0 &&
+        strcmp(row, range_it->spec.range.end_row) <= 0 ) {
+      spec = range_it->spec;
       found = true;
       break;
     }
-    else if (strcmp(row, range_it->state_spec.qualified_range.range.start_row)<=0) {
+    else if (strcmp(row, range_it->spec.range.start_row)<=0) {
       // gone too far
       break;
     }
     ++range_it;
   }
-#if 0
+  /**
   if (!found) {
     range_it = range_index.begin();
     HT_DEBUG_OUT << " Range not found " << table.id << " " << row
         << " existing ranges are..." << HT_END;
     while(range_it != range_index.end()) {
-      HT_DEBUG_OUT << range_it->state_spec << HT_END;
+      HT_DEBUG_OUT << range_it->spec << HT_END;
       ++range_it;
     }
   }
-#endif
+  **/
 
   return found;
-}
-
-bool RangeRecoveryReceiverPlan::get_qualified_range_spec(const TableIdentifier &table, const char *row,
-    QualifiedRangeSpec &range) {
-  QualifiedRangeStateSpec target;
-  bool retval = get_qualified_range_state_spec(table, row, target);
-  if (retval)
-    range = target.qualified_range;
-  return retval;
 }
 
 
@@ -198,9 +146,8 @@ void RangeRecoveryReceiverPlan::decode(const uint8_t **bufp, size_t *remainp) {
     ReceiverEntry tmp_entry;
     tmp_entry.decode(bufp, remainp);
     ReceiverEntry entry(m_arena, tmp_entry.location,
-            tmp_entry.state_spec.qualified_range.table,
-            tmp_entry.state_spec.qualified_range.range,
-            tmp_entry.state_spec.state);
+                        tmp_entry.spec.table, tmp_entry.spec.range,
+                        tmp_entry.state);
     m_plan.insert(entry);
   }
 }
@@ -211,23 +158,27 @@ void RangeRecoveryReceiverPlan::copy(RangeRecoveryReceiverPlan &other) const
   LocationIndex::const_iterator it = location_index.begin();
 
   while (it != location_index.end()) {
-    ReceiverEntry entry(other.m_arena, String(it->location), it->state_spec);
+    ReceiverEntry entry(other.m_arena, it->location, it->spec.table,
+                        it->spec.range, it->state);
     other.m_plan.insert(entry);
     ++it;
   }
 }
 
 size_t RangeRecoveryReceiverPlan::ReceiverEntry::encoded_length() const {
-  return Serialization::encoded_length_vstr(location) + state_spec.encoded_length();
+  return Serialization::encoded_length_vstr(location) + spec.encoded_length() +
+    state.encoded_length();
 }
 
 void RangeRecoveryReceiverPlan::ReceiverEntry::encode(uint8_t **bufp) const {
   Serialization::encode_vstr(bufp,location);
-  state_spec.encode(bufp);
+  spec.encode(bufp);
+  state.encode(bufp);
 }
 
 void RangeRecoveryReceiverPlan::ReceiverEntry::decode(const uint8_t **bufp,
     size_t *remainp) {
   location = Serialization::decode_vstr(bufp, remainp);
-  state_spec.decode(bufp,remainp);
+  spec.decode(bufp, remainp);
+  state.decode(bufp, remainp);
 }

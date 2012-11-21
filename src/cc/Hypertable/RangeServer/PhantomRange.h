@@ -50,7 +50,8 @@ namespace Hypertable {
       RANGE_PREPARED=3
     };
 
-    PhantomRange(const QualifiedRangeStateSpec &range, SchemaPtr &schema,
+    PhantomRange(const QualifiedRangeSpec &spec, const RangeState &state,
+                 SchemaPtr &schema,
                  const vector<uint32_t> &fragments);
     ~PhantomRange() {}
     /**
@@ -63,9 +64,7 @@ namespace Hypertable {
      */
     bool add(uint32_t fragment, bool more, EventPtr &event);
     int get_state();
-    const QualifiedRangeSpec &get_qualified_range_spec() { return m_spec.qualified_range; }
-    const RangeState &get_range_state() { return m_spec.state; }
-    const QualifiedRangeStateSpec &get_qualified_range_state_spec() { return m_spec; }
+    const RangeState &get_range_state() { return m_range_state; }
 
     void purge_incomplete_fragments();
     void create_range(MasterClientPtr &master_client, TableInfoPtr &table_info,
@@ -85,7 +84,8 @@ namespace Hypertable {
     typedef std::map<uint32_t, FragmentDataPtr> FragmentMap;
     Mutex            m_mutex;
     FragmentMap      m_fragments;
-    QualifiedRangeStateSpecManaged m_spec;
+    QualifiedRangeSpec m_range_spec;
+    RangeState       m_range_state;
     SchemaPtr        m_schema;
     size_t           m_outstanding;
     RangePtr         m_range;

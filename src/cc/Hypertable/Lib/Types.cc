@@ -220,32 +220,6 @@ void QualifiedRangeSpec::decode(const uint8_t **bufp, size_t *remainp) {
     range.decode(bufp, remainp));
 }
 
-bool QualifiedRangeStateSpec::is_root() const {
-  return (qualified_range.is_root());
-}
-
-bool QualifiedRangeStateSpec::operator<(const QualifiedRangeStateSpec &other) const {
-  return (qualified_range < other.qualified_range);
-}
-
-bool QualifiedRangeStateSpec::operator==(const QualifiedRangeStateSpec &other) const {
-  return (qualified_range == other.qualified_range);
-}
-
-size_t QualifiedRangeStateSpec::encoded_length() const {
-  return (qualified_range.encoded_length() + state.encoded_length());
-}
-
-void QualifiedRangeStateSpec::encode(uint8_t **bufp) const {
-  qualified_range.encode(bufp);
-  state.encode(bufp);
-}
-
-void QualifiedRangeStateSpec::decode(const uint8_t **bufp, size_t *remainp) {
-  HT_TRY("decoding qualified range spec managed ",
-    qualified_range.decode(bufp, remainp);
-    state.decode(bufp, remainp));
-}
 
 bool QualifiedRangeSpecManaged::operator<(const QualifiedRangeSpecManaged &other) const {
   if (table == other.table)
@@ -269,27 +243,6 @@ void QualifiedRangeSpecManaged::decode(const uint8_t **bufp, size_t *remainp) {
     m_range.decode(bufp, remainp));
   table = m_table;
   range = m_range;
-}
-
-bool QualifiedRangeStateSpecManaged::operator<(const QualifiedRangeStateSpecManaged &other) const {
-  return (qualified_range < other.qualified_range);
-}
-
-size_t QualifiedRangeStateSpecManaged::encoded_length() const {
-  return (m_qualified_range.encoded_length() + m_state.encoded_length());
-}
-
-void QualifiedRangeStateSpecManaged::encode(uint8_t **bufp) const {
-  m_qualified_range.encode(bufp);
-  m_state.encode(bufp);
-}
-
-void QualifiedRangeStateSpecManaged::decode(const uint8_t **bufp, size_t *remainp) {
-  HT_TRY("decoding qualified range spec managed ",
-    m_qualified_range.decode(bufp, remainp);
-    m_state.decode(bufp, remainp));
-  qualified_range = m_qualified_range;
-  state = m_state;
 }
 
 ostream &Hypertable::operator<<(ostream &os, const TableIdentifier &tid) {
@@ -318,12 +271,3 @@ ostream &Hypertable::operator<<(ostream &os, const QualifiedRangeSpecManaged &qu
   return os;
 }
 
-ostream &Hypertable::operator<<(ostream &os, const QualifiedRangeStateSpec &qrss) {
-  os << "{QualifiedRangeStateSpec: " << qrss.qualified_range << qrss.state << "}";
-  return os;
-}
-
-ostream &Hypertable::operator<<(ostream &os, const QualifiedRangeStateSpecManaged &qrss) {
-  os << "{QualifiedRangeStateSpecManaged: " << qrss.qualified_range << qrss.state << "}";
-  return os;
-}

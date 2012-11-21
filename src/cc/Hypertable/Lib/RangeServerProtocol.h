@@ -315,11 +315,13 @@ namespace Hypertable {
      *
      * @param location location of server being recovered
      * @param fragments fragments being replayed
-     * @param ranges range specs to be loaded
+     * @param specs range specs to be loaded
+     * @param states parallel range states vector
      */
     static CommBuf *create_request_phantom_load(const String &location,
         const vector<uint32_t> &fragments,
-        const std::vector<QualifiedRangeStateSpec> &ranges);
+        const std::vector<QualifiedRangeSpec> &specs,
+        const std::vector<RangeState> &states);
 
     /** Creates a "phantom_update" request message.
      *

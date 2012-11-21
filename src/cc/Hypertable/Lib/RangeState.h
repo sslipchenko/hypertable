@@ -22,6 +22,7 @@
 #ifndef HYPERTABLE_RANGESTATE_H
 #define HYPERTABLE_RANGESTATE_H
 
+#include "Common/PageArenaAllocator.h"
 #include "Common/String.h"
 
 namespace Hypertable {
@@ -45,6 +46,14 @@ namespace Hypertable {
       };
     RangeState() : state(STEADY), timestamp(0), soft_limit(0), transfer_log(0),
                    split_point(0), old_boundary_row(0) { }
+    RangeState(CharArena &arena, const RangeState &other) {
+      state = other.state;
+      timestamp = other.timestamp;
+      soft_limit = other.soft_limit;
+      transfer_log = arena.dup(other.transfer_log);
+      split_point = arena.dup(other.split_point);
+      old_boundary_row = arena.dup(other.old_boundary_row);
+    }
     virtual ~RangeState() {}
 
     virtual void clear();

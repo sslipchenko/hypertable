@@ -34,6 +34,9 @@
 
 #include "Hypertable/Lib/Config.h"
 #include "Hypertable/Lib/MetaLogReader.h"
+#include "Hypertable/Lib/RangeState.h"
+#include "Hypertable/Lib/Types.h"
+
 #include "DfsBroker/Lib/Client.h"
 
 #include "Hypertable/Master/Context.h"
@@ -845,29 +848,49 @@ void move_range_test(ContextPtr &context) {
   _exit(0);
 }
 
-void fill_ranges(vector<QualifiedRangeStateSpecManaged> &root,
-        vector<QualifiedRangeStateSpecManaged> &meta,
-        vector<QualifiedRangeStateSpecManaged> &system,
-        vector<QualifiedRangeStateSpecManaged> &user)
+void fill_ranges(vector<QualifiedRangeSpec> &root_specs,
+                 vector<RangeState> &root_states,
+                 vector<QualifiedRangeSpec> &metadata_specs,
+                 vector<RangeState> &metadata_states,
+                 vector<QualifiedRangeSpec> &system_specs,
+                 vector<RangeState> &system_states,
+                 vector<QualifiedRangeSpec> &user_specs,
+                 vector<RangeState> &user_states)
 {
-  root.clear();
-  root.push_back(QualifiedRangeStateSpecManaged(TableIdentifier("0/0"),
-              RangeSpec("start_root0", "end_root0"), RangeState()));
-  root.push_back(QualifiedRangeStateSpecManaged(TableIdentifier("0/0"),
-              RangeSpec("start_root1", "end_root1"), RangeState()));
-  meta.clear();
-  meta.push_back(QualifiedRangeStateSpecManaged(TableIdentifier("1/0"),
-              RangeSpec("start_meta1", "end_meta1"), RangeState()));
-  meta.push_back(QualifiedRangeStateSpecManaged(TableIdentifier("1/0"),
-              RangeSpec("start_meta2", "end_meta2"), RangeState()));
-  system.clear();
-  user.clear();
-  user.push_back(QualifiedRangeStateSpecManaged(TableIdentifier("2/0"),
-              RangeSpec("start_user1", "end_user1"), RangeState()));
-  user.push_back(QualifiedRangeStateSpecManaged(TableIdentifier("2/0"),
-              RangeSpec("start_user2", "end_user2"), RangeState()));
-  user.push_back(QualifiedRangeStateSpecManaged(TableIdentifier("2/0"),
-              RangeSpec("start_user3", "end_user3"), RangeState()));
+  QualifiedRangeSpec spec;
+
+  root_specs.clear();
+  root_states.clear();
+  spec = QualifiedRangeSpec(TableIdentifier("0/0"), RangeSpec("start_root0", "end_root0"));
+  root_specs.push_back(spec);
+  root_states.push_back(RangeState());
+  spec = QualifiedRangeSpec(TableIdentifier("0/0"), RangeSpec("start_root1", "end_root1"));
+  root_specs.push_back(spec);
+  root_states.push_back(RangeState());
+
+  metadata_specs.clear();
+  metadata_states.clear();
+  spec = QualifiedRangeSpec(TableIdentifier("1/0"), RangeSpec("start_meta1", "end_meta1"));
+  metadata_specs.push_back(spec);
+  metadata_states.push_back(RangeState());
+  spec = QualifiedRangeSpec(TableIdentifier("1/0"), RangeSpec("start_meta2", "end_meta2"));
+  metadata_specs.push_back(spec);
+  metadata_states.push_back(RangeState());
+
+  system_specs.clear();
+  system_states.clear();
+
+  user_specs.clear();
+  user_states.clear();
+  spec = QualifiedRangeSpec(TableIdentifier("2/0"), RangeSpec("start_user1", "end_user1"));
+  user_specs.push_back(spec);
+  user_states.push_back(RangeState());
+  spec = QualifiedRangeSpec(TableIdentifier("2/0"), RangeSpec("start_user2", "end_user2"));
+  user_specs.push_back(spec);
+  user_states.push_back(RangeState());
+  spec = QualifiedRangeSpec(TableIdentifier("2/0"), RangeSpec("start_user3", "end_user3"));
+  user_specs.push_back(spec);
+  user_states.push_back(RangeState());
 }
 
 void balance_plan_authority_test(ContextPtr &context) {
@@ -914,34 +937,42 @@ void balance_plan_authority_test(ContextPtr &context) {
 
   BalancePlanAuthority *bpa = context->get_balance_plan_authority();
 
-  vector<QualifiedRangeStateSpecManaged> root_range;
-  vector<QualifiedRangeStateSpecManaged> metadata_ranges;
-  vector<QualifiedRangeStateSpecManaged> system_ranges;
-  vector<QualifiedRangeStateSpecManaged> user_ranges;
+  vector<QualifiedRangeSpec> root_specs;
+  vector<RangeState> root_states;
+  vector<QualifiedRangeSpec> metadata_specs;
+  vector<RangeState> metadata_states;
+  vector<QualifiedRangeSpec> system_specs;
+  vector<RangeState> system_states;
+  vector<QualifiedRangeSpec> user_specs;
+  vector<RangeState> user_states;
 
   // populate ranges
-  fill_ranges(root_range, metadata_ranges, system_ranges, user_ranges);
+  fill_ranges(root_specs, root_states, metadata_specs, metadata_states,
+              system_specs, system_states, user_specs, user_states);
   rsc1->set_removed();
-  bpa->create_recovery_plan("rs1", root_range, metadata_ranges,
-          system_ranges, user_ranges);
+  bpa->create_recovery_plan("rs1", root_specs, root_states, metadata_specs, metadata_states,
+          system_specs, system_states, user_specs, user_states);
   out << "Recovered rsc1: " << *bpa << std::endl << std::endl;
 
-  fill_ranges(root_range, metadata_ranges, system_ranges, user_ranges);
+  fill_ranges(root_specs, root_states, metadata_specs, metadata_states,
+              system_specs, system_states, user_specs, user_states);
   rsc2->set_removed();
-  bpa->create_recovery_plan("rs2", root_range, metadata_ranges,
-          system_ranges, user_ranges);
+  bpa->create_recovery_plan("rs2", root_specs, root_states, metadata_specs, metadata_states,
+          system_specs, system_states, user_specs, user_states);
   out << "Recovered rsc2: " << *bpa << std::endl << std::endl;
 
-  fill_ranges(root_range, metadata_ranges, system_ranges, user_ranges);
+  fill_ranges(root_specs, root_states, metadata_specs, metadata_states,
+              system_specs, system_states, user_specs, user_states);
   rsc3->set_removed();
-  bpa->create_recovery_plan("rs3", root_range, metadata_ranges,
-          system_ranges, user_ranges);
+  bpa->create_recovery_plan("rs3", root_specs, root_states, metadata_specs, metadata_states,
+          system_specs, system_states, user_specs, user_states);
   out << "Recovered rsc3: " << *bpa << std::endl << std::endl;
 
-  fill_ranges(root_range, metadata_ranges, system_ranges, user_ranges);
+  fill_ranges(root_specs, root_states, metadata_specs, metadata_states,
+              system_specs, system_states, user_specs, user_states);
   rsc4->set_removed();
-  bpa->create_recovery_plan("rs4", root_range, metadata_ranges,
-          system_ranges, user_ranges);
+  bpa->create_recovery_plan("rs4", root_specs, root_states, metadata_specs, metadata_states,
+          system_specs, system_states, user_specs, user_states);
   out << "Recovered rsc4: " << *bpa << std::endl;
   out.flush();
 

@@ -27,6 +27,7 @@
 
 #include <boost/thread/condition.hpp>
 
+#include "Common/PageArenaAllocator.h"
 #include "Common/ReferenceCount.h"
 #include "Common/Mutex.h"
 
@@ -48,46 +49,24 @@ namespace Hypertable {
     TableInfoMapPtr get_tableinfo_map() { return m_tableinfo_map; }
 
     /**
-     * Insert range in map
-     *
-     * @param range range spec
-     * @param schema table schema
-     * @param fragments commit log fragments
-     */
-    void insert(const QualifiedRangeStateSpec &range_spec, SchemaPtr &schema,
-                const vector<uint32_t> &fragments);
-
-    /**
      * Gets the phantom range if it is in map
      *
      * @param range range spec
      * @param phantom_range phantom range
      */
-    void get(const QualifiedRangeStateSpec &range_spec, PhantomRangePtr &phantom_range);
+    void get(const QualifiedRangeSpec &range_spec, PhantomRangePtr &phantom_range);
 
     /**
      * Gets the phantom range, if not in map, insert first
      *
-     * @param range range spec
+     * @param spec range spec
+     * @param state range state
      * @param schema table schema
      * @param fragments fragments to be played
      * @param phantom_range phantom range
      */
-    void get(const QualifiedRangeStateSpec &range, SchemaPtr &schema,
+    void get(const QualifiedRangeSpec &range, const RangeState &state, SchemaPtr &schema,
              const vector<uint32_t> &fragments, PhantomRangePtr &phantom_range);
-    /**
-     * Remove range from map
-     *
-     * @param range range spec
-     */
-    void remove(const QualifiedRangeStateSpec &range_spec);
-
-    /**
-     * Remove range from map
-     *
-     * @param range range spec
-     */
-    void remove(const QualifiedRangeSpec &range_spec);
 
     /**
      * Get vector of all phantom ranges in map
@@ -117,11 +96,12 @@ namespace Hypertable {
 
 
   private:
-    typedef std::map<QualifiedRangeStateSpec, PhantomRangePtr> Map;
+    typedef std::map<QualifiedRangeSpec, PhantomRangePtr> Map;
     typedef std::pair<Map::iterator, bool> MapInsRec;
 
     Mutex            m_mutex;
     boost::condition m_load_cond;
+    CharArena        m_arena;
     TableInfoMapPtr  m_tableinfo_map;
     Map              m_map;
     int              m_state;

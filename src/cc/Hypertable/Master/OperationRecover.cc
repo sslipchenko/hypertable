@@ -167,53 +167,57 @@ void OperationRecover::execute() {
     break;
 
   case OperationState::ISSUE_REQUESTS:
-    if (m_root_range.size()) {
-      sub_op = new OperationRecoverRanges(m_context, m_location, 
+    if (m_root_specs.size()) {
+      sub_op = new OperationRecoverRanges(m_context, m_location,
                                           RangeSpec::ROOT);
       HT_INFO_OUT << "Number of root ranges to recover for location " 
           << m_location << "="
-          << m_root_range.size() << HT_END;
+          << m_root_specs.size() << HT_END;
       {
         ScopedLock lock(m_mutex);
+        // wrong, fix me!!
         m_dependencies.insert(Dependency::ROOT);
       }
       m_sub_ops.push_back(sub_op);
       entities.push_back(sub_op);
     }
-    if (m_metadata_ranges.size()) {
+    if (m_metadata_specs.size()) {
       sub_op = new OperationRecoverRanges(m_context, m_location,
                                           RangeSpec::METADATA);
       HT_INFO_OUT << "Number of metadata ranges to recover for location "
           << m_location << "="
-          << m_metadata_ranges.size() << HT_END;
+          << m_metadata_specs.size() << HT_END;
       {
         ScopedLock lock(m_mutex);
+        // wrong, fix me!!
         m_dependencies.insert(Dependency::METADATA);
       }
       m_sub_ops.push_back(sub_op);
       entities.push_back(sub_op);
     }
-    if (m_system_ranges.size()) {
+    if (m_system_specs.size()) {
       sub_op = new OperationRecoverRanges(m_context, m_location,
                                           RangeSpec::SYSTEM);
       HT_INFO_OUT << "Number of system ranges to recover for location "
           << m_location << "="
-          << m_system_ranges.size() << HT_END;
+          << m_system_specs.size() << HT_END;
       {
         ScopedLock lock(m_mutex);
+        // wrong, fix me!!
         m_dependencies.insert(Dependency::SYSTEM);
       }
       m_sub_ops.push_back(sub_op);
       entities.push_back(sub_op);
     }
-    if (m_user_ranges.size()) {
+    if (m_user_specs.size()) {
       sub_op = new OperationRecoverRanges(m_context, m_location,
                                           RangeSpec::USER);
       HT_INFO_OUT << "Number of user ranges to recover for location " 
           << m_location << "="
-          << m_user_ranges.size() << HT_END;
+          << m_user_specs.size() << HT_END;
       {
         ScopedLock lock(m_mutex);
+        // wrong, fix me!!
         m_dependencies.insert(format("%s-user", m_location.c_str()));
       }
       m_sub_ops.push_back(sub_op);
@@ -328,8 +332,11 @@ void OperationRecover::clear_server_state() {
 
 void OperationRecover::create_recovery_plan() {
   BalancePlanAuthority *plan = m_context->get_balance_plan_authority();
-  plan->create_recovery_plan(m_location, m_root_range, m_metadata_ranges,
-          m_system_ranges, m_user_ranges);
+  plan->create_recovery_plan(m_location,
+                             m_root_specs, m_root_states,
+                             m_metadata_specs, m_metadata_states,
+                             m_system_specs, m_system_states,
+                             m_user_specs, m_user_states);
 }
 
 void OperationRecover::read_rsml() {
@@ -348,21 +355,28 @@ void OperationRecover::read_rsml() {
     rsml_reader->get_entities(entities);
     foreach_ht (MetaLog::EntityPtr &entity, entities) {
       if ((range = dynamic_cast<MetaLog::EntityRange *>(entity.get())) != 0) {
-        QualifiedRangeStateSpec qrss;
+        QualifiedRangeSpec spec;
         // skip phantom ranges, let whoever was recovering them deal with them
         if (!(range->state.state & RangeState::PHANTOM)) {
-          HT_INFO_OUT << "Range " << *range << ": no PHANTOM; including" << HT_END;
-          qrss.qualified_range.range = range->spec;
-          qrss.qualified_range.table = range->table;
-          qrss.state = range->state;
-          if (qrss.qualified_range.is_root())
-            m_root_range.push_back(qrss);
-          else if (qrss.qualified_range.table.is_metadata())
-            m_metadata_ranges.push_back(qrss);
-          else if (qrss.qualified_range.table.is_system())
-            m_system_ranges.push_back(qrss);
-          else
-            m_user_ranges.push_back(qrss);
+          HT_INFO_OUT << "Range " << *range << ": not PHANTOM; including" << HT_END;
+          spec.table = range->table;
+          spec.range = range->spec;
+          if (spec.is_root()) {
+            m_root_specs.push_back(QualifiedRangeSpec(m_arena, spec));
+            m_root_states.push_back(RangeState(m_arena, range->state));
+          }
+          else if (spec.table.is_metadata()) {
+            m_metadata_specs.push_back(QualifiedRangeSpec(m_arena, spec));
+            m_metadata_states.push_back(RangeState(m_arena, range->state));
+          }
+          else if (spec.table.is_system()) {
+            m_system_specs.push_back(QualifiedRangeSpec(m_arena, spec));
+            m_system_states.push_back(RangeState(m_arena, range->state));
+          }
+          else {
+            m_user_specs.push_back(QualifiedRangeSpec(m_arena, spec));
+            m_user_states.push_back(RangeState(m_arena, range->state));
+          }
         }
         else
           HT_INFO_OUT << "Range " << *range << ": PHANTOM; skipping" << HT_END;
@@ -376,63 +390,82 @@ void OperationRecover::read_rsml() {
 
 size_t OperationRecover::encoded_state_length() const {
   size_t len = Serialization::encoded_length_vstr(m_location) + 16;
-  foreach_ht(const QualifiedRangeStateSpecManaged &range, m_root_range)
-    len += range.encoded_length();
-  foreach_ht(const QualifiedRangeStateSpecManaged &range, m_metadata_ranges)
-    len += range.encoded_length();
-  foreach_ht(const QualifiedRangeStateSpecManaged &range, m_system_ranges)
-    len += range.encoded_length();
-  foreach_ht(const QualifiedRangeStateSpecManaged &range, m_user_ranges)
-    len += range.encoded_length();
+  for (size_t i=0; i<m_root_specs.size(); i++)
+    len += m_root_specs[i].encoded_length() + m_root_states[i].encoded_length();
+  for (size_t i=0; i<m_metadata_specs.size(); i++)
+    len += m_metadata_specs[i].encoded_length() + m_metadata_states[i].encoded_length();
+  for (size_t i=0; i<m_system_specs.size(); i++)
+    len += m_system_specs[i].encoded_length() + m_system_states[i].encoded_length();
+  for (size_t i=0; i<m_user_specs.size(); i++)
+    len += m_user_specs[i].encoded_length() + m_user_states[i].encoded_length();
   return len;
 }
 
 void OperationRecover::encode_state(uint8_t **bufp) const {
   Serialization::encode_vstr(bufp, m_location);
-  Serialization::encode_i32(bufp, m_root_range.size());
-  foreach_ht(const QualifiedRangeStateSpecManaged &range, m_root_range)
-    range.encode(bufp);
-  Serialization::encode_i32(bufp, m_metadata_ranges.size());
-  foreach_ht(const QualifiedRangeStateSpecManaged &range, m_metadata_ranges)
-    range.encode(bufp);
-  Serialization::encode_i32(bufp, m_system_ranges.size());
-  foreach_ht(const QualifiedRangeStateSpecManaged &range, m_system_ranges)
-    range.encode(bufp);
-  Serialization::encode_i32(bufp, m_user_ranges.size());
-  foreach_ht(const QualifiedRangeStateSpecManaged &range, m_user_ranges)
-    range.encode(bufp);
+  // root
+  Serialization::encode_i32(bufp, m_root_specs.size());
+  for (size_t i=0; i<m_root_specs.size(); i++) {
+    m_root_specs[i].encode(bufp);
+    m_root_states[i].encode(bufp);
+  }
+  // metadata
+  Serialization::encode_i32(bufp, m_metadata_specs.size());
+  for (size_t i=0; i<m_metadata_specs.size(); i++) {
+    m_metadata_specs[i].encode(bufp);
+    m_metadata_states[i].encode(bufp);
+  }
+  // system
+  Serialization::encode_i32(bufp, m_system_specs.size());
+  for (size_t i=0; i<m_system_specs.size(); i++) {
+    m_system_specs[i].encode(bufp);
+    m_system_states[i].encode(bufp);
+  }
+  // user
+  Serialization::encode_i32(bufp, m_user_specs.size());
+  for (size_t i=0; i<m_user_specs.size(); i++) {
+    m_user_specs[i].encode(bufp);
+    m_user_states[i].encode(bufp);
+  }
 }
 
-void OperationRecover::decode_state(const uint8_t **bufp,
-        size_t *remainp) {
+void OperationRecover::decode_state(const uint8_t **bufp, size_t *remainp) {
   decode_request(bufp, remainp);
 }
 
-void OperationRecover::decode_request(const uint8_t **bufp,
-        size_t *remainp) {
+void OperationRecover::decode_request(const uint8_t **bufp, size_t *remainp) {
 
   m_location = Serialization::decode_vstr(bufp, remainp);
   int nn;
-  QualifiedRangeStateSpec qrss;
+  QualifiedRangeSpec spec;
+  RangeState state;
   nn = Serialization::decode_i32(bufp, remainp);
   for (int ii = 0; ii < nn; ++ii) {
-    qrss.decode(bufp, remainp);
-    m_root_range.push_back(qrss);
+    spec.decode(bufp, remainp);
+    m_root_specs.push_back(QualifiedRangeSpec(m_arena, spec));
+    state.decode(bufp, remainp);
+    m_root_states.push_back(RangeState(m_arena, state));
   }
   nn = Serialization::decode_i32(bufp, remainp);
   for (int ii = 0; ii < nn; ++ii) {
-    qrss.decode(bufp, remainp);
-    m_metadata_ranges.push_back(qrss);
+    spec.decode(bufp, remainp);
+    m_metadata_specs.push_back(QualifiedRangeSpec(m_arena, spec));
+    state.decode(bufp, remainp);
+    m_metadata_states.push_back(RangeState(m_arena, state));
   }
   nn = Serialization::decode_i32(bufp, remainp);
   for (int ii = 0; ii < nn; ++ii) {
-    qrss.decode(bufp, remainp);
-    m_system_ranges.push_back(qrss);
+    spec.decode(bufp, remainp);
+    m_system_specs.push_back(QualifiedRangeSpec(m_arena, spec));
+    state.decode(bufp, remainp);
+    m_system_states.push_back(RangeState(m_arena, state));
   }
   nn = Serialization::decode_i32(bufp, remainp);
   for (int ii = 0; ii < nn; ++ii) {
-    qrss.decode(bufp, remainp);
-    m_user_ranges.push_back(qrss);
+    spec.decode(bufp, remainp);
+    m_user_specs.push_back(QualifiedRangeSpec(m_arena, spec));
+    state.decode(bufp, remainp);
+    m_user_states.push_back(RangeState(m_arena, state));
   }
 }
 

@@ -23,6 +23,9 @@
 #define HYPERTABLE_OPERATIONRECOVER_H
 
 #include <vector>
+
+#include "Common/PageArenaAllocator.h"
+
 #include "Hypertable/Lib/Types.h"
 
 #include "Operation.h"
@@ -75,11 +78,16 @@ namespace Hypertable {
 
     // persisted state
     String m_location;
-    vector<QualifiedRangeStateSpecManaged> m_root_range;
-    vector<QualifiedRangeStateSpecManaged> m_metadata_ranges;
-    vector<QualifiedRangeStateSpecManaged> m_system_ranges;
-    vector<QualifiedRangeStateSpecManaged> m_user_ranges;
+    vector<QualifiedRangeSpec> m_root_specs;
+    vector<RangeState> m_root_states;
+    vector<QualifiedRangeSpec> m_metadata_specs;
+    vector<RangeState> m_metadata_states;
+    vector<QualifiedRangeSpec> m_system_specs;
+    vector<RangeState> m_system_states;
+    vector<QualifiedRangeSpec> m_user_specs;
+    vector<RangeState> m_user_states;
     // in mem state
+    CharArena m_arena;
     RangeServerConnectionPtr m_rsc;
     uint64_t m_hyperspace_handle;
     bool m_lock_acquired;
