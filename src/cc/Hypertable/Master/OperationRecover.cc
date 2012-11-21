@@ -40,6 +40,8 @@ OperationRecover::OperationRecover(ContextPtr &context,
   : Operation(context, MetaLog::EntityType::OPERATION_RECOVER_SERVER),
     m_location(rsc->location()), m_rsc(rsc), m_hyperspace_handle(0), 
     m_lock_acquired(false) {
+  m_subop_dependency = format("operation-id-%lld", (Lld)id());
+  m_dependencies.insert(m_subop_dependency);
   m_dependencies.insert(Dependency::RECOVERY_BLOCKER);
   m_dependencies.insert(Dependency::RECOVERY);
   m_exclusivities.insert(m_rsc->location());
@@ -52,6 +54,7 @@ OperationRecover::OperationRecover(ContextPtr &context,
 OperationRecover::OperationRecover(ContextPtr &context,
     const MetaLog::EntityHeader &header_)
   : Operation(context, header_), m_hyperspace_handle(0), m_lock_acquired(false) {
+  m_subop_dependency = format("operation-id-%lld", (Lld)id());
 }
 
 void OperationRecover::notification_hook() {
@@ -167,17 +170,14 @@ void OperationRecover::execute() {
     break;
 
   case OperationState::ISSUE_REQUESTS:
+    HT_ASSERT(!m_subop_dependency.empty());
     if (m_root_specs.size()) {
       sub_op = new OperationRecoverRanges(m_context, m_location,
                                           RangeSpec::ROOT);
       HT_INFO_OUT << "Number of root ranges to recover for location " 
           << m_location << "="
           << m_root_specs.size() << HT_END;
-      {
-        ScopedLock lock(m_mutex);
-        // wrong, fix me!!
-        m_dependencies.insert(Dependency::ROOT);
-      }
+      sub_op->add_obstruction(m_subop_dependency);
       m_sub_ops.push_back(sub_op);
       entities.push_back(sub_op);
     }
@@ -187,11 +187,7 @@ void OperationRecover::execute() {
       HT_INFO_OUT << "Number of metadata ranges to recover for location "
           << m_location << "="
           << m_metadata_specs.size() << HT_END;
-      {
-        ScopedLock lock(m_mutex);
-        // wrong, fix me!!
-        m_dependencies.insert(Dependency::METADATA);
-      }
+      sub_op->add_obstruction(m_subop_dependency);
       m_sub_ops.push_back(sub_op);
       entities.push_back(sub_op);
     }
@@ -201,11 +197,7 @@ void OperationRecover::execute() {
       HT_INFO_OUT << "Number of system ranges to recover for location "
           << m_location << "="
           << m_system_specs.size() << HT_END;
-      {
-        ScopedLock lock(m_mutex);
-        // wrong, fix me!!
-        m_dependencies.insert(Dependency::SYSTEM);
-      }
+      sub_op->add_obstruction(m_subop_dependency);
       m_sub_ops.push_back(sub_op);
       entities.push_back(sub_op);
     }
@@ -215,17 +207,12 @@ void OperationRecover::execute() {
       HT_INFO_OUT << "Number of user ranges to recover for location " 
           << m_location << "="
           << m_user_specs.size() << HT_END;
-      {
-        ScopedLock lock(m_mutex);
-        // wrong, fix me!!
-        m_dependencies.insert(format("%s-user", m_location.c_str()));
-      }
+      sub_op->add_obstruction(m_subop_dependency);
       m_sub_ops.push_back(sub_op);
       entities.push_back(sub_op);
     }
     set_state(OperationState::FINALIZE);
     entities.push_back(this);
-    HT_DEBUG_OUT << "added " << entities.size() << " sub_ops" << HT_END;
     m_context->mml_writer->record_state(entities);
     HT_MAYBE_FAIL("recover-server-3");
     break;

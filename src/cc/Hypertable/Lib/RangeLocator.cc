@@ -637,6 +637,7 @@ int RangeLocator::read_root_location(Timer &timer) {
   DynamicBuffer value(0);
   String addr_str;
   CommAddress addr;
+  CommAddress old_addr;
 
   {
     ScopedLock lock(m_hyperspace_mutex);
@@ -652,6 +653,7 @@ int RangeLocator::read_root_location(Timer &timer) {
 
   {
     ScopedLock lock(m_mutex);
+    old_addr = m_root_range_info.addr;
     m_root_range_info.start_row  = "";
     m_root_range_info.end_row    = Key::END_ROOT_ROW;
     m_root_range_info.addr.set_proxy( (const char *)value.base );
@@ -661,6 +663,15 @@ int RangeLocator::read_root_location(Timer &timer) {
 
   if (m_conn_manager) {
     uint32_t after_remaining, remaining = timer.remaining();
+
+    /**
+     * NOTE: This block assumes that a change of root address
+     * means the old server has died.  If root changes in the
+     * future can happen even when the original root server is
+     * still alive, this will have to change.
+     */
+    if (old_addr.is_set() && old_addr != addr)
+      m_conn_manager->remove(old_addr);
 
     m_conn_manager->add(addr, m_root_metadata_retry_interval,
                         "Root RangeServer");

@@ -89,6 +89,7 @@ namespace Hypertable {
     // in mem state
     CharArena m_arena;
     RangeServerConnectionPtr m_rsc;
+    String m_subop_dependency;
     uint64_t m_hyperspace_handle;
     bool m_lock_acquired;
   };

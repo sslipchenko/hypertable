@@ -45,6 +45,19 @@ namespace Hypertable {
     CommAddress &operator=(sockaddr_in iaddr) 
       { inet = iaddr; m_type=INET; return *this; }
 
+    bool operator==(const CommAddress &other) const {
+      if (m_type != other.type())
+        return false;
+      if (m_type == PROXY)
+	return proxy.compare(other.proxy) == 0;
+      HT_ASSERT(m_type == INET);
+      return inet == other.inet;
+    }
+
+    bool operator!=(const CommAddress &other) const {
+      return !(*this == other);
+    }
+
     bool operator<(const CommAddress &other) const {
       if (m_type != other.type())
 	return m_type < other.type();
