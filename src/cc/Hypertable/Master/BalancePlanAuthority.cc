@@ -138,16 +138,13 @@ BalancePlanAuthority::copy_recovery_plan(const String &location, int type,
   HT_ASSERT(m_map.find(location) != m_map.end());
   RangeRecoveryPlanPtr plan = m_map[location].plans[type];
 
+  out.clear();
   if (plan) {
     HT_ASSERT(plan->type == type);
     out.replay_plan = plan->replay_plan;
     plan->receiver_plan.copy(out.receiver_plan);
-    out.type = plan->type;
   }
-  else {
-    out.clear();
-    out.type = type;
-  }
+  out.type = type;
 
   generation = m_generation;
 }
