@@ -49,7 +49,6 @@
 #include "Monitoring.h"
 #include "RangeServerConnection.h"
 #include "RangeServerConnectionManager.h"
-#include "RecoveryReplayCounter.h"
 #include "RecoveryStepFuture.h"
 
 namespace Hypertable {
@@ -73,10 +72,9 @@ namespace Hypertable {
 
     class RecoveryState {
       public:
-        RecoveryReplayCounterPtr create_replay_counter(int64_t id,
-            uint32_t attempt);
-
-        void erase_replay_counter(int64_t id);
+        void install_replay_future(int64_t id, RecoveryStepFuturePtr &future);
+        RecoveryStepFuturePtr get_replay_future(int64_t id);
+        void erase_replay_future(int64_t id);
 
         void install_prepare_future(int64_t id, RecoveryStepFuturePtr &future);
         RecoveryStepFuturePtr get_prepare_future(int64_t id);
@@ -89,12 +87,11 @@ namespace Hypertable {
       private:
         friend class Context;
 
-        typedef std::map<int64_t, RecoveryReplayCounterPtr> ReplayMap;
         typedef std::map<int64_t, RecoveryStepFuturePtr> FutureMap;
 
         Mutex m_mutex;
-        ReplayMap m_replay_map;
-        FutureMap  m_prepare_map;
+        FutureMap m_replay_map;
+        FutureMap m_prepare_map;
         FutureMap m_commit_map;
     };
 

@@ -52,10 +52,11 @@ namespace Hypertable {
 
   private:
     // make sure all recovery participants are available
+    bool recovery_plan_has_changed();
     bool validate_recovery_plan();
     void initialize_obstructions_dependencies();
     bool wait_for_quorum();
-    bool get_new_recovery_plan(bool check=true);
+    void get_new_recovery_plan();
     bool prepare_to_commit();
     bool replay_fragments();
     bool phantom_load_ranges();
@@ -65,12 +66,10 @@ namespace Hypertable {
 
     String m_location;
     int m_type;
-    uint32_t m_attempt;
     RangeRecoveryPlan m_plan;
     String m_type_str;
     uint32_t m_timeout;
     int m_plan_generation;
-    bool m_plan_initialized;
   };
 
   typedef intrusive_ptr<OperationRecoverRanges> OperationRecoverRangesPtr;

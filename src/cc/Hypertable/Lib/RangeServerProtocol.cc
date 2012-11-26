@@ -356,19 +356,19 @@ namespace Hypertable {
   }
 
   CommBuf *RangeServerProtocol::create_request_replay_fragments(int64_t op_id,
-          uint32_t attempt, const String &recover_location, int type,
-          const vector<uint32_t> &fragments,
+          const String &recover_location, int plan_generation,
+          int type, const vector<uint32_t> &fragments,
           const RangeRecoveryReceiverPlan &receiver_plan,
           uint32_t replay_timeout) {
     CommHeader header(COMMAND_REPLAY_FRAGMENTS);
     header.flags |= CommHeader::FLAGS_BIT_URGENT;
-    size_t len = 8 + 4 + encoded_length_vstr(recover_location) + 4 
+    size_t len = 8 + encoded_length_vstr(recover_location) + 4 + 4
         + 4 + fragments.size() * 4 + receiver_plan.encoded_length() + 4;
 
     CommBuf *cbuf = new CommBuf(header, len);
     cbuf->append_i64(op_id);
-    cbuf->append_i32(attempt);
     cbuf->append_vstr(recover_location.c_str());
+    cbuf->append_i32(plan_generation);
     cbuf->append_i32(type);
     cbuf->append_i32(fragments.size());
     for(size_t ii = 0; ii < fragments.size(); ++ii)
@@ -380,12 +380,13 @@ namespace Hypertable {
   }
 
   CommBuf *RangeServerProtocol::create_request_phantom_load(const String &location,
+          int plan_generation,
           const vector<uint32_t> &fragments,
           const vector<QualifiedRangeSpec> &specs,
           const std::vector<RangeState> &states) {
     CommHeader header(COMMAND_PHANTOM_RECEIVE);
     header.flags |= CommHeader::FLAGS_BIT_URGENT;
-    size_t len = encoded_length_vstr(location) + 4 + fragments.size() * 4;
+    size_t len = encoded_length_vstr(location) + 4 + 4 + fragments.size() * 4;
     len += 4;
     HT_ASSERT(specs.size() == states.size());
     for (size_t ii = 0; ii < specs.size(); ++ii)
@@ -393,6 +394,7 @@ namespace Hypertable {
 
     CommBuf *cbuf = new CommBuf(header, len);
     cbuf->append_vstr(location);
+    cbuf->append_i32(plan_generation);
     cbuf->append_i32(fragments.size());
     for (size_t ii = 0; ii < fragments.size(); ++ii)
       cbuf->append_i32(fragments[ii]);
@@ -405,13 +407,14 @@ namespace Hypertable {
   }
 
   CommBuf *RangeServerProtocol::create_request_phantom_update(const QualifiedRangeSpec &range,
-          const String &location, uint32_t fragment, bool more,
+          const String &location, int plan_generation, uint32_t fragment, bool more,
           StaticBuffer &buffer) {
     CommHeader header(COMMAND_PHANTOM_UPDATE);
     header.flags |= CommHeader::FLAGS_BIT_URGENT;
-    size_t len = encoded_length_vstr(location) + range.encoded_length() + 4 + 1;
+    size_t len = encoded_length_vstr(location) + 4 + range.encoded_length() + 4 + 1;
     CommBuf *cbuf = new CommBuf(header, len, buffer);
     cbuf->append_vstr(location);
+    cbuf->append_i32(plan_generation);
     range.encode(cbuf->get_data_ptr_address());
     cbuf->append_i32(fragment);
     cbuf->append_bool(more);
@@ -419,23 +422,24 @@ namespace Hypertable {
   }
 
   CommBuf *RangeServerProtocol::create_request_phantom_prepare_ranges(int64_t op_id,
-          const String &location, const vector<QualifiedRangeSpec> &ranges) {
+          const String &location, int plan_generation, 
+          const vector<QualifiedRangeSpec> &ranges) {
     return create_request_phantom_ranges(COMMAND_PHANTOM_PREPARE_RANGES,
-            op_id, location, ranges);
+            op_id, location, plan_generation, ranges);
   }
 
   CommBuf *RangeServerProtocol::create_request_phantom_commit_ranges(int64_t op_id,
-          const String &location, const vector<QualifiedRangeSpec> &ranges) {
+          const String &location, int plan_generation, const vector<QualifiedRangeSpec> &ranges) {
     return create_request_phantom_ranges(COMMAND_PHANTOM_COMMIT_RANGES,
-            op_id, location, ranges);
+            op_id, location, plan_generation, ranges);
   }
 
   CommBuf *RangeServerProtocol::create_request_phantom_ranges(uint64_t cmd_id,
-          int64_t op_id, const String &location,
+          int64_t op_id, const String &location, int plan_generation,
           const vector<QualifiedRangeSpec> &ranges) {
     CommHeader header(cmd_id);
     header.flags |= CommHeader::FLAGS_BIT_URGENT;
-    size_t len = 8 + encoded_length_vstr(location);
+    size_t len = 8 + encoded_length_vstr(location) + 4;
     for (size_t ii = 0; ii < ranges.size(); ++ii)
       len += ranges[ii].encoded_length();
     len += 4;
@@ -443,6 +447,7 @@ namespace Hypertable {
     CommBuf *cbuf = new CommBuf(header, len);
     cbuf->append_i64(op_id);
     cbuf->append_vstr(location);
+    cbuf->append_i32(plan_generation);
     cbuf->append_i32(ranges.size());
     for(size_t ii = 0; ii < ranges.size(); ++ii)
       ranges[ii].encode(cbuf->get_data_ptr_address());

@@ -557,16 +557,16 @@ namespace Hypertable {
     /** Issues a synchronous "replay_fragments" request.
      * @param addr address of RangeServer
      * @param op_id id of the calling recovery operation
-     * @param attempt id of the replay attempt -- needed in case of master failure
      * @param recover_location location of the server being recovered
+     * @param plan_generation recovery plan generation
      * @param type type of fragments to play
      * @param fragments fragments being requested for replay
      * @param receiver_plan recovery receiver plan
      * @param replay_timeout timeout for replay to finish
      */
-    void replay_fragments(const CommAddress &addr, int64_t op_id, uint32_t attempt,
-                          const String &recover_location, int type,
-                          const vector<uint32_t> &fragments,
+    void replay_fragments(const CommAddress &addr, int64_t op_id,
+                          const String &recover_location, int plan_generation,
+                          int type, const vector<uint32_t> &fragments,
                           const RangeRecoveryReceiverPlan &plan,
                           uint32_t replay_timeout);
 
@@ -574,11 +574,13 @@ namespace Hypertable {
      *
      * @param addr address of RangeServer
      * @param location location of server being recovered
+     * @param plan_generation recovery plan generation
      * @param fragments fragments being replayed
      * @param specs range specs to be loaded
      * @param states parallel range states array
      */
     void phantom_load(const CommAddress &addr, const String &location,
+                      int plan_generation,
                       const vector<uint32_t> &fragments,
                       const vector<QualifiedRangeSpec> &specs,
                       const vector<RangeState> &states);
@@ -587,6 +589,7 @@ namespace Hypertable {
      *
      * @param addr address of RangeServer
      * @param location location being recovered
+     * @param plan_generation recovery plan generation
      * @param range range
      * @param fragment fragment_id
      * @param more indicates whether thes fragment is complete or not
@@ -594,7 +597,7 @@ namespace Hypertable {
      * @param handler handler
      */
     void phantom_update(const CommAddress &addr, const String &location,
-                        const QualifiedRangeSpec &range,
+                        int plan_generation, const QualifiedRangeSpec &range,
                         uint32_t fragment, bool more, StaticBuffer &updates,
                         DispatchHandler *handler);
 
@@ -603,11 +606,12 @@ namespace Hypertable {
      * @param addr address of RangeServer
      * @param op_id ID of Master recovery operation 
      * @param location location of server being recovered
+     * @param plan_generation recovery plan generation
      * @param ranges range specs to be prepared
      * @param timeout timeout
      */
     void phantom_prepare_ranges(const CommAddress &addr, int64_t op_id,
-                                const String &location,
+                                const String &location, int plan_generation,
                                 const vector<QualifiedRangeSpec> &ranges,
                                 uint32_t timeout);
 
@@ -616,11 +620,12 @@ namespace Hypertable {
      * @param addr address of RangeServer
      * @param op_id ID of Master recovery operation 
      * @param location location of server being recovered
+     * @param plan_generation recovery plan generation
      * @param ranges range specs to be committed
      * @param timeout timeout
      */
     void phantom_commit_ranges(const CommAddress &addr, int64_t op_id,
-                               const String &location,
+                               const String &location, int plan_generation,
                                const vector<QualifiedRangeSpec> &ranges,
                                uint32_t timeout);
 

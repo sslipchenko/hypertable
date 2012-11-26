@@ -43,6 +43,7 @@ void RequestHandlerPhantomUpdate::run() {
   vector<uint32_t> fragments;
   vector<QualifiedRangeSpecManaged> ranges;
   QualifiedRangeSpec range;
+  int plan_generation;
   uint32_t fragment;
   bool more;
 
@@ -52,12 +53,13 @@ void RequestHandlerPhantomUpdate::run() {
   size_t decode_remain = m_event_ptr->payload_len;
   try {
     location = Serialization::decode_vstr(&decode_ptr, &decode_remain);
+    plan_generation = Serialization::decode_i32(&decode_ptr, &decode_remain);
     range.decode(&decode_ptr, &decode_remain);
     fragment = Serialization::decode_i32(&decode_ptr, &decode_remain);
     more = Serialization::decode_bool(&decode_ptr, &decode_remain);
     cb.initialize(range, fragment);
-    m_range_server->phantom_update(&cb, location, range, fragment, more, 
-            m_event_ptr);
+    m_range_server->phantom_update(&cb, location, plan_generation, 
+         range, fragment, more, m_event_ptr);
   }
   catch (Exception &e) {
     HT_ERROR_OUT << e << HT_END;

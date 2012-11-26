@@ -27,7 +27,6 @@
 #include "Operation.h"
 #include "OperationRecover.h"
 #include "ReferenceManager.h"
-#include "RecoveryReplayCounter.h"
 #include "BalancePlanAuthority.h"
 
 using namespace Hypertable;
@@ -84,53 +83,30 @@ BalancePlanAuthority *Context::get_balance_plan_authority() {
 }
 
 void Context::replay_complete(EventPtr &event) {
-  int64_t id;
-  uint32_t attempt, fragment;
-  map<uint32_t, int> error_map;
   const uint8_t *decode_ptr = event->payload;
   size_t decode_remain = event->payload_len;
-  int nn, error;
-  bool success;
 
-  id       = Serialization::decode_i64(&decode_ptr, &decode_remain);
-  attempt  = Serialization::decode_i32(&decode_ptr, &decode_remain);
-  nn       = Serialization::decode_i32(&decode_ptr, &decode_remain);
+  int64_t id       = Serialization::decode_i64(&decode_ptr, &decode_remain);
+  String location  = Serialization::decode_vstr(&decode_ptr, &decode_remain);
+  int plan_generation = Serialization::decode_i32(&decode_ptr, &decode_remain);
+  int32_t error    = Serialization::decode_i32(&decode_ptr, &decode_remain);
+  String error_msg = Serialization::decode_vstr(&decode_ptr, &decode_remain);
 
-  HT_DEBUG_OUT << "Received replay_complete for op_id=" << id << " attempt="
-      << attempt << " num_ranges=" << nn << " from " << event->proxy << HT_END;
+  HT_INFOF("replay_complete(id=%lld, %s, plan_generation=%d) = %s",
+           (Lld)id, location.c_str(), plan_generation, Error::get_text(error));
 
-  for (int ii = 0; ii < nn; ++ii) {
-    fragment = Serialization::decode_i32(&decode_ptr, &decode_remain);
-    error    = Serialization::decode_i32(&decode_ptr, &decode_remain);
-    error_map[fragment] = error;
+  RecoveryStepFuturePtr future = m_recovery_state.get_replay_future(id);
+
+  if (future) {
+    if (error == Error::OK)
+      future->success(event->proxy, plan_generation);
+    else
+      future->failure(event->proxy, plan_generation, error, error_msg);
   }
-  success  = Serialization::decode_bool(&decode_ptr, &decode_remain);
+  else
+    HT_WARN_OUT << "No Recovery replay step future found for operation=" << id << HT_END;
 
-  {
-    ScopedLock lock(m_recovery_state.m_mutex);
-    RecoveryState::ReplayMap::iterator it = m_recovery_state.m_replay_map.find(id);
-    RecoveryReplayCounterPtr replay_counter;
-    if (it != m_recovery_state.m_replay_map.end()) {
-      replay_counter = it->second;
-      if (!replay_counter->complete(attempt, success, error_map)) {
-        HT_WARN_OUT << "non-pending player complete message received for "
-            "operation=" << id << " attempt=" << attempt << HT_END;
-      }
-    }
-    else {
-      HT_WARN_OUT << "No RecoveryReplayCounter found for operation="
-          << id << " attempt=" << attempt << HT_END;
-    }
-
-    // if there were any corrupt fragments then notify the admin
-    bool notify = replay_counter->has_errors();
-    RecoveryReplayCounter::ErrorMap errors = replay_counter->get_errors();
-    if (HT_FAILURE_SIGNALLED("bad-log-fragments-1")
-        && !replay_counter->has_errors()) {
-      errors[1] = Error::BAD_SCHEMA;
-      errors[2] = Error::BLOCK_COMPRESSOR_DEFLATE_ERROR;
-      notify = true;
-    }
+    /**
     if (notify) {
       String msg;
       msg = 
@@ -156,8 +132,9 @@ void Context::replay_complete(EventPtr &event) {
     }
   }
 
-  HT_DEBUG_OUT << "Exitting replay_complete for op_id=" << id << " attempt="
-      << attempt << " num_ranges=" << nn << " from " << event->proxy << HT_END;
+  HT_DEBUG_OUT << "Exitting replay_complete for op_id=" << id << " plan_generation="
+               << plan_generation << " num_ranges=" << nn << " from " << event->proxy << HT_END;
+    */
 }
 
 void Context::prepare_complete(EventPtr &event) {
@@ -166,22 +143,21 @@ void Context::prepare_complete(EventPtr &event) {
 
   int64_t id       = Serialization::decode_i64(&decode_ptr, &decode_remain);
   String location  = Serialization::decode_vstr(&decode_ptr, &decode_remain);
+  int plan_generation = Serialization::decode_i32(&decode_ptr, &decode_remain);
   int32_t error    = Serialization::decode_i32(&decode_ptr, &decode_remain);
   String error_msg = Serialization::decode_vstr(&decode_ptr, &decode_remain);
 
-  HT_INFOF("prepare_complete(%lld, %s) = %s", (Lld)id, location.c_str(), Error::get_text(error));
-
-  if (error != Error::OK) {
-    HT_WARN_OUT << "prepare_complete(" << id << ", " << location << ") received from " << event->proxy
-                << " reports error " << Error::get_text(error) << " (" << error_msg << ")" << HT_END;
-    // TODO: Notify administrator
-    return;
-  }
+  HT_INFOF("prepare_complete(id=%lld, %s, plan_generation=%d) = %s",
+           (Lld)id, location.c_str(), plan_generation, Error::get_text(error));
 
   RecoveryStepFuturePtr future = m_recovery_state.get_prepare_future(id);
 
-  if (future)
-    future->success(event->proxy);
+  if (future) {
+    if (error == Error::OK)
+      future->success(event->proxy, plan_generation);
+    else
+      future->failure(event->proxy, plan_generation, error, error_msg);
+  }
   else
     HT_WARN_OUT << "No Recovery prepare step future found for operation=" << id << HT_END;
 
@@ -194,20 +170,21 @@ void Context::commit_complete(EventPtr &event) {
 
   int64_t id       = Serialization::decode_i64(&decode_ptr, &decode_remain);
   String location  = Serialization::decode_vstr(&decode_ptr, &decode_remain);
+  int plan_generation = Serialization::decode_i32(&decode_ptr, &decode_remain);
   int32_t error    = Serialization::decode_i32(&decode_ptr, &decode_remain);
   String error_msg = Serialization::decode_vstr(&decode_ptr, &decode_remain);
 
-  if (error != Error::OK) {
-    HT_WARN_OUT << "commit_complete(" << id << ", " << location << ") received from " << event->proxy
-                << " reports error " << Error::get_text(error) << " (" << error_msg << ")" << HT_END;
-    // TODO: Notify administrator
-    return;
-  }
+  HT_INFOF("commit_complete(id=%lld, %s, plan_generation=%d) = %s",
+           (Lld)id, location.c_str(), plan_generation, Error::get_text(error));
 
   RecoveryStepFuturePtr future = m_recovery_state.get_commit_future(id);
 
-  if (future)
-    future->success(event->proxy);
+  if (future) {
+    if (error == Error::OK)
+      future->success(event->proxy, plan_generation);
+    else
+      future->failure(event->proxy, plan_generation, error, error_msg);
+  }
   else
     HT_WARN_OUT << "No Recovery commit step future found for operation=" << id << HT_END;
 
@@ -245,33 +222,35 @@ bool Context::can_accept_ranges(const RangeServerStatistics &stats)
   return false;
 }
 
-RecoveryReplayCounterPtr
-Context::RecoveryState::create_replay_counter(int64_t id, uint32_t attempt)
-{
+
+void
+Context::RecoveryState::install_replay_future(int64_t id,
+                                               RecoveryStepFuturePtr &future) {
   ScopedLock lock(m_mutex);
-
-  RecoveryReplayCounterPtr counter = new RecoveryReplayCounter(attempt);
-
-  if (m_replay_map.find(id) != m_replay_map.end())
-    m_replay_map.erase(id);
-
-  m_replay_map.insert(make_pair(id, counter));
-  return counter;
+  m_replay_map[id] = future;
 }
 
-void 
-Context::RecoveryState::erase_replay_counter(int64_t id)
-{
+RecoveryStepFuturePtr
+Context::RecoveryState::get_replay_future(int64_t id) {
+  ScopedLock lock(m_mutex);
+  RecoveryStepFuturePtr future;
+  if (m_replay_map.find(id) != m_replay_map.end())
+    future = m_replay_map[id];
+  return future;
+}
+
+void
+Context::RecoveryState::erase_replay_future(int64_t id) {
   ScopedLock lock(m_mutex);
   m_replay_map.erase(id);
 }
+
 
 void
 Context::RecoveryState::install_prepare_future(int64_t id,
                                                RecoveryStepFuturePtr &future) {
   ScopedLock lock(m_mutex);
-  HT_ASSERT(m_prepare_map.find(id) == m_prepare_map.end());
-  m_prepare_map.insert(make_pair(id, future));    
+  m_prepare_map[id] = future;
 }
 
 RecoveryStepFuturePtr
@@ -294,8 +273,7 @@ void
 Context::RecoveryState::install_commit_future(int64_t id,
                                                RecoveryStepFuturePtr &future) {
   ScopedLock lock(m_mutex);
-  HT_ASSERT(m_commit_map.find(id) == m_commit_map.end());
-  m_commit_map.insert(make_pair(id, future));    
+  m_commit_map[id] = future;
 }
 
 RecoveryStepFuturePtr

@@ -3530,12 +3530,12 @@ RangeServer::relinquish_range(ResponseCallback *cb,
 }
 
 void RangeServer::replay_fragments(ResponseCallback *cb, int64_t op_id,
-        uint32_t attempt, const String &location, int type,
-        const vector<uint32_t> &fragments,
+        const String &location, int plan_generation, 
+        int type, const vector<uint32_t> &fragments,
         RangeRecoveryReceiverPlan &receiver_plan,
         uint32_t replay_timeout) {
-  HT_INFO_OUT << "replay_fragments location=" << location << ", attempt="
-      << attempt << ", num_fragments=" << fragments.size() << HT_END;
+  HT_INFO_OUT << "replay_fragments location=" << location << ", plan_generation="
+      << plan_generation << ", num_fragments=" << fragments.size() << HT_END;
 
   CommitLogReaderPtr log_reader;
   String log_dir = Global::toplevel_dir + "/servers/" + location + "/log/" +
@@ -3546,8 +3546,10 @@ void RangeServer::replay_fragments(ResponseCallback *cb, int64_t op_id,
       return;
   }
 
-  HT_INFO_OUT << "replay_fragments() start replaying " << fragments.size()
-      <<  " fragments from " << log_dir << HT_END;
+  HT_INFOF("replay_fragments(id=%lld, %s, plan_generation=%d, num_fragments=%d)",
+           (Lld)op_id, location.c_str(), plan_generation, (int)fragments.size());
+
+  cb->response_ok();
 
   try {
     log_reader = new CommitLogReader(Global::log_dfs, log_dir, fragments);
@@ -3561,123 +3563,123 @@ void RangeServer::replay_fragments(ResponseCallback *cb, int64_t op_id,
       m_conn_manager->add(addr, timeout_ms, "RangeServer");
       if (!m_conn_manager->wait_for_connection(addr, timer.remaining())) {
         if (timer.expired())
-          HT_THROW_(Error::REQUEST_TIMEOUT);
+          HT_THROWF(Error::REQUEST_TIMEOUT, "Problem connecting to %s", receiver.c_str());
       }
     }
+
+    BlockCompressionHeaderCommitLog header;
+    uint8_t *base;
+    size_t len;
+    TableIdentifier table_id;
+    const uint8_t *ptr, *end;
+    SerializedKey key;
+    ByteString value;
+    uint32_t block_count = 0;
+    uint32_t fragment_id;
+    uint32_t last_fragment_id;
+    bool started = false;
+    ReplayBuffer replay_buffer(m_props, m_comm, receiver_plan, location, plan_generation);
+    size_t num_kv_pairs=0;
+
+    try {
+
+      while (log_reader->next((const uint8_t **)&base, &len, &header)) {
+        fragment_id = log_reader->last_fragment_id();
+        if (!started) {
+          started = true;
+          last_fragment_id = fragment_id;
+          replay_buffer.set_current_fragment(fragment_id);
+        }
+        else if (fragment_id != last_fragment_id) {
+          replay_buffer.finish_fragment();
+          last_fragment_id = fragment_id;
+          num_kv_pairs = 0;
+          replay_buffer.set_current_fragment(fragment_id);
+        }
+
+        ptr = base;
+        end = base + len;
+
+        table_id.decode(&ptr, &len);
+
+        while (ptr < end) {
+          // extract the key
+          key.ptr = ptr;
+          ptr += key.length();
+          if (ptr > end)
+            HT_THROW(Error::RANGESERVER_CORRUPT_COMMIT_LOG, "Problem decoding key");
+          // extract the value
+          value.ptr = ptr;
+          ptr += value.length();
+          if (ptr > end)
+            HT_THROW(Error::RANGESERVER_CORRUPT_COMMIT_LOG, "Problem decoding value");
+          ++num_kv_pairs;
+          replay_buffer.add(table_id, key, value);
+        }
+        block_count++;
+      }
+
+      HT_MAYBE_FAIL_X("replay-fragments-user-0", type==RangeSpec::USER);
+
+    }
+    catch (Exception &e){
+      HT_ERROR_OUT << log_reader->last_fragment_fname() << ": " << e << HT_END;
+      HT_THROWF(e.code(), "%s: %s", log_reader->last_fragment_fname().c_str(), e.what());
+    }
+
+    HT_MAYBE_FAIL("replay-fragments-1");
+    HT_MAYBE_FAIL_X("replay-fragments-user-1", type==RangeSpec::USER);
+
+    replay_buffer.finish_fragment();
+
+    HT_INFO_OUT << "Finished playing " << fragments.size() << " fragments from "
+                << log_dir << HT_END;
+
   }
   catch (Exception &e) {
-    HT_ERROR_OUT << "Unable to replay log " << log_dir << "-"
-        << e.what() << HT_END;
-    cb->error(e.code(), log_dir.c_str());
+    HT_ERROR_OUT << e << HT_END;
+    try {
+      m_master_client->replay_complete(op_id, location, plan_generation,
+                                       e.code(), e.what());
+    }
+    catch (Exception &ee) {
+      HT_ERROR_OUT << ee << HT_END;
+    }
     return;
   }
-  cb->response_ok();
-
-  BlockCompressionHeaderCommitLog header;
-  uint8_t *base;
-  size_t len;
-  TableIdentifier table_id;
-  const uint8_t *ptr, *end;
-  SerializedKey key;
-  ByteString value;
-  uint32_t block_count = 0;
-  uint32_t fragment_id;
-  uint32_t last_fragment_id;
-  bool started = false;
-  ReplayBuffer replay_buffer(m_props, m_comm, receiver_plan, location);
-  size_t num_kv_pairs=0;
-
-  while (log_reader->next((const uint8_t **)&base, &len, &header)) {
-    fragment_id = log_reader->get_current_fragment_id();
-    if (!started) {
-      started = true;
-      last_fragment_id = fragment_id;
-      replay_buffer.set_current_fragment(fragment_id);
-    }
-    else if (fragment_id != last_fragment_id) {
-      replay_buffer.finish_fragment();
-      last_fragment_id = fragment_id;
-      num_kv_pairs = 0;
-      replay_buffer.set_current_fragment(fragment_id);
-    }
-
-    ptr = base;
-    end = base + len;
-
-    table_id.decode(&ptr, &len);
-
-    while (ptr < end) {
-      // extract the key
-      key.ptr = ptr;
-      ptr += key.length();
-      if (ptr > end)
-        HT_FATAL_OUT << "Problem decoding key" << HT_END;
-      // extract the value
-      value.ptr = ptr;
-      ptr += value.length();
-      if (ptr > end)
-        HT_FATAL_OUT << "Problem decoding value" << HT_END;
-      ++num_kv_pairs;
-      replay_buffer.add(table_id, key, value);
-    }
-    block_count++;
-  }
-
-  HT_MAYBE_FAIL("replay-fragments-1");
-  HT_MAYBE_FAIL_X("replay-fragments-user-1", type==RangeSpec::USER);
-
-  replay_buffer.finish_fragment();
-  HT_DEBUG_OUT << "replayed " << num_kv_pairs << " k/v pairs from fragment "
-      << last_fragment_id << " in " << log_dir << HT_END;
-  HT_INFO_OUT << "Finished playing " << fragments.size() << " fragments from "
-      << log_dir << HT_END;
 
   HT_MAYBE_FAIL("replay-fragments-2");
 
-  // now call into master and tell it we are done
-  // for now error map is all ok (master will redo from scratch in case of any
-  // failures and receiving rangeservers should fail hard)
-  map<uint32_t, uint32_t> log_error_map = log_reader->get_error_map();
-  map<uint32_t, int> error_map;
-  foreach_ht (uint32_t fragment, fragments)
-    if (log_error_map.find(fragment) != log_error_map.end())
-      error_map[fragment] = log_error_map[fragment];
-    else
-      error_map[fragment] = Error::OK;
   try {
-    m_master_client->replay_complete(op_id, type, location, attempt, true,
-            error_map);
+    m_master_client->replay_complete(op_id, location, plan_generation,
+                                     Error::OK, "");
   }
   catch (Exception &e){
     HT_ERROR_OUT << "Unable to call player_complete on master for op_id="
         << op_id << ", type=" << type << ", location=" << location
-        << ", attempt=" << attempt << ", num_fragments=" << fragments.size()
-        << " - " << e << HT_END;
+        << ", plan_generation=" << plan_generation << ", num_fragments="
+                 << fragments.size() << " - " << e << HT_END;
   }
 }
 
 void RangeServer::phantom_load(ResponseCallback *cb, const String &location,
+        int plan_generation,
         const vector<uint32_t> &fragments,
         const vector<QualifiedRangeSpec> &specs,
         const vector<RangeState> &states) {
-  PhantomRangePtr phantom_range;
   TableInfoPtr table_info;
   SchemaPtr schema;
   FailoverPhantomRangeMap::iterator failover_map_it;
   PhantomRangeMapPtr phantom_range_map;
-  TableInfoMapPtr phantom_map;
+  TableInfoMapPtr phantom_tableinfo_map;
 
-  HT_INFO_OUT << "phantom_load location=" << location << ", num_fragments="
-      << fragments.size() << ", num_ranges=" << specs.size() << HT_END;
+  HT_INFO_OUT << "phantom_load location=" << location << ", plan_generation="
+              << plan_generation << ", num_fragments=" << fragments.size()
+              << ", num_ranges=" << specs.size() << HT_END;
 
   if (!m_replay_finished) {
     if (!wait_for_recovery_finish(cb->get_event()->expiration_time()))
       return;
-  }
-
-  if (already_live(specs)) {
-    cb->error(Error::RANGESERVER_RANGES_ALREADY_LIVE, "");
-    return;
   }
 
   HT_ASSERT(!specs.empty());
@@ -3688,67 +3690,71 @@ void RangeServer::phantom_load(ResponseCallback *cb, const String &location,
     ScopedLock lock(m_failover_mutex);
     failover_map_it = m_failover_map.find(location);
     if (failover_map_it == m_failover_map.end()) {
-      phantom_range_map = new PhantomRangeMap();
-      m_failover_map.insert(make_pair(location, phantom_range_map));
+      phantom_range_map = new PhantomRangeMap(plan_generation);
+      m_failover_map[location] = phantom_range_map;
     }
     else
       phantom_range_map = failover_map_it->second;
-    phantom_map = phantom_range_map->get_tableinfo_map();
   }
 
-  phantom_range_map->load_start();
+  {
+    Locker<PhantomRangeMap> lock(*phantom_range_map);
 
-  HT_ON_SCOPE_EXIT(&Hypertable::call_load_finish, phantom_range_map);
+    // check for out-of-order phantom_load requests
+    if (plan_generation < phantom_range_map->get_plan_generation())
+      return;
 
-  try {
-
-    for (size_t i=0; i<specs.size(); i++) {
-      const QualifiedRangeSpec &spec = specs[i];
-      const RangeState &state = states[i];
-
-      // XXX: TODO: deal with dropped tables
-      //if (m_dropped_table_id_cache->contains(range.qualified_range.table.id)) {
-      //  HT_WARNF("Table %s has been dropped", range.qualified_range.table.id);
-      //  cb->error(Error::RANGESERVER_TABLE_DROPPED, range.qualified_range.table.id);
-      //  return;
-      //}
-      // Get TableInfo, create if doesn't exist
-      if (!phantom_map->get(spec.table.id, table_info)) {
-        table_info = new TableInfo(m_master_client,
-                                   &(spec.table), schema);
-
-        // Verify schema, this will create the Schema object and add it to
-        // table_info if it doesn't exist
-        try {
-          verify_schema(table_info, spec.table.generation);
-        }
-        catch (Hypertable::Exception &e) {
-          String errstr = String("Unable to verify schema for ") +
-              spec.table.id + e.what();
-          HT_WARN(errstr.c_str());
-          cb->error(e.code(), errstr);
-          return;
-        }
-
-        phantom_map->set(spec.table.id, table_info);
-      }
-
-      SchemaPtr schema = table_info->get_schema();
-      phantom_range_map->get(spec, state, schema, fragments, phantom_range);
-
-      // This check doesn't seem necessary, purge_incomplete_fragments
-      // should have no effect if the state is RANGE_PREPARED.  We should
-      // add an assert in the beginning of phantom_prepare_ranges() to
-      // verify that this is the case and then drop this check
-      if (phantom_range->get_state() != PhantomRange::RANGE_PREPARED)
-        phantom_range->purge_incomplete_fragments();
+    if (plan_generation > phantom_range_map->get_plan_generation())
+      phantom_range_map->reset(plan_generation);
+    else if (phantom_range_map->loaded()) {
+      cb->response_ok();
+      return;
     }
 
-  }
-  catch (Exception &e) {
-    HT_ERRORF("Phantom receive failed '%s'", e.what());
-    cb->error(e.code(), e.what());
-    return;
+    phantom_tableinfo_map = phantom_range_map->get_tableinfo_map();
+
+    try {
+      for (size_t i=0; i<specs.size(); i++) {
+        const QualifiedRangeSpec &spec = specs[i];
+        const RangeState &state = states[i];
+
+        // XXX: TODO: deal with dropped tables
+        //if (m_dropped_table_id_cache->contains(range.qualified_range.table.id)) {
+        //  HT_WARNF("Table %s has been dropped", range.qualified_range.table.id);
+        //  cb->error(Error::RANGESERVER_TABLE_DROPPED, range.qualified_range.table.id);
+        //  return;
+        //}
+        // Get TableInfo, create if doesn't exist
+        if (!phantom_tableinfo_map->get(spec.table.id, table_info)) {
+          table_info = new TableInfo(m_master_client, &(spec.table), schema);
+
+          // Verify schema, this will create the Schema object and add it to
+          // table_info if it doesn't exist
+          try {
+            verify_schema(table_info, spec.table.generation);
+          }
+          catch (Hypertable::Exception &e) {
+            String errstr = String("Unable to verify schema for ") +
+              spec.table.id + e.what();
+            HT_WARN(errstr.c_str());
+            cb->error(e.code(), errstr);
+            return;
+          }
+
+          phantom_tableinfo_map->set(spec.table.id, table_info);
+        }
+
+        SchemaPtr schema = table_info->get_schema();
+        phantom_range_map->insert(spec, state, schema, fragments);
+      }
+    }
+    catch (Exception &e) {
+      HT_ERRORF("Phantom receive failed '%s'", e.what());
+      cb->error(e.code(), e.what());
+      return;
+    }
+
+    phantom_range_map->set_loaded();
   }
 
   HT_MAYBE_FAIL_X("phantom-load-user-2", specs[0].table.is_user());
@@ -3757,8 +3763,8 @@ void RangeServer::phantom_load(ResponseCallback *cb, const String &location,
 }
 
 void RangeServer::phantom_update(ResponseCallbackPhantomUpdate *cb,
-        const String &location, QualifiedRangeSpec &range, uint32_t fragment,
-        bool more, EventPtr &event) {
+        const String &location, int plan_generation, QualifiedRangeSpec &range,
+        uint32_t fragment, bool more, EventPtr &event) {
   HT_INFO_OUT << "phantom_update location=" << location << ", fragment="
       << fragment << ", more=" << more << " event=" << std::hex
       << event.get() << HT_END;
@@ -3768,32 +3774,50 @@ void RangeServer::phantom_update(ResponseCallbackPhantomUpdate *cb,
   PhantomRangePtr phantom_range;
 
   {
-    // make sure we're ready to receive data for this recovery
     ScopedLock lock(m_failover_mutex);
     failover_map_it = m_failover_map.find(location);
     if (failover_map_it == m_failover_map.end()) {
-      HT_THROW(Error::RANGESERVER_INVALID_RECOVERY,
-              (String)"no phantom range map found for recovery of " + location);
+      HT_THROW(Error::RANGESERVER_PHANTOM_RANGE_MAP_NOT_FOUND,
+               "no phantom range map found for recovery of " + location);
     }
     phantom_range_map = failover_map_it->second;
   }
 
-  phantom_range_map->get(range, phantom_range);
-  HT_ASSERT(phantom_range.get());
-  if (!phantom_range->add(fragment, more, event)) {
-    String msg = format("fragment %d completely received for range "
-            "%s[%s..%s]", fragment, range.table.id, range.range.start_row,
-            range.range.end_row);
-    HT_INFO_OUT << msg << HT_END;
-    cb->error(Error::RANGESERVER_FRAGMENT_ALREADY_PROCESSED, msg);
-    return;
+  {
+    Locker<PhantomRangeMap> lock(*phantom_range_map);
+
+    // verify plan generation
+    if (plan_generation != phantom_range_map->get_plan_generation())
+      HT_THROWF(Error::RANGESERVER_RECOVERY_PLAN_GENERATION_MISMATCH,
+                "supplied = %d, installed == %d", plan_generation,
+                phantom_range_map->get_plan_generation());
+
+    if (phantom_range_map->replayed()) {
+      cb->response_ok();
+      return;
+    }
+
+    HT_ASSERT(phantom_range_map->loaded());
+
+    phantom_range_map->get(range, phantom_range);
+    HT_ASSERT(phantom_range.get());
+    if (!phantom_range->add(fragment, more, event)) {
+      String msg = format("fragment %d completely received for range "
+                          "%s[%s..%s]", fragment, range.table.id, range.range.start_row,
+                          range.range.end_row);
+      HT_INFO_OUT << msg << HT_END;
+      cb->error(Error::RANGESERVER_FRAGMENT_ALREADY_PROCESSED, msg);
+      return;
+    }
+
   }
 
   cb->response_ok();
 }
 
 void RangeServer::phantom_prepare_ranges(ResponseCallback *cb, int64_t op_id,
-        const String &location, const vector<QualifiedRangeSpec> &specs) {
+        const String &location, int plan_generation, 
+        const vector<QualifiedRangeSpec> &specs) {
   FailoverPhantomRangeMap::iterator failover_map_it;
   TableInfoMapPtr phantom_map;
   PhantomRangeMapPtr phantom_range_map;
@@ -3804,7 +3828,8 @@ void RangeServer::phantom_prepare_ranges(ResponseCallback *cb, int64_t op_id,
   root_log_exists = metadata_log_exists = system_log_exists = false;
 
   HT_INFO_OUT << "phantom_prepare_ranges op_id=" << op_id << " location="
-        << location << ", num ranges=" << specs.size() << HT_END;
+              << location << ", plan_generation=" << plan_generation
+              << ", num ranges=" << specs.size() << HT_END;
 
   if (!m_replay_finished) {
     if (!wait_for_recovery_finish(cb->get_event()->expiration_time()))
@@ -3813,24 +3838,15 @@ void RangeServer::phantom_prepare_ranges(ResponseCallback *cb, int64_t op_id,
 
   cb->response_ok();
 
-  if (already_live(specs)) {
-    try {
-      m_master_client->phantom_prepare_complete(op_id, location, Error::OK, "");
-    }
-    catch (Exception &e) {
-      HT_ERROR_OUT << e << HT_END;
-    }
-    return;
-  }
-
   {
-    // make sure we have data for this recovery op
     ScopedLock lock(m_failover_mutex);
     failover_map_it = m_failover_map.find(location);
     if (failover_map_it == m_failover_map.end()) {
       try {
-        m_master_client->phantom_prepare_complete(op_id, location,
-                    Error::RANGESERVER_PHANTOM_RANGE_MAP_NOT_FOUND, "");
+        String msg = format("No phantom map found for %s", location.c_str());
+        HT_INFO_OUT << msg << HT_END;
+        m_master_client->phantom_prepare_complete(op_id, location, plan_generation,
+                              Error::RANGESERVER_PHANTOM_RANGE_MAP_NOT_FOUND, msg);
       }
       catch (Exception &e) {
         HT_ERROR_OUT << e << HT_END;
@@ -3840,202 +3856,200 @@ void RangeServer::phantom_prepare_ranges(ResponseCallback *cb, int64_t op_id,
     phantom_range_map = failover_map_it->second;
   }
 
-  phantom_map = phantom_range_map->get_tableinfo_map();
+  try {
+    Locker<PhantomRangeMap> lock(*phantom_range_map);
 
-  if (phantom_range_map->prepare_start()) {
-
-    try {
-
-      foreach_ht(const QualifiedRangeSpec &rr, specs) {
-        phantom_table_info = 0;
-        HT_ASSERT(phantom_map->get(rr.table.id, phantom_table_info)
-                  && phantom_table_info);
-        TableInfoPtr table_info;
-        m_live_map->get(rr.table.id, table_info);
-        if (!table_info) {
-          SchemaPtr schema = phantom_table_info->get_schema();
-          table_info = new TableInfo(m_master_client, &rr.table, schema);
-          m_live_map->set(rr.table.id, table_info);
-        }
-        //HT_DEBUG_OUT << "Creating Range object for range " << rr << HT_END;
-        // create a real range and its transfer log
-        phantom_range_map->get(rr, phantom_range);
-        HT_ASSERT(phantom_range.get());
-
-        if (!Global::metadata_table) {
-          ScopedLock lock(m_mutex);
-          // TODO double-check locking (works fine on x86 and amd64 but may fail
-          // on other archs without using a memory barrier
-          if (!Global::metadata_table)
-            Global::metadata_table = new Table(m_props, m_conn_manager,
-                                               Global::hyperspace, m_namemap,
-                                               TableIdentifier::METADATA_NAME);
-        }
-
-        // if we're about to move a root range: make sure that the location
-        // of the metadata-table is updated
-        if (rr.table.is_metadata()) {
-          Global::metadata_table->get_range_locator()->invalidate(&rr.table,
-                                                                  Key::END_ROOT_ROW);
-          Global::metadata_table->get_range_locator()->set_root_stale();
-        }
-
-        phantom_range->create_range(m_master_client, table_info,
-                                    Global::log_dfs, Global::log_dir);
-        HT_DEBUG_OUT << "Range object created for range " << rr << HT_END;
-      }
-
-      CommitLog *log;
-      foreach_ht(const QualifiedRangeSpec &rr, specs) {
-        phantom_range_map->get(rr, phantom_range);
-        HT_ASSERT(phantom_range.get());
-        bool is_empty = true;
-
-        // If already staged, continue with next range
-        if (phantom_range->staged())
-          continue;
-
-        phantom_range->populate_range_and_log(Global::log_dfs,
-                                              Global::log_dir, &is_empty);
-
-        HT_MAYBE_FAIL_X("phantom-prepare-ranges-user-1", rr.table.is_user());
-
-        HT_DEBUG_OUT << "populated range and log for range " << rr << HT_END;
-
-        RangePtr range = phantom_range->get_range();
-        {
-          CommitLogReaderPtr log_reader;
-          if (rr.is_root()) {
-            if (!root_log_exists){
-              ScopedLock lock(m_drop_table_mutex);
-              if (!Global::root_log) {
-                Global::log_dfs->mkdirs(Global::log_dir + "/root");
-                Global::root_log = new CommitLog(Global::log_dfs,
-                                                 Global::log_dir + "/root", m_props);
-                root_log_exists = true;
-              }
-            }
-            log = Global::root_log;
-          }
-          else if (rr.table.is_metadata()) {
-            if (!metadata_log_exists){
-              ScopedLock lock(m_drop_table_mutex);
-              if (!Global::metadata_log) {
-                Global::log_dfs->mkdirs(Global::log_dir + "/metadata");
-                Global::metadata_log = new CommitLog(Global::log_dfs,
-                                                     Global::log_dir + "/metadata", m_props);
-                metadata_log_exists = true;
-              }
-            }
-            log = Global::metadata_log;
-          }
-          else if (rr.table.is_system()) {
-            if (!system_log_exists){
-              ScopedLock lock(m_drop_table_mutex);
-              if (!Global::system_log) {
-                Global::log_dfs->mkdirs(Global::log_dir + "/system");
-                Global::system_log = new CommitLog(Global::log_dfs,
-                                                   Global::log_dir + "/system", m_props);
-                system_log_exists = true;
-              }
-            }
-            log = Global::system_log;
-          }
-          else
-            log = Global::user_log;
-        }
-
-        CommitLogPtr phantom_log = phantom_range->get_phantom_log();
-        HT_ASSERT(phantom_log && log);
-        int error = Error::OK;
-        if (!is_empty
-            && (error = log->link_log(phantom_log.get())) != Error::OK) {
-
-          String msg = format("Problem linking phantom log '%s' for range %s[%s..%s]",
-                              phantom_range->get_phantom_logname().c_str(),
-                              rr.table.id, rr.range.start_row, rr.range.end_row);
-
-          m_master_client->phantom_prepare_complete(op_id, location, error, msg);
-          return;
-        }
-
-        /**
-           This shouldn't be necessary since it happens
-           in CommitLog::link_log()
-           
-        if (!is_empty)
-          log->stitch_in(phantom_log.get());
-        */
-
-        metalog_entities.push_back( range->metalog_entity() );
-
-        HT_ASSERT(phantom_map->get(rr.table.id, phantom_table_info));
-
-        HT_INFO("phantom adding range");
-
-        phantom_table_info->add_range(range, true);
-        
-        phantom_range->set_staged();
-      }
-
-      HT_MAYBE_FAIL_X("phantom-prepare-ranges-user-2", specs.back().table.is_user());
-
-      HT_DEBUG_OUT << "write all range entries to rsml" << HT_END;
-      // write metalog entities
-      if (Global::rsml_writer)
-        Global::rsml_writer->record_state(metalog_entities);
-      else
-        HT_THROW(Error::SERVER_SHUTTING_DOWN,
-                 Global::location_initializer->get());
-
-      HT_MAYBE_FAIL_X("phantom-prepare-ranges-user-3", specs.back().table.is_user());
-
-      phantom_range_map->prepare_finish();
-
-    }
-    catch (Exception &e) {
-      phantom_range_map->prepare_abort();
-      HT_ERROR_OUT << e << HT_END;
+    if (phantom_range_map->prepared()) {
       try {
-        m_master_client->phantom_prepare_complete(op_id, location, e.code(), e.what());
+        m_master_client->phantom_prepare_complete(op_id, location, plan_generation, Error::OK, "");
       }
       catch (Exception &e) {
         HT_ERROR_OUT << e << HT_END;
       }
       return;
     }
+
+    HT_ASSERT(phantom_range_map->loaded());
+
+    phantom_map = phantom_range_map->get_tableinfo_map();
+
+    foreach_ht(const QualifiedRangeSpec &rr, specs) {
+      phantom_table_info = 0;
+      HT_ASSERT(phantom_map->get(rr.table.id, phantom_table_info)
+                && phantom_table_info);
+      TableInfoPtr table_info;
+      m_live_map->get(rr.table.id, table_info);
+      if (!table_info) {
+        SchemaPtr schema = phantom_table_info->get_schema();
+        table_info = new TableInfo(m_master_client, &rr.table, schema);
+        m_live_map->set(rr.table.id, table_info);
+      }
+      //HT_DEBUG_OUT << "Creating Range object for range " << rr << HT_END;
+      // create a real range and its transfer log
+      phantom_range_map->get(rr, phantom_range);
+      HT_ASSERT(phantom_range.get());
+
+      if (!Global::metadata_table) {
+        ScopedLock lock(m_mutex);
+        // TODO double-check locking (works fine on x86 and amd64 but may fail
+        // on other archs without using a memory barrier
+        if (!Global::metadata_table)
+          Global::metadata_table = new Table(m_props, m_conn_manager,
+                                             Global::hyperspace, m_namemap,
+                                             TableIdentifier::METADATA_NAME);
+      }
+
+      // if we're about to move a root range: make sure that the location
+      // of the metadata-table is updated
+      if (rr.table.is_metadata()) {
+        Global::metadata_table->get_range_locator()->invalidate(&rr.table,
+                                                                Key::END_ROOT_ROW);
+        Global::metadata_table->get_range_locator()->set_root_stale();
+      }
+
+      phantom_range->create_range(m_master_client, table_info,
+                                  Global::log_dfs, Global::log_dir);
+      HT_DEBUG_OUT << "Range object created for range " << rr << HT_END;
+    }
+
+    CommitLog *log;
+    foreach_ht(const QualifiedRangeSpec &rr, specs) {
+      phantom_range_map->get(rr, phantom_range);
+      HT_ASSERT(phantom_range.get());
+      bool is_empty = true;
+
+      // If already staged, continue with next range
+      if (phantom_range->staged())
+        continue;
+
+      phantom_range->populate_range_and_log(Global::log_dfs,
+                                            Global::log_dir, &is_empty);
+
+      HT_MAYBE_FAIL_X("phantom-prepare-ranges-user-1", rr.table.is_user());
+
+      HT_DEBUG_OUT << "populated range and log for range " << rr << HT_END;
+
+      RangePtr range = phantom_range->get_range();
+      {
+        CommitLogReaderPtr log_reader;
+        if (rr.is_root()) {
+          if (!root_log_exists){
+            ScopedLock lock(m_drop_table_mutex);
+            if (!Global::root_log) {
+              Global::log_dfs->mkdirs(Global::log_dir + "/root");
+              Global::root_log = new CommitLog(Global::log_dfs,
+                                               Global::log_dir + "/root", m_props);
+              root_log_exists = true;
+            }
+          }
+          log = Global::root_log;
+        }
+        else if (rr.table.is_metadata()) {
+          if (!metadata_log_exists){
+            ScopedLock lock(m_drop_table_mutex);
+            if (!Global::metadata_log) {
+              Global::log_dfs->mkdirs(Global::log_dir + "/metadata");
+              Global::metadata_log = new CommitLog(Global::log_dfs,
+                                                   Global::log_dir + "/metadata", m_props);
+              metadata_log_exists = true;
+            }
+          }
+          log = Global::metadata_log;
+        }
+        else if (rr.table.is_system()) {
+          if (!system_log_exists){
+            ScopedLock lock(m_drop_table_mutex);
+            if (!Global::system_log) {
+              Global::log_dfs->mkdirs(Global::log_dir + "/system");
+              Global::system_log = new CommitLog(Global::log_dfs,
+                                                 Global::log_dir + "/system", m_props);
+              system_log_exists = true;
+            }
+          }
+          log = Global::system_log;
+        }
+        else
+          log = Global::user_log;
+      }
+
+      CommitLogPtr phantom_log = phantom_range->get_phantom_log();
+      HT_ASSERT(phantom_log && log);
+      int error = Error::OK;
+      if (!is_empty
+          && (error = log->link_log(phantom_log.get())) != Error::OK) {
+
+        String msg = format("Problem linking phantom log '%s' for range %s[%s..%s]",
+                            phantom_range->get_phantom_logname().c_str(),
+                            rr.table.id, rr.range.start_row, rr.range.end_row);
+
+        m_master_client->phantom_prepare_complete(op_id, location, plan_generation, error, msg);
+        return;
+      }
+
+      metalog_entities.push_back( range->metalog_entity() );
+
+      HT_ASSERT(phantom_map->get(rr.table.id, phantom_table_info));
+
+      HT_INFO("phantom adding range");
+
+      phantom_table_info->add_range(range, true);
+        
+      phantom_range->set_staged();
+    }
+
+    HT_MAYBE_FAIL_X("phantom-prepare-ranges-user-2", specs.back().table.is_user());
+
+    HT_DEBUG_OUT << "write all range entries to rsml" << HT_END;
+    // write metalog entities
+    if (Global::rsml_writer)
+      Global::rsml_writer->record_state(metalog_entities);
+    else
+      HT_THROW(Error::SERVER_SHUTTING_DOWN,
+               Global::location_initializer->get());
+
+    HT_MAYBE_FAIL_X("phantom-prepare-ranges-user-3", specs.back().table.is_user());
+
+    phantom_range_map->set_prepared();
+
   }
-  else
-    HT_WARN("Unable to start prepare");
-
-  HT_MAYBE_FAIL("phantom-prepare-ranges-4");
-
-  if (phantom_range_map->is_prepared()) {
+  catch (Exception &e) {
+    HT_ERROR_OUT << e << HT_END;
     try {
-      m_master_client->phantom_prepare_complete(op_id, location, Error::OK, "");
+      m_master_client->phantom_prepare_complete(op_id, location, plan_generation, e.code(), e.what());
     }
     catch (Exception &e) {
       HT_ERROR_OUT << e << HT_END;
     }
+    return;
   }
 
+  HT_MAYBE_FAIL("phantom-prepare-ranges-4");
+
+  try {
+    m_master_client->phantom_prepare_complete(op_id, location, plan_generation, Error::OK, "");
+  }
+  catch (Exception &e) {
+    HT_ERROR_OUT << e << HT_END;
+  }
 }
 
 void RangeServer::phantom_commit_ranges(ResponseCallback *cb, int64_t op_id,
-        const String &recovery_location, const vector<QualifiedRangeSpec> &specs) {
+        const String &location, int plan_generation, 
+        const vector<QualifiedRangeSpec> &specs) {
   FailoverPhantomRangeMap::iterator failover_map_it;
   PhantomRangeMapPtr phantom_range_map;
   TableInfoMapPtr phantom_map;
   TableMutatorPtr mutator;
   KeySpec key;
-  String location = Global::location_initializer->get();
+  String our_location = Global::location_initializer->get();
   vector<MetaLog::Entity *> entities;
   map<QualifiedRangeSpec, TableInfoPtr> phantom_table_info_map;
   map<QualifiedRangeSpec, int> error_map;
   vector<RangePtr> range_vec;
 
   HT_INFO_OUT << "phantom_commit_ranges op_id=" << op_id
-              << ", recovery_location=" << recovery_location
+              << ", location=" << location
+              << ", plan_generation=" << plan_generation
               << ", num ranges=" << specs.size() << HT_END;
 
   if (!m_replay_finished) {
@@ -4047,22 +4061,27 @@ void RangeServer::phantom_commit_ranges(ResponseCallback *cb, int64_t op_id,
 
   if (already_live(specs)) {
     try {
-      m_master_client->phantom_commit_complete(op_id, location, Error::OK, "");
+      m_master_client->phantom_commit_complete(op_id, location, plan_generation, Error::OK, "");
     }
     catch (Exception &e) {
-      HT_ERROR_OUT << e << HT_END;
+      String msg = format("Error during phantom_commit op_id=%ld, "
+        "plan_generation=%d, location=%s, num ranges=%u", op_id, 
+        plan_generation, location.c_str(), (unsigned)specs.size());
+      HT_ERRORF("%s - %s", Error::get_text(e.code()), msg.c_str());
     }
     return;
   }
 
   {
-    // make sure we have data for this recovery op
     ScopedLock lock(m_failover_mutex);
-    failover_map_it = m_failover_map.find(recovery_location);
+    failover_map_it = m_failover_map.find(location);
     if (failover_map_it == m_failover_map.end()) {
       try {
-        m_master_client->phantom_commit_complete(op_id, recovery_location,
-                    Error::RANGESERVER_PHANTOM_RANGE_MAP_NOT_FOUND, "");
+        String msg = format("No phantom map found for %s plan_generation=%d",
+                            location.c_str(), plan_generation);
+        HT_INFO_OUT << msg << HT_END;
+        m_master_client->phantom_commit_complete(op_id, location, plan_generation,
+                              Error::RANGESERVER_PHANTOM_RANGE_MAP_NOT_FOUND, msg);
       }
       catch (Exception &e) {
         HT_ERROR_OUT << e << HT_END;
@@ -4070,136 +4089,138 @@ void RangeServer::phantom_commit_ranges(ResponseCallback *cb, int64_t op_id,
       return;
     }
     phantom_range_map = failover_map_it->second;
-    phantom_map = phantom_range_map->get_tableinfo_map();
   }
 
-  if (phantom_range_map->commit_start()) {
+  try {
+    Locker<PhantomRangeMap> lock(*phantom_range_map);
 
-    try {
+    // Double-check to see if concurrent method call flipped them live
+    if (already_live(specs))
+      return;
 
-      foreach_ht(const QualifiedRangeSpec &rr, specs) {
-
-        RangePtr range;
-        PhantomRangePtr phantom_range;
-
-        String range_name = format("%s[%s..%s]", rr.table.id,
-                                   rr.range.start_row, rr.range.end_row);
-
-        // Make sure Range is not already live
-        TableInfoPtr table_info;
-        if (m_live_map->get(rr.table.id, table_info))
-          HT_ASSERT(!table_info->has_range(&rr.range));
-
-        // Fetch phantom_range object
-        phantom_range_map->get(rr, phantom_range);
-        if (!phantom_range) {
-            HT_THROWF(Error::RANGESERVER_RANGE_NOT_FOUND,
-                      "no live or phantom range found for %s", range_name.c_str());
-        }
-
-        range = phantom_range->get_range();
-
-        HT_DEBUG_OUT << "Found phantom_range " << rr << HT_END;
-
-        HT_ASSERT(range);
-
-        bool is_root = range->is_root();
-        MetaLog::EntityRange *entity = range->metalog_entity();
-        entity->needs_compaction = true;
-        entity->load_acknowledged = false;
-        entity->state.state = entity->state.state & (~RangeState::PHANTOM);
-        entities.push_back(entity);
-
-        HT_MAYBE_FAIL_X("phantom-commit-user-1", rr.table.is_user());
-
-        /**
-         * Take ownership of the range by writing the 'Location' column in the
-         * METADATA table, or /hypertable/root{location} attribute of Hyperspace
-         * if it is the root range.
-         */
-        mutator = Global::metadata_table->create_mutator();
-        if (!is_root) {
-          String metadata_key_str = format("%s:%s", rr.table.id,rr.range.end_row);
-
-          // Take ownership of the range
-          key.row = metadata_key_str.c_str();
-          key.row_len = strlen(metadata_key_str.c_str());
-          key.column_family = "Location";
-          key.column_qualifier = 0;
-          key.column_qualifier_len = 0;
-
-          // just set for now we'll do one big flush right at the end
-          HT_DEBUG_OUT << "Update metadata location for " << key << " to "
-                       << location << HT_END;
-          mutator->set(key, location.c_str(), location.length());
-        }
-        else {  //root
-          uint64_t handle=0;
-          uint32_t oflags = OPEN_FLAG_READ | OPEN_FLAG_WRITE | OPEN_FLAG_CREATE;
-          HT_INFO("Failing over root METADATA range");
-
-          HT_ON_SCOPE_EXIT(&Hyperspace::close_handle_ptr,
-                           Global::hyperspace, &handle);
-          String root_filename = Global::toplevel_dir + "/root";
-          handle = m_hyperspace->open(root_filename, oflags);
-          Global::hyperspace->attr_set(handle, "Location", location.c_str(),
-                                       location.length());
-          HT_DEBUG_OUT << "Updated attr Location of " << root_filename << " to "
-                       << location << HT_END;
-        }
-      }
-
-      // flush mutator
-      HT_DEBUG_OUT << "flush metadata updates" << HT_END;
-      mutator->flush();
-
-      HT_MAYBE_FAIL_X("phantom-commit-user-2", specs.back().table.is_user());
-
-      // persist RSML entities
-      if (Global::rsml_writer)
-        Global::rsml_writer->record_state(entities);
-      else
-        HT_THROW(Error::SERVER_SHUTTING_DOWN,
-                 Global::location_initializer->get());
-
-      HT_MAYBE_FAIL_X("phantom-commit-user-3", specs.back().table.is_user());
-
-      // make ranges live
-      HT_INFOF("Merging phantom map into live map for recovery of %s (ID=%lld)",
-               recovery_location.c_str(), (Lld)op_id);
-      m_live_map->merge(phantom_map);
-
-      {
-        ScopedLock lock(m_failover_mutex);
-        m_failover_map.erase(recovery_location);
-      }
-
-      phantom_range_map->commit_finish();
-
-      HT_MAYBE_FAIL_X("phantom-commit-user-4", specs.back().table.is_user());
-    }
-    catch (Exception &e) {
-      phantom_range_map->commit_abort();
-      HT_ERROR_OUT << e << HT_END;
+    if (phantom_range_map->committed()) {
       try {
-        m_master_client->phantom_commit_complete(op_id, recovery_location, e.code(), e.what());
+        m_master_client->phantom_commit_complete(op_id, location, plan_generation, Error::OK, "");
       }
       catch (Exception &e) {
         HT_ERROR_OUT << e << HT_END;
       }
       return;
     }
+
+    HT_ASSERT(phantom_range_map->prepared());
+
+    phantom_map = phantom_range_map->get_tableinfo_map();
+
+    foreach_ht(const QualifiedRangeSpec &rr, specs) {
+
+      RangePtr range;
+      PhantomRangePtr phantom_range;
+
+      String range_name = format("%s[%s..%s]", rr.table.id,
+                                 rr.range.start_row, rr.range.end_row);
+
+      // Fetch phantom_range object
+      phantom_range_map->get(rr, phantom_range);
+      if (!phantom_range) {
+        HT_THROWF(Error::RANGESERVER_RANGE_NOT_FOUND,
+                  "no live or phantom range found for %s", range_name.c_str());
+      }
+
+      range = phantom_range->get_range();
+
+      HT_ASSERT(range);
+
+      bool is_root = range->is_root();
+      MetaLog::EntityRange *entity = range->metalog_entity();
+      entity->needs_compaction = true;
+      entity->load_acknowledged = false;
+      entity->state.state &= ~RangeState::PHANTOM;
+      entities.push_back(entity);
+
+      HT_MAYBE_FAIL_X("phantom-commit-user-1", rr.table.is_user());
+
+      /**
+       * Take ownership of the range by writing the 'Location' column in the
+       * METADATA table, or /hypertable/root{location} attribute of Hyperspace
+       * if it is the root range.
+       */
+      mutator = Global::metadata_table->create_mutator();
+      if (!is_root) {
+        String metadata_key_str = format("%s:%s", rr.table.id,rr.range.end_row);
+
+        // Take ownership of the range
+        key.row = metadata_key_str.c_str();
+        key.row_len = strlen(metadata_key_str.c_str());
+        key.column_family = "Location";
+        key.column_qualifier = 0;
+        key.column_qualifier_len = 0;
+
+        // just set for now we'll do one big flush right at the end
+        HT_DEBUG_OUT << "Update metadata location for " << key << " to "
+                     << our_location << HT_END;
+        mutator->set(key, our_location.c_str(), our_location.length());
+      }
+      else {  //root
+        uint64_t handle=0;
+        uint32_t oflags = OPEN_FLAG_READ | OPEN_FLAG_WRITE | OPEN_FLAG_CREATE;
+        HT_INFO("Failing over root METADATA range");
+
+        HT_ON_SCOPE_EXIT(&Hyperspace::close_handle_ptr,
+                         Global::hyperspace, &handle);
+        String root_filename = Global::toplevel_dir + "/root";
+        handle = m_hyperspace->open(root_filename, oflags);
+        Global::hyperspace->attr_set(handle, "Location", our_location.c_str(),
+                                     our_location.length());
+        HT_DEBUG_OUT << "Updated attr Location of " << root_filename << " to "
+                     << our_location << HT_END;
+      }
+    }
+
+    // flush mutator
+    mutator->flush();
+
+    HT_MAYBE_FAIL_X("phantom-commit-user-2", specs.back().table.is_user());
+
+    // persist RSML entities
+    if (Global::rsml_writer)
+      Global::rsml_writer->record_state(entities);
+    else
+      HT_THROW(Error::SERVER_SHUTTING_DOWN, our_location);
+
+    HT_MAYBE_FAIL_X("phantom-commit-user-3", specs.back().table.is_user());
+
+    // make ranges live
+    HT_INFOF("Merging phantom map into live map for recovery of %s (ID=%lld)",
+             location.c_str(), (Lld)op_id);
+    m_live_map->merge(phantom_map);
+
+    {
+      ScopedLock lock(m_failover_mutex);
+      m_failover_map.erase(location);
+    }
+
+    phantom_range_map->set_committed();
+
+    HT_MAYBE_FAIL_X("phantom-commit-user-4", specs.back().table.is_user());
   }
-  else if(!phantom_range_map->is_committed())
+  catch (Exception &e) {
+    HT_ERROR_OUT << e << HT_END;
+    try {
+      m_master_client->phantom_commit_complete(op_id, location, plan_generation, e.code(), e.what());
+    }
+    catch (Exception &e) {
+      HT_ERROR_OUT << e << HT_END;
+    }
     return;
+  }
 
   try {
     
-    m_master_client->phantom_commit_complete(op_id, recovery_location, Error::OK, "");
+    m_master_client->phantom_commit_complete(op_id, location, plan_generation, Error::OK, "");
 
     HT_DEBUG_OUT << "phantom_commit_complete sent to master for num_ranges="
         << specs.size() << HT_END;
-
 
     // Wake up maintenance scheduler to handle any "in progress" operations
     // that were happening on the ranges just added
@@ -4238,8 +4259,8 @@ void RangeServer::phantom_commit_ranges(ResponseCallback *cb, int64_t op_id,
   }
   catch (Exception &e) {
     String msg = format("Error during phantom_commit op_id=%ld, "
-        "recovery_location=%s, num ranges=%u", op_id, 
-       recovery_location.c_str(), (unsigned)specs.size());
+        "plan_generation=%d, location=%s, num ranges=%u", op_id, 
+        plan_generation, location.c_str(), (unsigned)specs.size());
     HT_ERRORF("%s - %s", Error::get_text(e.code()), msg.c_str());
     // do not re-throw because this would cause an error to get sent back
     // that is not expected
@@ -4255,9 +4276,7 @@ bool RangeServer::already_live(const vector<QualifiedRangeSpec> &ranges) {
         live_count++;
     }
   }
-  if (live_count > 0 && live_count < ranges.size())
-    HT_FATALF("Found only a subset %d out of %d live.", 
-              (int)live_count, (int)ranges.size());
+  HT_ASSERT(live_count == 0 || live_count == ranges.size());
 
   return live_count == ranges.size();
 }

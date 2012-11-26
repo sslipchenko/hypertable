@@ -77,8 +77,8 @@ void ReplayDispatchHandler::add(const CommAddress &addr,
   try {
     ScopedLock lock(m_mutex);
     m_outstanding++;
-    m_rsclient.phantom_update(addr, m_recover_location, range, fragment,
-            more, buffer, this);
+    m_rsclient.phantom_update(addr, m_recover_location, m_plan_generation, 
+                              range, fragment, more, buffer, this);
   }
   catch (Exception &e) {
     HT_ERROR_OUT << "Error sending phantom updates for range " << range

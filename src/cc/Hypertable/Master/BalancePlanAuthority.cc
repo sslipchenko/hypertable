@@ -186,10 +186,29 @@ void BalancePlanAuthority::remove_from_replay_plan(const String &recovery_locati
   m_mml_writer->record_state(this);  
 }
 
+void BalancePlanAuthority::remove_locations_in_recovery(StringSet &locations) {
+  ScopedLock lock(m_mutex);
+  RecoveryPlanMap::iterator iter;
+  for (iter = m_map.begin(); iter != m_map.end(); ++iter) {
+    if (locations.count(iter->first) > 0)
+      locations.erase(iter->first);
+  }
+}
+
+bool BalancePlanAuthority::recovery_complete(const String &location, int type) {
+  ScopedLock lock(m_mutex);
+  if (m_map.find(location) == m_map.end())
+    return true;
+  RangeRecoveryPlanPtr plan = m_map[location].plans[type];
+  if (!plan || plan->receiver_plan.empty())
+    return true;
+  return false;
+}
+
 
 bool
-BalancePlanAuthority::is_empty()
-{
+BalancePlanAuthority::is_empty() {
+  ScopedLock lock(m_mutex);
   return (m_map.empty());
 }
 
@@ -319,6 +338,9 @@ BalancePlanAuthority::create_range_plan(const String &location, int type,
     plan->replay_plan.insert(fragment, *location_it);
     ++location_it;
   }
+
+  HT_INFOF("Added recovery plan with %d fragments for %d %s ranges",
+           (int)fragments.size(), (int)specs.size(), type_strings[type]);
 
   return plan;
 }

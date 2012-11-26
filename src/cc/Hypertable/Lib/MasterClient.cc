@@ -937,22 +937,22 @@ void MasterClient::fetch_result(int64_t id, Timer *timer, EventPtr &event, const
 }
 
 void
-MasterClient::replay_complete(int64_t op_id, int type, const String &location,
-    uint32_t attempt, bool success, const map<uint32_t, int> &error_map,
-    Timer *timer) {
-  Timer tmp_timer(m_timeout_ms);
+MasterClient::replay_complete(int64_t op_id, const String &location,
+                              int plan_generation, int32_t error,
+                              const String message) {
+  Timer timer(m_timeout_ms, true);
   CommBufPtr cbp;
   EventPtr event;
-  String label = format("replay_complete op_id=%llu type=%d location=%s "
-          "attempt=%d success=%d num_fragments=%d", (Llu)op_id, type,
-          location.c_str(), attempt, (int)success, (int)error_map.size());
+  String label = format("replay_complete op_id=%llu location=%s "
+                        "plan_generation=%d error=%s", (Llu)op_id,
+                        location.c_str(), plan_generation,
+                        Error::get_text(error));
 
-  initialize(timer, tmp_timer);
-  while (!timer->expired()) {
-    cbp = MasterProtocol::create_replay_complete_request(op_id, attempt, 
-            error_map, success);
-    if (!send_message(cbp, timer, event, label)) {
-      poll(0, 0, std::min(timer->remaining(), (System::rand32() % 3000)));
+  while (!timer.expired()) {
+    cbp = MasterProtocol::create_replay_complete_request(op_id,
+                            location, plan_generation, error, message);
+    if (!send_message(cbp, &timer, event, label)) {
+      poll(0, 0, std::min(timer.remaining(), (System::rand32() % 3000)));
       continue;
     }
     return;
@@ -968,15 +968,19 @@ MasterClient::replay_complete(int64_t op_id, int type, const String &location,
 
 void
 MasterClient::phantom_prepare_complete(int64_t op_id, const String &location,
-                                       int32_t error, const String message) {
+                                       int plan_generation, int32_t error,
+                                       const String message) {
   Timer timer(m_timeout_ms, true);
   CommBufPtr cbp;
   EventPtr event;
   String label = format("phantom_prepare_complete op_id=%llu location=%s "
-                        "error=%s", (Llu)op_id, location.c_str(), Error::get_text(error));
+                        "plan_generation=%d error=%s", (Llu)op_id,
+                        location.c_str(), plan_generation,
+                        Error::get_text(error));
 
   while (!timer.expired()) {
-    cbp = MasterProtocol::create_phantom_prepare_complete_request(op_id, location, error, message);
+    cbp = MasterProtocol::create_phantom_prepare_complete_request(op_id,
+                            location, plan_generation, error, message);
     if (!send_message(cbp, &timer, event, label)) {
       poll(0, 0, std::min(timer.remaining(), (System::rand32() % 3000)));
       continue;
@@ -994,7 +998,8 @@ MasterClient::phantom_prepare_complete(int64_t op_id, const String &location,
 
 void
 MasterClient::phantom_commit_complete(int64_t op_id, const String &location,
-                                       int32_t error, const String message) {
+                                      int plan_generation, int32_t error,
+                                      const String message) {
   Timer timer(m_timeout_ms, true);
   CommBufPtr cbp;
   EventPtr event;
@@ -1002,7 +1007,8 @@ MasterClient::phantom_commit_complete(int64_t op_id, const String &location,
                         "error=%s", (Llu)op_id, location.c_str(), Error::get_text(error));
 
   while (!timer.expired()) {
-    cbp = MasterProtocol::create_phantom_commit_complete_request(op_id, location, error, message);
+    cbp = MasterProtocol::create_phantom_commit_complete_request(op_id,
+                           location, plan_generation, error, message);
     if (!send_message(cbp, &timer, event, label)) {
       poll(0, 0, std::min(timer.remaining(), (System::rand32() % 3000)));
       continue;

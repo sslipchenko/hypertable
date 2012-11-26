@@ -131,15 +131,14 @@ namespace Hypertable {
 
     void set_verbose_flag(bool verbose) { m_verbose = verbose; }
 
-    void replay_complete(int64_t op_id, int type, const String &location,
-            uint32_t attempt, bool success,
-            const std::map<uint32_t, int> &error_map, Timer *timer=0);
+    void replay_complete(int64_t op_id, const String &location,
+                         int plan_generation, int32_t error, const String message);
 
     void phantom_prepare_complete(int64_t op_id, const String &location,
-                                  int32_t error, const String message);
+                                  int plan_generation, int32_t error, const String message);
 
     void phantom_commit_complete(int64_t op_id, const String &location,
-                                 int32_t error, const String message);
+                                 int plan_generation, int32_t error, const String message);
 
 
   private:

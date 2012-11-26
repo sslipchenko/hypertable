@@ -215,7 +215,7 @@ void QualifiedRangeSpec::encode(uint8_t **bufp) const {
 }
 
 void QualifiedRangeSpec::decode(const uint8_t **bufp, size_t *remainp) {
-  HT_TRY("decoding qualified range spec managed ",
+  HT_TRY("decoding qualified range spec ",
     table.decode(bufp, remainp);
     range.decode(bufp, remainp));
 }

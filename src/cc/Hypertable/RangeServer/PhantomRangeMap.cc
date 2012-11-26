@@ -31,38 +31,40 @@ using namespace Hypertable;
 namespace {
 
   enum {
-    PREPARED  = 0x00000001,
-    COMMITTED = 0x00000002
+    LOADED    = 0x00000001,
+    REPLAYED  = 0x00000002,
+    PREPARED  = 0x00000004,
+    COMMITTED = 0x00000008,
+    CANCELLED = 0x00000010
   };
 
 }
 
-PhantomRangeMap::PhantomRangeMap() : m_state(0), m_load_in_progress(false),
-                 m_prepare_in_progress(false), m_commit_in_progress(false) {
+PhantomRangeMap::PhantomRangeMap(int plan_generation) : 
+  m_plan_generation(plan_generation), m_state(0) {
   m_tableinfo_map = new TableInfoMap();
 }
 
+void PhantomRangeMap::reset(int plan_generation) {
+  m_plan_generation = plan_generation;
+  m_state = 0;
+  for (Map::iterator iter = m_map.begin(); iter != m_map.end(); ++iter)
+    iter->second->purge_incomplete_fragments();
+}
 
-void PhantomRangeMap::get(const QualifiedRangeSpec &spec, const RangeState &state, 
-                          SchemaPtr &schema, const vector<uint32_t> &fragments,
-                          PhantomRangePtr &phantom_range) {
-  ScopedLock lock(m_mutex);
-  Map::iterator it = m_map.find(spec);
-  if (it == m_map.end()) {
+
+void PhantomRangeMap::insert(const QualifiedRangeSpec &spec,
+                             const RangeState &state, SchemaPtr &schema,
+                             const vector<uint32_t> &fragments) {
+  if (m_map.find(spec) == m_map.end()) {
     QualifiedRangeSpec copied_spec(m_arena, spec);
-    phantom_range = new PhantomRange(copied_spec,
-                                     RangeState(m_arena, state),
-                                     schema, fragments);
-    MapInsRec ins_rec = m_map.insert(make_pair(copied_spec, phantom_range));
-    HT_ASSERT(ins_rec.second);
+    RangeState copied_state(m_arena, state);
+    m_map[copied_spec] =
+      new PhantomRange(copied_spec, copied_state, schema, fragments);
   }
-  else
-    phantom_range = it->second;
-  return;
 }
 
 void PhantomRangeMap::get(const QualifiedRangeSpec &spec, PhantomRangePtr &phantom_range) {
-  ScopedLock lock(m_mutex);
   Map::iterator it = m_map.find(spec);
   if (it == m_map.end())
     phantom_range = 0;
@@ -70,82 +72,38 @@ void PhantomRangeMap::get(const QualifiedRangeSpec &spec, PhantomRangePtr &phant
     phantom_range = it->second;
 }
 
-void PhantomRangeMap::get_all(vector<PhantomRangePtr> &range_vec) {
-  ScopedLock lock(m_mutex);
-  foreach_ht(Map::value_type &vv, m_map)
-    range_vec.push_back(vv.second);
+bool PhantomRangeMap::initial() const {
+  return m_state == 0;
 }
 
-size_t PhantomRangeMap::size() {
-  ScopedLock lock(m_mutex);
-  return m_map.size();
+void PhantomRangeMap::set_loaded() {
+  HT_ASSERT((m_state & LOADED) == 0);
+  m_state |= LOADED;
 }
 
-void PhantomRangeMap::load_start() {
-  ScopedLock lock(m_mutex);
-  while (m_load_in_progress)
-    m_load_cond.wait(lock);
-  m_load_in_progress = true;
-}
-
-void PhantomRangeMap::load_finish() {
-  ScopedLock lock(m_mutex);
-  m_load_in_progress = false;
-  m_load_cond.notify_all();
-}
-
-bool PhantomRangeMap::prepare_start() {
-  ScopedLock lock(m_mutex);
-  if ((m_state & PREPARED) == PREPARED || m_prepare_in_progress)
-    return false;
-  m_prepare_in_progress = true;
-  return true;
-}
-
-void PhantomRangeMap::prepare_abort() {
-  ScopedLock lock(m_mutex);
-  m_prepare_in_progress = false;
+bool PhantomRangeMap::loaded() const {
+  return (m_state & LOADED) == LOADED;
 }
 
 
-void PhantomRangeMap::prepare_finish() {
-  ScopedLock lock(m_mutex);
-  m_prepare_in_progress = false;
+bool PhantomRangeMap::replayed() const {
+  return (m_state & REPLAYED) == REPLAYED;
+}
+
+void PhantomRangeMap::set_prepared() {
+  HT_ASSERT((m_state & PREPARED) == 0);
   m_state |= PREPARED;
 }
 
-bool PhantomRangeMap::is_prepared() {
-  ScopedLock lock(m_mutex);
+bool PhantomRangeMap::prepared() const {
   return (m_state & PREPARED) == PREPARED;
 }
 
-
-bool PhantomRangeMap::commit_start() {
-  ScopedLock lock(m_mutex);
-  if ((m_state & COMMITTED) == COMMITTED || m_commit_in_progress)
-    return false;
-  m_commit_in_progress = true;
-  return true;
-}
-
-void PhantomRangeMap::commit_abort() {
-  ScopedLock lock(m_mutex);
-  m_commit_in_progress = false;
-}
-
-
-void PhantomRangeMap::commit_finish() {
-  ScopedLock lock(m_mutex);
-  m_commit_in_progress = false;
+void PhantomRangeMap::set_committed() {
+  HT_ASSERT((m_state & COMMITTED) == 0);
   m_state |= COMMITTED;
 }
 
-bool PhantomRangeMap::is_committed() {
-  ScopedLock lock(m_mutex);
+bool PhantomRangeMap::committed() const {
   return (m_state & COMMITTED) == COMMITTED;
-}
-
-
-void Hypertable::call_load_finish(PhantomRangeMapPtr phantom_range_map) {
-  phantom_range_map->load_finish();
 }

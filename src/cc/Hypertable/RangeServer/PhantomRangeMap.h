@@ -23,6 +23,7 @@
 #define HYPERTABLE_PHANTOMRANGEMAP_H
 
 #include <map>
+#include <set>
 #include <string>
 
 #include <boost/thread/condition.hpp>
@@ -43,10 +44,24 @@ namespace Hypertable {
    */
   class PhantomRangeMap : public ReferenceCount {
   public:
-    PhantomRangeMap();
+    PhantomRangeMap(int plan_generation);
     virtual ~PhantomRangeMap() { }
 
-    TableInfoMapPtr get_tableinfo_map() { return m_tableinfo_map; }
+    void lock() { m_mutex.lock(); }
+    void unlock() { m_mutex.unlock(); }
+
+    void reset(int plan_generation);
+
+    /**
+     * Inserts a phantom range
+     *
+     * @param spec range spec
+     * @param state range state
+     * @param schema table schema
+     * @param fragments fragments to be played
+     */
+    void insert(const QualifiedRangeSpec &range, const RangeState &state,
+                SchemaPtr &schema, const vector<uint32_t> &fragments);
 
     /**
      * Gets the phantom range if it is in map
@@ -56,63 +71,36 @@ namespace Hypertable {
      */
     void get(const QualifiedRangeSpec &range_spec, PhantomRangePtr &phantom_range);
 
-    /**
-     * Gets the phantom range, if not in map, insert first
-     *
-     * @param spec range spec
-     * @param state range state
-     * @param schema table schema
-     * @param fragments fragments to be played
-     * @param phantom_range phantom range
-     */
-    void get(const QualifiedRangeSpec &range, const RangeState &state, SchemaPtr &schema,
-             const vector<uint32_t> &fragments, PhantomRangePtr &phantom_range);
+    TableInfoMapPtr get_tableinfo_map() { return m_tableinfo_map; }
 
-    /**
-     * Get vector of all phantom ranges in map
-     * @param range_vec will contain all ranges in map
-     */
-    void get_all(std::vector<PhantomRangePtr> &range_vec);
+    int get_plan_generation() { return m_plan_generation; }
 
-    /**
-     * Get number of phantom ranges in map
-     *
-     * @return number of phantom ranges in map
-     */
-    size_t size();
+    bool initial() const;
 
-    void load_start();
-    void load_finish();
+    void set_loaded();
+    bool loaded() const;
 
-    bool prepare_start();
-    void prepare_abort();
-    void prepare_finish();
-    bool is_prepared();
+    bool replayed() const;
+    
+    void set_prepared();
+    bool prepared() const;
 
-    bool commit_start();
-    void commit_abort();
-    void commit_finish();
-    bool is_committed();
-
+    void set_committed();
+    bool committed() const;
 
   private:
     typedef std::map<QualifiedRangeSpec, PhantomRangePtr> Map;
-    typedef std::pair<Map::iterator, bool> MapInsRec;
 
     Mutex            m_mutex;
-    boost::condition m_load_cond;
     CharArena        m_arena;
     TableInfoMapPtr  m_tableinfo_map;
     Map              m_map;
+    int              m_plan_generation;
     int              m_state;
-    bool             m_load_in_progress;
-    bool             m_prepare_in_progress;
-    bool             m_commit_in_progress;
   };
 
   typedef boost::intrusive_ptr<PhantomRangeMap> PhantomRangeMapPtr;
 
-  void call_load_finish(PhantomRangeMapPtr phantom_range_map);
 }
 
 #endif // HYPERTABLE_PHANTOMRANGEMAP_H

@@ -42,6 +42,7 @@ void RequestHandlerPhantomCommitRanges::run() {
   String location;
   vector<QualifiedRangeSpec> ranges;
   QualifiedRangeSpec range;
+  int plan_generation;
   uint32_t nn;
 
   const uint8_t *decode_ptr = m_event_ptr->payload;
@@ -50,6 +51,7 @@ void RequestHandlerPhantomCommitRanges::run() {
   try {
     op_id     = Serialization::decode_i64(&decode_ptr, &decode_remain);
     location  = Serialization::decode_vstr(&decode_ptr, &decode_remain);
+    plan_generation = Serialization::decode_i32(&decode_ptr, &decode_remain);
     nn        = Serialization::decode_i32(&decode_ptr, &decode_remain);
     for(uint32_t ii = 0; ii < nn; ++ii) {
       range.decode(&decode_ptr, &decode_remain);
@@ -63,7 +65,7 @@ void RequestHandlerPhantomCommitRanges::run() {
   }
 
   try {
-    m_range_server->phantom_commit_ranges(&cb, op_id, location, ranges);
+    m_range_server->phantom_commit_ranges(&cb, op_id, location, plan_generation, ranges);
   }
   catch (Exception &e) {
     HT_FATAL_OUT << e << HT_END;

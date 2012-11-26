@@ -80,6 +80,10 @@ namespace Hypertable {
     void remove_from_replay_plan(const String &recovery_location, int type,
                                  const String &replay_location);
 
+    void remove_locations_in_recovery(StringSet &locations);
+
+    bool recovery_complete(const String &location, int type);
+
     // returns the plan generation; increased whenever a RangeServer fails
     // and a new recovery plan is added
     int get_generation() { ScopedLock lock(m_mutex); return m_generation; }

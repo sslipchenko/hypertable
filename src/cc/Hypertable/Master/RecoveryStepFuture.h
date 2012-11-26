@@ -25,6 +25,7 @@
 #include <boost/thread/condition.hpp>
 
 #include <set>
+#include <utility>
 #include <vector>
 
 #include "Common/ReferenceCount.h"
@@ -39,7 +40,10 @@ namespace Hypertable {
   class RecoveryStepFuture : public ReferenceCount {
   public:
 
-    RecoveryStepFuture(const String &label) : m_label(label) { }
+    typedef std::map<const String, std::pair<int32_t, String> > RecoveryStepErrorMapT;
+
+    RecoveryStepFuture(const String &label, int plan_generation) :
+      m_label(label), m_plan_generation(plan_generation) { }
 
     void register_locations(StringSet &locations) {
       ScopedLock lock(m_mutex);
@@ -47,9 +51,10 @@ namespace Hypertable {
         locations.erase(location);
       m_outstanding.clear();
       m_outstanding.insert(locations.begin(), locations.end());
+      m_error_map.clear();
     }
 
-    void success(const String &location) {
+    void success(const String &location, int plan_generation) {
       ScopedLock lock(m_mutex);
 
       if (m_outstanding.empty()) {
@@ -57,22 +62,47 @@ namespace Hypertable {
         return;
       }
 
-      if (m_outstanding.count(location) > 0) {
-        m_outstanding.erase(location);
-        m_success.insert(location);
-      }
-      else if (m_success.count(location) == 0) {
-        HT_INFOF("Received response from %s for recovery step %s, but not registered",
-                 location.c_str(), m_label.c_str());
-      }
+      m_success.insert(location);
+
+      m_outstanding.erase(location);
+
+      // purge from error map
+      RecoveryStepErrorMapT::iterator iter = m_error_map.find(location);
+      if (iter != m_error_map.end())
+        m_error_map.erase(iter);
 
       if (m_outstanding.empty())
         m_cond.notify_all();
     }
 
+    void failure(const String &location, int plan_generation,
+                 int32_t error, const String &message) {
+      ScopedLock lock(m_mutex);
+
+      if (plan_generation != m_plan_generation) {
+        HT_INFOF("Ignoring response from %s for recovery step %s because "
+                 "response plan generation %d does not match registered (%d)",
+                 location.c_str(), m_label.c_str(), plan_generation,
+                 m_plan_generation);
+        return;
+      }
+
+      RecoveryStepErrorMapT::iterator iter = m_error_map.find(location);
+
+      m_outstanding.erase(location);
+
+      if (m_success.count(location) == 0)
+        m_error_map[location] = make_pair(error, message);
+
+      if (m_outstanding.empty())
+        m_cond.notify_all();
+      
+    }
+
     bool wait_for_completion(Timer &timer) {
       ScopedLock lock(m_mutex);
       boost::xtime expire_time;
+      RecoveryStepErrorMapT::iterator iter;
 
       timer.start();
 
@@ -81,12 +111,16 @@ namespace Hypertable {
         xtime_add_millis(expire_time, timer.remaining());
         if (!m_cond.timed_wait(lock, expire_time)) {
           if (!m_outstanding.empty()) {
-            HT_WARN_OUT << "Recovery step " << m_label << " timed out" << HT_END;
-            return false;
+            foreach_ht (const String &location, m_outstanding) {
+              iter = m_error_map.find(location);
+              if (iter == m_error_map.end())
+                m_error_map[location] = make_pair(Error::REQUEST_TIMEOUT, "");
+            }
+            m_outstanding.clear();
           }
         }
       }
-      return true;
+      return m_error_map.empty();
     }
 
   protected:
@@ -95,6 +129,8 @@ namespace Hypertable {
     String m_label;
     StringSet m_outstanding;
     StringSet m_success;
+    RecoveryStepErrorMapT m_error_map;
+    int m_plan_generation;
   };
   typedef intrusive_ptr<RecoveryStepFuture> RecoveryStepFuturePtr;
 }

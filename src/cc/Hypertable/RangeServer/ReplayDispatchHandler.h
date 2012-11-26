@@ -43,8 +43,10 @@ namespace Hypertable {
   class ReplayDispatchHandler : public DispatchHandler {
 
   public:
-    ReplayDispatchHandler(Comm *comm, const String &location, int32_t timeout_ms) :
-        m_rsclient(comm, timeout_ms), m_recover_location(location), m_timeout_ms(timeout_ms),
+    ReplayDispatchHandler(Comm *comm, const String &location, 
+                          int plan_generation, int32_t timeout_ms) :
+        m_rsclient(comm, timeout_ms), m_recover_location(location),
+        m_plan_generation(plan_generation), m_timeout_ms(timeout_ms),
         m_outstanding(0) { }
 
     virtual void handle(EventPtr &event_ptr);
@@ -67,6 +69,7 @@ namespace Hypertable {
     boost::condition m_cond;
     RangeServerClient m_rsclient;
     String m_recover_location;
+    int m_plan_generation;
     int32_t m_timeout_ms;
     size_t        m_outstanding;
     map<QualifiedRangeSpecManaged, int32_t> m_range_errors;

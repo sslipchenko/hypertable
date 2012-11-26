@@ -62,6 +62,7 @@ bool PhantomRange::add(uint32_t fragment, bool more, EventPtr &event) {
   }
   else {
     HT_ASSERT(m_outstanding);
+    HT_INFOF("more=%s, m_outstanding=%d", more ? "true" : "false", (int)m_outstanding);
     if (!more) {
       --m_outstanding;
       if (!m_outstanding)

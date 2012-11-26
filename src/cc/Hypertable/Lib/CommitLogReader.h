@@ -66,17 +66,16 @@ namespace Hypertable {
       m_error_map.clear();
     }
 
-    uint32_t get_current_fragment_id() const {
-      return m_current_fragment_id;
-    }
-
     const std::map<uint32_t, uint32_t> &get_error_map() { return m_error_map; }
+
+    String last_fragment_fname() { return m_last_fragment_fname; }
+
+    int32_t last_fragment_id() { return m_last_fragment_id; }
 
   private:
 
     void load_fragments(String log_dir, CommitLogFileInfo *parent);
     void load_compressor(uint16_t ztype);
-    void populate_init_fragments();
 
     FilesystemPtr     m_fs;
     uint64_t          m_fragment_queue_offset;
@@ -89,9 +88,10 @@ namespace Hypertable {
     uint16_t               m_compressor_type;
     BlockCompressionCodec *m_compressor;
     std::set<uint64_t>     m_fragment_filter;
-    uint32_t               m_current_fragment_id;
     std::vector<uint32_t>  m_init_fragments;
     std::map<uint32_t, uint32_t> m_error_map;
+    String                 m_last_fragment_fname;
+    int32_t                m_last_fragment_id;
   };
 
   typedef intrusive_ptr<CommitLogReader> CommitLogReaderPtr;

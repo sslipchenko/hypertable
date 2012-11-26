@@ -39,16 +39,16 @@ namespace Hypertable {
   public:
     typedef std::map<uint32_t, int> ErrorMap;
 
-    RecoveryReplayCounter(uint32_t attempt)
-      : m_attempt(attempt), m_outstanding(0), m_done(false), m_errors(false),
-        m_timed_out(false) { }
+    RecoveryReplayCounter(int plan_generation)
+      : m_plan_generation(plan_generation), m_outstanding(0),
+        m_done(false), m_errors(false), m_timed_out(false) { }
 
     void add(size_t num) {
       ScopedLock lock(m_mutex);
       m_outstanding += num;
     }
 
-    bool complete(uint32_t attempt, bool success, const ErrorMap &error_map) {
+    bool complete(int plan_generation, int32_t error, const ErrorMap &error_map) {
       ScopedLock lock(m_mutex);
       HT_ASSERT(m_outstanding >= error_map.size());
       m_outstanding -= error_map.size();
@@ -123,9 +123,9 @@ namespace Hypertable {
     bool has_errors() const { return m_errors; }
 
   protected:
-    uint32_t m_attempt;
     Mutex m_mutex;
     boost::condition m_cond;
+    int m_attempt;
     size_t m_outstanding;
     bool m_done;
     bool m_errors;

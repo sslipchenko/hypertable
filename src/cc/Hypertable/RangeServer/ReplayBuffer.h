@@ -36,8 +36,9 @@ namespace Hypertable {
   class ReplayBuffer : public ReferenceCount {
   public:
     ReplayBuffer(PropertiesPtr &props, Comm *comm,
-            RangeRecoveryReceiverPlan &plan, const String &location);
-
+                 RangeRecoveryReceiverPlan &plan, const String &location,
+                 int plan_generation);
+    
     void add(const TableIdentifier &table, SerializedKey &key,
             ByteString &value);
 
@@ -57,6 +58,7 @@ namespace Hypertable {
     std::set<QualifiedRangeSpec> m_completed_ranges;
     ReplayBufferMap m_buffer_map;
     String m_location;
+    int m_plan_generation;
     size_t m_memory_used;
     size_t m_num_entries;
     size_t m_flush_limit_aggregate;

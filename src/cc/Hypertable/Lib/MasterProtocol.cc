@@ -183,46 +183,43 @@ namespace Hypertable {
   }
 
   CommBuf *MasterProtocol::create_replay_complete_request(int64_t op_id,
-          uint32_t attempt, const map<uint32_t, int> &error_map,
-          bool success) {
+          const String &location, int plan_generation,
+          int32_t error, const String &message) {
     CommHeader header(COMMAND_REPLAY_COMPLETE);
-    size_t len = 8 + 4 + 4 + error_map.size() * 8 + 1;
-
-    map<uint32_t, int>::const_iterator it = error_map.begin();
-
-    CommBuf *cbuf = new CommBuf(header, len);
-    cbuf->append_i64(op_id);
-    cbuf->append_i32(attempt);
-    cbuf->append_i32(error_map.size());
-    while (it != error_map.end()) {
-      cbuf->append_i32(it->first);
-      cbuf->append_i32(it->second);
-      ++it;
-    }
-    cbuf->append_bool(success);
-    return cbuf;
-  }
-
-  CommBuf *MasterProtocol::create_phantom_prepare_complete_request(int64_t op_id, const String &location,
-                                                                   int code, const String &message) {
-    CommHeader header(COMMAND_PHANTOM_PREPARE_COMPLETE);
-    size_t len = 8 + encoded_length_vstr(location) + 4 + encoded_length_vstr(message);
+    size_t len = 8 + encoded_length_vstr(location) + 4 + 4 + encoded_length_vstr(message);
     CommBuf *cbuf = new CommBuf(header, len);
     cbuf->append_i64(op_id);
     cbuf->append_vstr(location);
-    cbuf->append_i32(code);
+    cbuf->append_i32(plan_generation);
+    cbuf->append_i32(error);
     cbuf->append_vstr(message);
     return cbuf;
   }
 
-  CommBuf *MasterProtocol::create_phantom_commit_complete_request(int64_t op_id, const String &location,
-                                                                  int code, const String &message) {
-    CommHeader header(COMMAND_PHANTOM_COMMIT_COMPLETE);
-    size_t len = 8 + encoded_length_vstr(location) + 4 + encoded_length_vstr(message);
+  CommBuf *MasterProtocol::create_phantom_prepare_complete_request(int64_t op_id,
+                                     const String &location, int plan_generation,
+                                     int32_t error, const String &message) {
+    CommHeader header(COMMAND_PHANTOM_PREPARE_COMPLETE);
+    size_t len = 8 + encoded_length_vstr(location) + 4 + 4 + encoded_length_vstr(message);
     CommBuf *cbuf = new CommBuf(header, len);
     cbuf->append_i64(op_id);
     cbuf->append_vstr(location);
-    cbuf->append_i32(code);
+    cbuf->append_i32(plan_generation);
+    cbuf->append_i32(error);
+    cbuf->append_vstr(message);
+    return cbuf;
+  }
+
+  CommBuf *MasterProtocol::create_phantom_commit_complete_request(int64_t op_id,
+                                    const String &location, int plan_generation,
+                                    int32_t error, const String &message) {
+    CommHeader header(COMMAND_PHANTOM_COMMIT_COMPLETE);
+    size_t len = 8 + encoded_length_vstr(location) + 4 + 4 + encoded_length_vstr(message);
+    CommBuf *cbuf = new CommBuf(header, len);
+    cbuf->append_i64(op_id);
+    cbuf->append_vstr(location);
+    cbuf->append_i32(plan_generation);
+    cbuf->append_i32(error);
     cbuf->append_vstr(message);
     return cbuf;
   }

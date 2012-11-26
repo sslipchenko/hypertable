@@ -28,9 +28,10 @@ using namespace Hypertable;
 using namespace Hypertable::Property;
 
 ReplayBuffer::ReplayBuffer(PropertiesPtr &props, Comm *comm,
-    RangeRecoveryReceiverPlan &plan, const String &location)
-  : m_comm(comm), m_plan(plan), m_location(location), m_memory_used(0),
-    m_num_entries(0) {
+     RangeRecoveryReceiverPlan &plan, const String &location,
+     int plan_generation)
+  : m_comm(comm), m_plan(plan), m_location(location),
+    m_plan_generation(plan_generation), m_memory_used(0), m_num_entries(0) {
   m_flush_limit_aggregate =
       (size_t)props->get_i64("Hypertable.RangeServer.Failover.FlushLimit.Aggregate");
   m_flush_limit_per_range =
@@ -86,7 +87,7 @@ void ReplayBuffer::add(const TableIdentifier &table, SerializedKey &key,
 }
 
 void ReplayBuffer::flush(bool flush /* = true */) {
-  ReplayDispatchHandler handler(m_comm, m_location, m_timeout_ms);
+  ReplayDispatchHandler handler(m_comm, m_location, m_plan_generation, m_timeout_ms);
 
   foreach_ht(ReplayBufferMap::value_type &vv, m_buffer_map) {
     // skip over any ranges that have completely received data for this fragment
@@ -133,7 +134,6 @@ void ReplayBuffer::flush(bool flush /* = true */) {
 
 void ReplayBuffer::finish_fragment() {
   flush(false);
-
   HT_DEBUG_OUT << "Read " << m_num_entries << " k/v pairs from fragment "
       << m_fragment << HT_END;
   m_completed_ranges.clear();

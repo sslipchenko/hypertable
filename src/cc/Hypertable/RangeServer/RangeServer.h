@@ -117,24 +117,28 @@ namespace Hypertable {
 
     void metadata_sync(ResponseCallback *, const char *, uint32_t flags, std::vector<const char *> columns);
 
-    void replay_fragments(ResponseCallback *, int64_t op_id, uint32_t attempt,
-        const String &location, int type, const vector<uint32_t> &fragments,
+    void replay_fragments(ResponseCallback *, int64_t op_id,
+        const String &location, int plan_generation, int type,
+        const vector<uint32_t> &fragments,
         RangeRecoveryReceiverPlan &receiver_plan, uint32_t replay_timeout);
 
     void phantom_load(ResponseCallback *, const String &location,
+                      int plan_generation,
                       const vector<uint32_t> &fragments, 
                       const vector<QualifiedRangeSpec> &specs,
                       const vector<RangeState> &states);
 
     void phantom_update(ResponseCallbackPhantomUpdate *, const String &location,
-                        QualifiedRangeSpec &range, uint32_t fragment, bool more,
-                        EventPtr &event);
+                        int plan_generation, QualifiedRangeSpec &range,
+                        uint32_t fragment, bool more, EventPtr &event);
 
     void phantom_prepare_ranges(ResponseCallback *, int64_t op_id,
-        const String &location, const vector<QualifiedRangeSpec> &ranges);
+        const String &location, int plan_generation, 
+        const vector<QualifiedRangeSpec> &ranges);
 
     void phantom_commit_ranges(ResponseCallback *, int64_t op_id,
-        const String &location, const vector<QualifiedRangeSpec> &ranges);
+        const String &location, int plan_generation, 
+        const vector<QualifiedRangeSpec> &ranges);
 
     /**
      * Blocks while the maintenance queue is non-empty

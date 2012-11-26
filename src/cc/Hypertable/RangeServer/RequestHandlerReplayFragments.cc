@@ -42,7 +42,8 @@ void RequestHandlerReplayFragments::run() {
   ResponseCallback cb(m_comm, m_event_ptr);
   int64_t op_id;
   int type;
-  uint32_t attempt, replay_timeout;
+  int plan_generation;
+  uint32_t replay_timeout;
   String recover_location;
   vector<uint32_t> fragments;
   RangeRecoveryReceiverPlan receiver_plan;
@@ -53,8 +54,8 @@ void RequestHandlerReplayFragments::run() {
 
   try {
     op_id = decode_i64(&decode_ptr, &decode_remain);
-    attempt = decode_i32(&decode_ptr, &decode_remain);
     recover_location = decode_vstr(&decode_ptr, &decode_remain);
+    plan_generation = decode_i32(&decode_ptr, &decode_remain);
     type = decode_i32(&decode_ptr, &decode_remain);
     nn = decode_i32(&decode_ptr, &decode_remain);
     for (uint32_t ii = 0; ii < nn; ++ii)
@@ -70,8 +71,8 @@ void RequestHandlerReplayFragments::run() {
   }
 
   try {
-    m_range_server->replay_fragments(&cb, op_id, attempt, recover_location, type,
-        fragments, receiver_plan, replay_timeout);
+    m_range_server->replay_fragments(&cb, op_id, recover_location,
+        plan_generation, type, fragments, receiver_plan, replay_timeout);
   }
   catch (Exception &e) {
     HT_ERROR_OUT << e << HT_END;

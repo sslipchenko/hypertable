@@ -40,6 +40,7 @@ using namespace Serialization;
 void RequestHandlerPhantomLoad::run() {
   ResponseCallback cb(m_comm, m_event_ptr);
   String location;
+  int plan_generation;
   vector<uint32_t> fragments;
   vector<QualifiedRangeSpec> specs;
   vector<RangeState> states;
@@ -52,6 +53,7 @@ void RequestHandlerPhantomLoad::run() {
 
   try {
     location = Serialization::decode_vstr(&decode_ptr, &decode_remain);
+    plan_generation = Serialization::decode_i32(&decode_ptr, &decode_remain);
     nn = Serialization::decode_i32(&decode_ptr, &decode_remain);
     for (uint32_t ii=0; ii<nn; ++ii)
       fragments.push_back(Serialization::decode_i32(&decode_ptr, 
@@ -73,7 +75,7 @@ void RequestHandlerPhantomLoad::run() {
   }
 
   try {
-    m_range_server->phantom_load(&cb, location, fragments, specs, states);
+    m_range_server->phantom_load(&cb, location, plan_generation, fragments, specs, states);
   }
   catch (Exception &e) {
     HT_ERROR_OUT << e << HT_END;

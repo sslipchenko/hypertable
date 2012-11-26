@@ -298,27 +298,29 @@ namespace Hypertable {
     /** Creates a "replay_fragments" request message.
      *
      * @param op_id id of the calling recovery operation
-     * @param attempt id of the replay attempt -- needed in case of master failure
      * @param location location of the server being recovered
+     * @param plan_generation recovery plan generation
      * @param type type of ranges being recovered
      * @param fragments fragments being requested for replay
      * @param receiver_plan recovery load plan
      * @param replay_timeout timeout for replay to finish
      */
     static CommBuf *create_request_replay_fragments(int64_t op_id,
-            uint32_t attempt, const String &location, int type,
-            const std::vector<uint32_t> &fragments,
+            const String &location, int plan_generation,
+            int type, const std::vector<uint32_t> &fragments,
             const RangeRecoveryReceiverPlan &receiver_plan,
             uint32_t replay_timeout);
 
     /** Creates a "phantom_load" request message.
      *
      * @param location location of server being recovered
+     * @param plan_generation recovery plan generation
      * @param fragments fragments being replayed
      * @param specs range specs to be loaded
      * @param states parallel range states vector
      */
     static CommBuf *create_request_phantom_load(const String &location,
+        int plan_generation,
         const vector<uint32_t> &fragments,
         const std::vector<QualifiedRangeSpec> &specs,
         const std::vector<RangeState> &states);
@@ -326,37 +328,43 @@ namespace Hypertable {
     /** Creates a "phantom_update" request message.
      *
      * @param location server being recovered
+     * @param plan_generation recovery plan generation
      * @param range range being updated
      * @param fragment fragment updates belong to
      * @param more if false then this fragment is complete
      * @param buffer update buffer
      */
     static CommBuf *create_request_phantom_update(const QualifiedRangeSpec &range,
-        const String &location, uint32_t fragment, bool more, StaticBuffer &buffer);
+        const String &location, int plan_generation, 
+        uint32_t fragment, bool more, StaticBuffer &buffer);
 
     /** Creates a "phantom_prepare_ranges" request message.
      *
      * @param op_id id of the calling recovery operation
      * @param location location of the server being recovered
+     * @param plan_generation recovery plan generation
      * @param ranges ranges to be prepared
      */
     static CommBuf *create_request_phantom_prepare_ranges(int64_t op_id,
-            const String &location, const std::vector<QualifiedRangeSpec> &ranges);
+            const String &location, int plan_generation,
+            const std::vector<QualifiedRangeSpec> &ranges);
 
     /** Creates a "phantom_commit_ranges" request message.
      *
      * @param op_id id of the calling recovery operation
      * @param location location of the server being recovered
+     * @param plan_generation recovery plan generation
      * @param ranges ranges to be commit
      */
     static CommBuf *create_request_phantom_commit_ranges(int64_t op_id,
-        const String &location, const std::vector<QualifiedRangeSpec> &ranges);
+        const String &location, int plan_generation,
+        const std::vector<QualifiedRangeSpec> &ranges);
 
     virtual const char *command_text(uint64_t command);
 
   private:
     static CommBuf *create_request_phantom_ranges(uint64_t cmd_id,
-          int64_t op_id, const String &location,
+          int64_t op_id, const String &location, int plan_generation,
           const vector<QualifiedRangeSpec> &ranges);
   };
 }

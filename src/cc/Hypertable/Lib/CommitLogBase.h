@@ -108,6 +108,12 @@ namespace Hypertable {
 
     LogFragmentQueue &fragment_queue() { return m_fragment_queue; }
 
+    uint32_t toplevel_fragment_id(CommitLogFileInfo *finfo) {
+      while (finfo->parent)
+        finfo = finfo->parent;
+      return finfo->num;
+    }
+
   protected:
     Mutex             m_mutex;
     String            m_log_dir;

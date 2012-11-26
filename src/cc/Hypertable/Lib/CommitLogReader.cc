@@ -67,12 +67,11 @@ namespace {
 CommitLogReader::CommitLogReader(FilesystemPtr &fs, const String &log_dir)
   : CommitLogBase(log_dir), m_fs(fs), m_fragment_queue_offset(0),
     m_block_buffer(256), m_revision(TIMESTAMP_MIN), m_compressor(0),
-    m_current_fragment_id(0) {
+    m_last_fragment_id(-1) {
   if (get_bool("Hypertable.CommitLog.SkipErrors"))
     CommitLogBlockStream::ms_assert_on_error = false;
 
   load_fragments(m_log_dir, 0);
-  populate_init_fragments();
   reset();
 }
 
@@ -80,7 +79,7 @@ CommitLogReader::CommitLogReader(FilesystemPtr &fs, const String &log_dir,
         const std::vector<uint32_t> &fragment_filter)
   : CommitLogBase(log_dir), m_fs(fs), m_fragment_queue_offset(0),
     m_block_buffer(256), m_revision(TIMESTAMP_MIN), m_compressor(0),
-    m_current_fragment_id(0) {
+    m_last_fragment_id(-1) {
   if (get_bool("Hypertable.CommitLog.SkipErrors"))
     CommitLogBlockStream::ms_assert_on_error = false;
 
@@ -88,7 +87,6 @@ CommitLogReader::CommitLogReader(FilesystemPtr &fs, const String &log_dir,
     m_fragment_filter.insert(fragment);
 
   load_fragments(log_dir, 0);
-  populate_init_fragments();
   reset();
 }
 
@@ -102,10 +100,13 @@ CommitLogReader::next_raw_block(CommitLogBlockInfo *infop,
   if (fragment_queue_iter == m_fragment_queue.end())
     return false;
 
-  if ((*fragment_queue_iter)->block_stream == 0)
+  if ((*fragment_queue_iter)->block_stream == 0) {
     (*fragment_queue_iter)->block_stream =
       new CommitLogBlockStream(m_fs, (*fragment_queue_iter)->log_dir,
                                format("%u", (*fragment_queue_iter)->num));
+    m_last_fragment_fname = (*fragment_queue_iter)->block_stream->get_fname();
+    m_last_fragment_id = (int32_t)toplevel_fragment_id(*fragment_queue_iter);
+  }
 
   if (!(*fragment_queue_iter)->block_stream->next(infop, header)) {
     CommitLogFileInfo *info = *fragment_queue_iter;
@@ -288,9 +289,15 @@ void CommitLogReader::load_fragments(String log_dir, CommitLogFileInfo *parent) 
       m_range_reference_required = false;
   }
 
-  // Add this log dir to the parent's purge_dirs set
+  // Add this log dir to the parent's purge_dirs set or
+  // initialize m_init_fragments vector if no parent
   if (parent)
     parent->purge_dirs.insert(log_dir);
+  else {
+    m_init_fragments.clear();
+    foreach_ht(const CommitLogFileInfo *fragment, m_fragment_queue)
+      m_init_fragments.push_back(fragment->num);
+  }
 
 }
 
@@ -316,22 +323,3 @@ void CommitLogReader::load_compressor(uint16_t ztype) {
   m_compressor = compressor_ptr.get();
 }
 
-void CommitLogReader::populate_init_fragments() {
-  foreach_ht(const CommitLogFileInfo *fragment, m_fragment_queue) {
-    m_init_fragments.push_back(fragment->num);
-  }
-  foreach_ht(const CommitLogFileInfo *fragment, m_fragment_queue) {
-    if (fragment->log_dir == m_log_dir) {
-      m_current_fragment_id = fragment->num;
-      break;
-    }
-  }
-
-#if 0
-  String msg = (String)"For commit log " + m_log_dir + "current_fragment is "
-      + m_current_fragment_id + " set of fragments is ";
-  foreach_ht(uint32_t &fragment, m_init_fragments)
-    msg = msg + " " + fragment;
-  HT_DEBUG_OUT << msg << HT_END;
-#endif
-}
