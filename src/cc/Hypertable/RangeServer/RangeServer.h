@@ -130,7 +130,7 @@ namespace Hypertable {
 
     void phantom_update(ResponseCallbackPhantomUpdate *, const String &location,
                         int plan_generation, QualifiedRangeSpec &range,
-                        uint32_t fragment, bool more, EventPtr &event);
+                        uint32_t fragment, EventPtr &event);
 
     void phantom_prepare_ranges(ResponseCallback *, int64_t op_id,
         const String &location, int plan_generation, 

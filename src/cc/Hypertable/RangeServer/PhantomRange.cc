@@ -45,16 +45,11 @@ int PhantomRange::get_state() {
   return m_state;
 }
 
-bool PhantomRange::add(uint32_t fragment, bool more, EventPtr &event) {
+bool PhantomRange::add(uint32_t fragment, EventPtr &event) {
   ScopedLock lock(m_mutex);
   FragmentMap::iterator it = m_fragments.find(fragment);
-  if (it == m_fragments.end()) {
-    String msg = format("Unexpected fragment %u, expected one of ", fragment);
-    foreach_ht(const FragmentMap::value_type &vv, m_fragments)
-      msg = msg + (String)" " + vv.first;
-    HT_ERROR_OUT << msg << HT_END;
-    return false;
-  }
+
+  HT_ASSERT(it != m_fragments.end());
 
   if (it->second->complete()) {
     // fragment is already complete
@@ -62,13 +57,15 @@ bool PhantomRange::add(uint32_t fragment, bool more, EventPtr &event) {
   }
   else {
     HT_ASSERT(m_outstanding);
+#if 0
     HT_INFOF("more=%s, m_outstanding=%d", more ? "true" : "false", (int)m_outstanding);
     if (!more) {
       --m_outstanding;
       if (!m_outstanding)
         m_state = FINISHED_REPLAY;
     }
-    it->second->add(more, event);
+#endif
+    it->second->add(event);
   }
   return true;
 }

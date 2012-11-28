@@ -664,10 +664,10 @@ void RangeServerClient::phantom_load(const CommAddress &addr,
 }
 
 void RangeServerClient::phantom_update(const CommAddress &addr, const String &location,
-    int plan_generation, const QualifiedRangeSpec &range, uint32_t fragment, bool more,
+    int plan_generation, const QualifiedRangeSpec &range, uint32_t fragment,
     StaticBuffer &buffer, DispatchHandler *handler) {
   CommBufPtr cbp(RangeServerProtocol::create_request_phantom_update(range,
-                     location, plan_generation, fragment, more, buffer));
+                     location, plan_generation, fragment, buffer));
   send_message(addr, cbp, handler, m_default_timeout_ms);
 }
 

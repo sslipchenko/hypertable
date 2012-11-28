@@ -57,12 +57,10 @@ namespace Hypertable {
     /**
      *
      * @param fragment fragment id
-     * @param more if false this is the last data for this fragment
-     * @param empty if true then there is no data for this range
      * @param event contains data fort his fragment
      * @return true if the add succeded, false means the fragment is already complete
      */
-    bool add(uint32_t fragment, bool more, EventPtr &event);
+    bool add(uint32_t fragment, EventPtr &event);
     int get_state();
     const RangeState &get_range_state() { return m_range_state; }
 

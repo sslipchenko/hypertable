@@ -51,11 +51,9 @@ namespace Hypertable {
     /**
      * Adds EventPtr to data for this fragment
      *
-     * @param more if false then this fragment is complete
      * @param event event_ptr
-     * @return true if there is no more data to be added for this fragment
      */
-    void add(bool more, EventPtr &event);
+    void add(EventPtr &event);
     bool complete() const { return m_done; }
     void clear() {
       HT_ASSERT(!m_done);

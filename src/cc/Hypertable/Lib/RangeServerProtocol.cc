@@ -407,17 +407,16 @@ namespace Hypertable {
   }
 
   CommBuf *RangeServerProtocol::create_request_phantom_update(const QualifiedRangeSpec &range,
-          const String &location, int plan_generation, uint32_t fragment, bool more,
+          const String &location, int plan_generation, uint32_t fragment,
           StaticBuffer &buffer) {
     CommHeader header(COMMAND_PHANTOM_UPDATE);
     header.flags |= CommHeader::FLAGS_BIT_URGENT;
-    size_t len = encoded_length_vstr(location) + 4 + range.encoded_length() + 4 + 1;
+    size_t len = encoded_length_vstr(location) + 4 + range.encoded_length() + 4;
     CommBuf *cbuf = new CommBuf(header, len, buffer);
     cbuf->append_vstr(location);
     cbuf->append_i32(plan_generation);
     range.encode(cbuf->get_data_ptr_address());
     cbuf->append_i32(fragment);
-    cbuf->append_bool(more);
     return cbuf;
   }
 

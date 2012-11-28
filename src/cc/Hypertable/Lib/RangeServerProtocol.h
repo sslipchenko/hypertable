@@ -331,12 +331,11 @@ namespace Hypertable {
      * @param plan_generation recovery plan generation
      * @param range range being updated
      * @param fragment fragment updates belong to
-     * @param more if false then this fragment is complete
      * @param buffer update buffer
      */
     static CommBuf *create_request_phantom_update(const QualifiedRangeSpec &range,
         const String &location, int plan_generation, 
-        uint32_t fragment, bool more, StaticBuffer &buffer);
+        uint32_t fragment, StaticBuffer &buffer);
 
     /** Creates a "phantom_prepare_ranges" request message.
      *

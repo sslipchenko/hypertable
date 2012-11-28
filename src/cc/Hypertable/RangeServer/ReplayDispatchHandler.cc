@@ -73,12 +73,12 @@ void ReplayDispatchHandler::handle(Hypertable::EventPtr &event_ptr) {
 
 void ReplayDispatchHandler::add(const CommAddress &addr,
         const QualifiedRangeSpec &range, uint32_t fragment,
-        bool more, StaticBuffer &buffer) {
+        StaticBuffer &buffer) {
   try {
     ScopedLock lock(m_mutex);
     m_outstanding++;
     m_rsclient.phantom_update(addr, m_recover_location, m_plan_generation, 
-                              range, fragment, more, buffer, this);
+                              range, fragment, buffer, this);
   }
   catch (Exception &e) {
     HT_ERROR_OUT << "Error sending phantom updates for range " << range

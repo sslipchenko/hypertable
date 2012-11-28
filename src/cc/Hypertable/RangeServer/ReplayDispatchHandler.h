@@ -52,7 +52,7 @@ namespace Hypertable {
     virtual void handle(EventPtr &event_ptr);
 
     void add(const CommAddress &addr, const QualifiedRangeSpec &range,
-             uint32_t fragment, bool more, StaticBuffer &buffer);
+             uint32_t fragment, StaticBuffer &buffer);
 
     bool has_errors() {
       ScopedLock lock(m_mutex);

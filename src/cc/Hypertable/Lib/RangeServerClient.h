@@ -592,13 +592,12 @@ namespace Hypertable {
      * @param plan_generation recovery plan generation
      * @param range range
      * @param fragment fragment_id
-     * @param more indicates whether thes fragment is complete or not
      * @param replay_buffer replay buffer
      * @param handler handler
      */
     void phantom_update(const CommAddress &addr, const String &location,
                         int plan_generation, const QualifiedRangeSpec &range,
-                        uint32_t fragment, bool more, StaticBuffer &updates,
+                        uint32_t fragment, StaticBuffer &updates,
                         DispatchHandler *handler);
 
     /** Issues a "phantom_prepare_ranges" synchronous request.

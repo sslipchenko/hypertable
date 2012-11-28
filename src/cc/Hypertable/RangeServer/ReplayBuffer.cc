@@ -31,7 +31,7 @@ ReplayBuffer::ReplayBuffer(PropertiesPtr &props, Comm *comm,
      RangeRecoveryReceiverPlan &plan, const String &location,
      int plan_generation)
   : m_comm(comm), m_plan(plan), m_location(location),
-    m_plan_generation(plan_generation), m_memory_used(0), m_num_entries(0) {
+    m_plan_generation(plan_generation), m_memory_used(0) {
   m_flush_limit_aggregate =
       (size_t)props->get_i64("Hypertable.RangeServer.Failover.FlushLimit.Aggregate");
   m_flush_limit_per_range =
@@ -67,7 +67,6 @@ void ReplayBuffer::add(const TableIdentifier &table, SerializedKey &key,
     if (it == m_buffer_map.end())
       return;
     m_memory_used += it->second->add(key, value);
-    m_num_entries++;
     if (m_memory_used > m_flush_limit_aggregate ||
        it->second->memory_used() > m_flush_limit_per_range) {
 #if 0
@@ -86,7 +85,7 @@ void ReplayBuffer::add(const TableIdentifier &table, SerializedKey &key,
   }
 }
 
-void ReplayBuffer::flush(bool more /* = true */) {
+void ReplayBuffer::flush() {
   ReplayDispatchHandler handler(m_comm, m_location, m_plan_generation, m_timeout_ms);
 
   foreach_ht(ReplayBufferMap::value_type &vv, m_buffer_map) {
@@ -100,7 +99,7 @@ void ReplayBuffer::flush(bool more /* = true */) {
       QualifiedRangeSpec &range = buffer.get_range();
       StaticBuffer updates;
       buffer.get_updates(updates);
-      handler.add(addr, range, m_fragment, more, updates);
+      handler.add(addr, range, m_fragment, updates);
       buffer.clear();
     }
   }
@@ -130,12 +129,4 @@ void ReplayBuffer::flush(bool more /* = true */) {
     ++set_it;
   }
   m_memory_used=0;
-}
-
-void ReplayBuffer::finish_fragment() {
-  flush(false);
-  HT_DEBUG_OUT << "Read " << m_num_entries << " k/v pairs from fragment "
-      << m_fragment << HT_END;
-  m_completed_ranges.clear();
-  m_num_entries=0;
 }

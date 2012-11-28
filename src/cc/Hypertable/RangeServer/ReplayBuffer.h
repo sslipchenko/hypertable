@@ -40,17 +40,17 @@ namespace Hypertable {
                  int plan_generation);
     
     void add(const TableIdentifier &table, SerializedKey &key,
-            ByteString &value);
+             ByteString &value);
 
     size_t memory_used() const { return m_memory_used; }
-    size_t num_entries() const { return m_num_entries; }
-    void finish_fragment();
+
     void set_current_fragment(uint32_t fragment_id) {
       m_fragment = fragment_id;
     }
 
+    void flush();
+
   private:
-    void flush(bool more = true);
 
     Comm *m_comm;
     RangeRecoveryReceiverPlan &m_plan;
@@ -60,7 +60,6 @@ namespace Hypertable {
     String m_location;
     int m_plan_generation;
     size_t m_memory_used;
-    size_t m_num_entries;
     size_t m_flush_limit_aggregate;
     size_t m_flush_limit_per_range;
     int32_t m_timeout_ms;

@@ -26,11 +26,8 @@
 using namespace std;
 using namespace Hypertable;
 
-void FragmentData::add(bool more, EventPtr &event) {
+void FragmentData::add(EventPtr &event) {
   m_data.push_back(event);
-  m_done = !more;
-  //HT_DEBUG_OUT << "num events in fragment "<< m_id<< "=" << m_data.size()
-  //    << " latest event=" << std::hex << event.get() << HT_END;
   return;
 }
 
@@ -61,8 +58,6 @@ void FragmentData::merge(RangePtr &range, DynamicBuffer &dbuf,
     range_spec.decode(&decode_ptr, &decode_remain);
     // skip "fragment"
     (void)Serialization::decode_i32(&decode_ptr, &decode_remain);
-    // skip "more"
-    (void)Serialization::decode_bool(&decode_ptr, &decode_remain);
 
     total_size += decode_remain;
     uint8_t *base = (uint8_t *)decode_ptr;

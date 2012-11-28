@@ -32,14 +32,12 @@ size_t RangeReplayBuffer::add(SerializedKey &key, ByteString &value) {
   size_t incr_mem = m_accum.fill();
   m_accum.add(key.ptr, (ptr-key.ptr)+len);
   m_accum.add(value.ptr, value.length());
-  ++m_num_entries;
   incr_mem = m_accum.fill() - incr_mem;
   return incr_mem;
 }
 
 void RangeReplayBuffer::clear() {
   m_accum.clear();
-  m_num_entries=0;
 }
 
 

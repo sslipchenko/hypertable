@@ -3591,7 +3591,7 @@ void RangeServer::replay_fragments(ResponseCallback *cb, int64_t op_id,
           replay_buffer.set_current_fragment(fragment_id);
         }
         else if (fragment_id != last_fragment_id) {
-          replay_buffer.finish_fragment();
+          replay_buffer.flush();
           last_fragment_id = fragment_id;
           replay_buffer.set_current_fragment(fragment_id);
         }
@@ -3632,7 +3632,7 @@ void RangeServer::replay_fragments(ResponseCallback *cb, int64_t op_id,
     HT_MAYBE_FAIL("replay-fragments-1");
     HT_MAYBE_FAIL_X("replay-fragments-user-1", type==RangeSpec::USER);
 
-    replay_buffer.finish_fragment();
+    replay_buffer.flush();
 
     HT_INFO_OUT << "Finished playing " << fragments.size() << " fragments from "
                 << log_dir << HT_END;
@@ -3766,10 +3766,9 @@ void RangeServer::phantom_load(ResponseCallback *cb, const String &location,
 
 void RangeServer::phantom_update(ResponseCallbackPhantomUpdate *cb,
         const String &location, int plan_generation, QualifiedRangeSpec &range,
-        uint32_t fragment, bool more, EventPtr &event) {
+        uint32_t fragment, EventPtr &event) {
   HT_INFO_OUT << "phantom_update location=" << location << ", fragment="
-      << fragment << ", more=" << more << " event=" << std::hex
-      << event.get() << HT_END;
+              << fragment << ", event=" << std::hex << event.get() << HT_END;
 
   FailoverPhantomRangeMap::iterator failover_map_it;
   PhantomRangeMapPtr phantom_range_map;
@@ -3803,7 +3802,7 @@ void RangeServer::phantom_update(ResponseCallbackPhantomUpdate *cb,
 
     phantom_range_map->get(range, phantom_range);
     HT_ASSERT(phantom_range.get());
-    if (!phantom_range->add(fragment, more, event)) {
+    if (!phantom_range->add(fragment, event)) {
       String msg = format("fragment %d completely received for range "
                           "%s[%s..%s]", fragment, range.table.id, range.range.start_row,
                           range.range.end_row);
