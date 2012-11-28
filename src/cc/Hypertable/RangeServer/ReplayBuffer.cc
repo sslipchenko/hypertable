@@ -86,7 +86,7 @@ void ReplayBuffer::add(const TableIdentifier &table, SerializedKey &key,
   }
 }
 
-void ReplayBuffer::flush(bool flush /* = true */) {
+void ReplayBuffer::flush(bool more /* = true */) {
   ReplayDispatchHandler handler(m_comm, m_location, m_plan_generation, m_timeout_ms);
 
   foreach_ht(ReplayBufferMap::value_type &vv, m_buffer_map) {
@@ -100,7 +100,7 @@ void ReplayBuffer::flush(bool flush /* = true */) {
       QualifiedRangeSpec &range = buffer.get_range();
       StaticBuffer updates;
       buffer.get_updates(updates);
-      handler.add(addr, range, m_fragment, flush, updates);
+      handler.add(addr, range, m_fragment, more, updates);
       buffer.clear();
     }
   }

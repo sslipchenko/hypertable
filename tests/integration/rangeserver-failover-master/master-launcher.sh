@@ -5,7 +5,7 @@ HYPERTABLE_HOME=$HT_HOME
 PIDFILE=$HT_HOME/run/Hypertable.Master.pid
 LAUNCHER_PIDFILE=$HT_HOME/run/Hypertable.MasterLauncher.pid
 DUMP_METALOG=$HT_HOME/bin/metalog_dump
-METALOG="/hypertable/servers/master/log/mml/"
+METALOG="/hypertable/servers/master/log/mml"
 SCRIPT_DIR=`dirname $0`
 
 . $HT_HOME/bin/ht-env.sh
@@ -24,7 +24,7 @@ if [ -f $PIDFILE ]; then
 fi
 
 # Dumping cores slows things down unnecessarily for normal test runs
-ulimit -c 0
+#ulimit -c 0
 
 $HT_HOME/bin/Hypertable.Master --verbose --pidfile=$PIDFILE \
     --config=${SCRIPT_DIR}/test.cfg $1

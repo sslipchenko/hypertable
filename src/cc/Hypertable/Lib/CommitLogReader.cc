@@ -246,6 +246,8 @@ void CommitLogReader::load_fragments(String log_dir, CommitLogFileInfo *parent) 
     long num = strtol(listing[i].c_str(), &endptr, 10);
     if (m_fragment_filter.size() && log_dir == m_log_dir &&
       m_fragment_filter.find(num) == m_fragment_filter.end()) {
+      HT_INFOF("Dropping log fragment %s/%ld because it is filtered",
+               log_dir.c_str(), num);
       //HT_DEBUG_OUT << "Fragments " << num <<" in " << log_dir
       //    << " is part of CommitLog "
       //    << m_log_dir << " is not in fragment filter of size()="

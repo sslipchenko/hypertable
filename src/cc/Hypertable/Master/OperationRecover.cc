@@ -221,9 +221,8 @@ void OperationRecover::execute() {
     // Once recovery is complete, the master blows away the RSML and CL for the
     // server being recovered then it unlocks the hyperspace file
     clear_server_state();
-    HT_MAYBE_FAIL("recover-server-5");
+    HT_MAYBE_FAIL("recover-server-4");
     complete_ok();
-    HT_MAYBE_FAIL("recover-server-6");
     break;
 
   default:

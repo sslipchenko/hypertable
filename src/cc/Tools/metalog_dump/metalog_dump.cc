@@ -81,6 +81,7 @@ namespace {
   typedef Meta::list<DfsClientPolicy, DefaultCommPolicy, AppPolicy> Policies;
 
   void determine_log_type(FilesystemPtr &fs, String path, String &name, bool *is_file) {
+    bool check_file=false;
     boost::trim_right_if(path, boost::is_any_of("/"));
 
     *is_file = false;
@@ -93,7 +94,16 @@ namespace {
         *is_file = true;
     }
 
-    if (*is_file) {
+    if (!*is_file) {
+      std::vector<String> listing;
+      fs->readdir(path, listing);
+      if (!listing.empty()) {
+        path += String("/") + listing[0];
+        check_file = true;
+      }
+    }
+
+    if (*is_file || check_file) {
       int fd = fs->open(path, 0);
       MetaLog::Header header;
       uint8_t buf[MetaLog::Header::LENGTH];

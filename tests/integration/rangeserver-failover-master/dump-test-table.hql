@@ -1,3 +1,3 @@
 use '/';
-select * from "failover-test" revs=1;
+select * from FailoverTest KEYS_ONLY MAX_VERSIONS 1;
 quit;

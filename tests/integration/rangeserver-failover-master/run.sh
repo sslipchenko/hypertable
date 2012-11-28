@@ -4,17 +4,14 @@ HT_HOME=${INSTALL_DIR:-"/opt/hypertable/current"}
 HYPERTABLE_HOME=${HT_HOME}
 HT_SHELL=$HT_HOME/bin/hypertable
 SCRIPT_DIR=`dirname $0`
-#DATA_SEED=42 # for repeating certain runs
+DATA_SEED=42
+DATA_SIZE=${DATA_SIZE:-"2000000"}
 DIGEST="openssl dgst -md5"
 RS1_PIDFILE=$HT_HOME/run/Hypertable.RangeServer.rs1.pid
 RS2_PIDFILE=$HT_HOME/run/Hypertable.RangeServer.rs2.pid
 RS3_PIDFILE=$HT_HOME/run/Hypertable.RangeServer.rs3.pid
 RUN_DIR=`pwd`
 
-if [ ${FAST} != "" ] ; then
-  echo "Skipping test b/c running in FAST mode"
-  exit 0
-fi
 
 . $HT_HOME/bin/ht-env.sh
 
@@ -26,12 +23,9 @@ fi
 
 wait_for_recovery() {
   local id=$1
-  s="Leaving RecoverServer $id state=COMPLETE"
-  # Test 23 induces an error before the "state=COMPLETE" message is printed,
-  # therefore grep through the mml output
-  [ "$TEST_23" ] && s="MetaLog::Entity RecoverServer.*payload=\{ state=COMPLETE"
-  n=0
-  egrep "$s" master.output.$TEST_ID
+  local n=0
+  local s="Leaving RecoverServer $id state=COMPLETE"
+  egrep "$s" master.output.$TEST
   while [ $? -ne "0" ]
   do
     (( n += 1 ))
@@ -40,136 +34,173 @@ wait_for_recovery() {
       exit 1
     fi
     sleep 2
-    egrep "$s" master.output.$TEST_ID
+    egrep "$s" master.output.$TEST
   done
 }
 
 gen_test_data() {
-  seed=${DATA_SEED:-$$}
-  size=${DATA_SIZE:-"2000000"}
-  perl -e 'print "#row\tcolumn\tvalue\n"' > data.header
-  perl -e 'srand('$seed'); for($i=0; $i<'$size'; ++$i) {
-    printf "row%07d\tcolumn%d\tvalue%d\n", $i, int(rand(3))+1, $i
-  }' > data.body
-  $DIGEST < data.body > data.md5
+    if [ ! -s golden_dump.md5 ] ; then
+        $HT_HOME/bin/ht load_generator --spec-file=$SCRIPT_DIR/data.spec \
+            --max-keys=$DATA_SIZE --row-seed=$DATA_SEED --table=FailoverTest \
+            --stdout update | cut -f1 | tail -n +2 | sort -u > golden_dump.txt
+        $DIGEST < golden_dump.txt > golden_dump.md5
+    fi
 }
 
 stop_range_servers() {
-  echo "shutdown; quit;" | $HT_HOME/bin/ht rsclient localhost:38062
-  echo "shutdown; quit;" | $HT_HOME/bin/ht rsclient localhost:38061
-  echo "shutdown; quit;" | $HT_HOME/bin/ht rsclient localhost:38060
-  sleep 1
-  kill -9 `cat $HT_HOME/run/Hypertable.RangeServer.rs?.pid`
+    local port
+    let port=38059+$1
+    while [ $port -ge 38060 ] ; do
+        echo "shutdown; quit;" | $HT_HOME/bin/ht rsclient localhost:$port
+        let port-=1
+    done
+    sleep 1
+    kill -9 `cat $HT_HOME/run/Hypertable.RangeServer.rs?.pid`
 }
 
-stop_rs1() {
-  echo "shutdown; quit;" | $HT_HOME/bin/ht rsclient localhost:38060
-  kill -9 `cat $HT_HOME/run/Hypertable.RangeServer.rs1.pid`
+stop_rs() {
+    local port
+    let port=38059+$1
+    echo "shutdown; quit;" | $HT_HOME/bin/ht rsclient localhost:$port
+    kill -9 `cat $HT_HOME/run/Hypertable.RangeServer.rs$1.pid`
 }
 
-stop_rs2() {
-  kill -9 `cat $HT_HOME/run/Hypertable.RangeServer.rs2.pid`
+kill_rs() {
+    kill -9 `cat $HT_HOME/run/Hypertable.RangeServer.rs$1.pid`
 }
 
-stop_rs3() {
-  kill -9 `cat $HT_HOME/run/Hypertable.RangeServer.rs3.pid`
-}
-
-set_tests() {
-  for i in $@; do
-    eval TEST_$i=1
-  done
-}
 
 # Runs an individual test with two RangeServers; the master goes down
 # during recovery
-run_test1() {
-  local TEST_ID=$1
-  shift;
-  
-  echo "Running test $TEST_ID." >> report.txt
+run_test() {
+    local MASTER_INDUCED_FAILURE=$1
+    local i port WAIT_ARGS INDUCED_FAILURE PIDFILE PORT
+    shift
+    let i=1
+    while [ $# -gt 0 ] ; do
+        INDUCED_FAILURE[$i]=$1
+        PIDFILE[$i]=$HT_HOME/run/Hypertable.RangeServer.rs$i.pid
+        let port=38059+$i
+        PORT[$i]=$port
+        let i+=1
+        shift
+    done
+    let RS_COUNT=i-1
 
-  stop_range_servers
+    echo "Running test $TEST." >> report.txt
+    let i=1
+    while [ $i -le $RS_COUNT ] ; do
+        echo "$i: ${INDUCED_FAILURE[$i]}" >> report.txt
+        let i+=1
+    done
 
-  $HT_HOME/bin/start-test-servers.sh --no-master --no-rangeserver \
-        --no-thriftbroker --clear
+    stop_range_servers $RS_COUNT
 
-  # start master-launcher script in background. it will restart the
-  # master as soon as it crashes
-  $SCRIPT_DIR/master-launcher.sh $@ > master.output.$TEST_ID 2>&1 &
-  sleep 10
+    $HT_HOME/bin/start-test-servers.sh --no-master --no-rangeserver \
+        --no-thriftbroker --clear --DfsBroker.DisableFileRemoval=true
 
-  # give rangeserver time to get registered etc 
-  $HT_HOME/bin/ht Hypertable.RangeServer --verbose --pidfile=$RS1_PIDFILE \
-     --Hypertable.RangeServer.ProxyName=rs1 \
-     --Hypertable.RangeServer.Port=38060 \
-     --config=${SCRIPT_DIR}/test.cfg 2>&1 > rangeserver.rs1.output.$TEST_ID &
-  sleep 5
-  $HT_HOME/bin/ht Hypertable.RangeServer --verbose --pidfile=$RS2_PIDFILE \
-    --Hypertable.RangeServer.ProxyName=rs2 \
-    --Hypertable.RangeServer.Port=38061 \
-    --config=${SCRIPT_DIR}/test.cfg 2>&1 > rangeserver.rs2.output.$TEST_ID &
+    # start master-launcher script in background. it will restart the
+    # master as soon as it crashes
+    local INDUCER_ARG MASTER_EXIT
+    if test -n $MASTER_INDUCED_FAILURE ; then
+        INDUCER_ARG="--induce-failure=$MASTER_INDUCED_FAILURE"
+    fi        
+    echo $MASTER_INDUCED_FAILURE | grep ":exit:" > /dev/null
+    if [ $? == 0 ] ; then
+        MASTER_EXIT=true
+        $SCRIPT_DIR/master-launcher.sh $INDUCER_ARG > master.output.$TEST 2>&1 &
+    else
+        $HT_HOME/bin/Hypertable.Master --verbose \
+            --pidfile=$HT_HOME/run/Hypertable.Master.pid \
+            --config=${SCRIPT_DIR}/test.cfg \
+            $INDUCER_ARG > master.output.$TEST 2>&1 &
+    fi
+    sleep 10
 
-  $HT_SHELL --batch < $SCRIPT_DIR/create-test-table.hql
-  if [ $? != 0 ] ; then
-    echo "Unable to create table 'failover-test', exiting ..."
-    exit 1
-  fi
+    local j
+    let j=1
+    while [ $j -le $RS_COUNT ] ; do
+        INDUCER_ARG=
+        if test -n ${INDUCED_FAILURE[$j]} ; then
+            INDUCER_ARG=--induce-failure=${INDUCED_FAILURE[$j]}
+        fi
+        $HT_HOME/bin/ht Hypertable.RangeServer --verbose --pidfile=${PIDFILE[$j]} \
+            --Hypertable.RangeServer.ProxyName=rs$j \
+            --Hypertable.RangeServer.Port=${PORT[$j]} ${INDUCED_FAILURE[$j]} \
+            --config=${SCRIPT_DIR}/test.cfg 2>&1 > rangeserver.rs$j.output.$TEST &
+        if [ $j -eq 1 ] ; then
+            sleep 5
+        fi
+        let j+=1
+    done
 
-  $HT_SHELL --Hypertable.Mutator.ScatterBuffer.FlushLimit.PerServer=100K \
-      --batch < $SCRIPT_DIR/load.hql
-  if [ $? != 0 ] ; then
-    echo "Problem loading table 'failover-test', exiting ..."
-    exit 1
-  fi
-  
-  # wait a bit for splits 
-  $HT_HOME/bin/ht_rsclient --exec "COMPACT RANGES USER; WAIT FOR MAINTENANCE;"
-  sleep 10
-  $HT_SHELL --namespace 'sys' --batch --exec \
-     'select Location from METADATA revs=1;' > locations.$TEST_ID  
+    $HT_SHELL --batch < $SCRIPT_DIR/create-test-table.hql
+    if [ $? != 0 ] ; then
+        echo "Unable to create table 'failover-test', exiting ..."
+        exit 1
+    fi
 
-  ROOT_LOCATION=`echo "open /hypertable/root; attrget /hypertable/root Location;" | /opt/hypertable/doug/current/bin/ht hyperspace --batch | tail -1`
+    $HT_HOME/bin/ht load_generator --spec-file=$SCRIPT_DIR/data.spec \
+        --max-keys=$DATA_SIZE --row-seed=$DATA_SEED --table=FailoverTest \
+        --Hypertable.Mutator.ScatterBuffer.FlushLimit.PerServer=100K \
+        update
+    if [ $? != 0 ] ; then
+        echo "Problem loading table 'FailoverTest', exiting ..."
+        exit 1
+    fi
+    
+    sleep 10
+    $HT_SHELL --namespace 'sys' --batch --exec \
+        'select Location from METADATA revs=1;' > locations.$TEST
 
-  kill -9 `cat $HT_HOME/run/Hypertable.RangeServer.$ROOT_LOCATION.pid`  
-  
+  # kill rs1
+    stop_rs 1
+    
   # wait for recovery to complete 
-  wait_for_recovery $ROOT_LOCATION
+    wait_for_recovery "rs1"
+    let j=2
+    while [ $j -le $RS_COUNT ] ; do
+        if test -n "${INDUCED_FAILURE[$j]}" ; then
+            wait_for_recovery "rs$j"          
+        fi
+        let j+=1
+    done
 
-  fgrep "CRASH" master.output.$TEST_ID
-  if [ $? != 0 ] ; then
-    echo "ERROR: Failure was not induced."
-    exit 1
-  fi
-  
+    if test -n "$MASTER_EXIT" ; then
+        fgrep "CRASH" master.output.$TEST
+        if [ $? != 0 ] ; then
+            echo "ERROR: Failure was not induced in Master."
+            exit 1
+        fi
+    fi
+    
   # dump keys
-  $HT_SHELL -l error --batch < $SCRIPT_DIR/dump-test-table.hql \
-      | grep -v "hypertable" > dbdump.$TEST_ID
-  if [ $? != 0 ] ; then
-    echo "Problem dumping table 'failover-test', exiting ..."
-    exit 1
-  fi
-  
-  # shut everything down
-  kill -9 `cat $HT_HOME/run/Hypertable.RangeServer.*.pid`  
-  $HT_HOME/bin/stop-servers.sh
-
-  $DIGEST < dbdump.$TEST_ID > dbdump.md5
-  diff data.md5 dbdump.md5 > out
-  if [ $? != 0 ] ; then
-    echo "Test $TEST_ID FAILED." >> report.txt
-    echo "Test $TEST_ID FAILED." >> errors.txt
-    cat out >> report.txt
-    touch error
     $HT_SHELL -l error --batch < $SCRIPT_DIR/dump-test-table.hql \
-        | grep -v "hypertable" > dbdump.$TEST_ID.again
+        | grep -v "hypertable" > dbdump.$TEST
     if [ $? != 0 ] ; then
         echo "Problem dumping table 'failover-test', exiting ..."
         exit 1
     fi
-  else
-    echo "Test $TEST_ID PASSED." >> report.txt
-  fi
+    
+    $DIGEST < dbdump.$TEST > dbdump.md5
+    diff golden_dump.md5 dbdump.md5 > out
+    if [ $? != 0 ] ; then
+        echo "Test $TEST FAILED." >> report.txt
+        echo "Test $TEST FAILED." >> errors.txt
+        cat out >> report.txt
+        touch error
+        $HT_SHELL -l error --batch < $SCRIPT_DIR/dump-test-table.hql \
+            | grep -v "hypertable" > dbdump.$TEST.again
+        exec 1>&-
+        sleep 86400
+    else
+        echo "Test $TEST PASSED." >> report.txt
+    fi
+
+    # shut everything down
+    kill -9 `cat $HT_HOME/run/Hypertable.RangeServer.*.pid`  
+    $HT_HOME/bin/stop-servers.sh
+
 }
 
 # Runs an individual test with three RangeServers; one additional range server
@@ -467,31 +498,59 @@ rm -f report.txt
 
 gen_test_data
 
-env | grep '^TEST_[1-9][0-9]\?=' || set_tests 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40
+let j=1
+[ $TEST == $j ] && run_test "recover-server-ranges-root-initial-1:exit:0" "" ""
+let j+=1
+[ $TEST == $j ] && run_test "recover-server-ranges-root-initial-2:exit:0" "" ""
+let j+=1
+[ $TEST == $j ] && run_test "recover-server-ranges-root-load-3:exit:0" "" ""
+let j+=1
+[ $TEST == $j ] && run_test "recover-server-ranges-root-replay-3:exit:0" "" ""
+let j+=1
+[ $TEST == $j ] && run_test "recover-server-ranges-root-prepare-3:exit:0" "" ""
+let j+=1
+[ $TEST == $j ] && run_test "recover-server-ranges-root-commit-3:exit:0" "" ""
+let j+=1
+[ $TEST == $j ] && run_test "recover-server-ranges-root-ack-3:exit:0" "" ""
+let j+=1
+[ $TEST == $j ] && run_test "recover-server-ranges-metadata-load-3:exit:0" "" ""
+let j+=1
+[ $TEST == $j ] && run_test "recover-server-ranges-metadata-replay-3:exit:0" "" ""
+let j+=1
+[ $TEST == $j ] && run_test "recover-server-ranges-metadata-prepare-3:exit:0" "" ""
+let j+=1
+[ $TEST == $j ] && run_test "recover-server-ranges-metadata-commit-3:exit:0" "" ""
+let j+=1
+[ $TEST == $j ] && run_test "recover-server-ranges-metadata-ack-3:exit:0" "" ""
+let j+=1
+[ $TEST == $j ] && run_test "recover-server-ranges-user-load-3:exit:0" "" ""
+let j+=1
+[ $TEST == $j ] && run_test "recover-server-ranges-user-replay-3:exit:0" "" ""
+let j+=1
+[ $TEST == $j ] && run_test "recover-server-ranges-user-prepare-3:exit:0" "" ""
+let j+=1
+[ $TEST == $j ] && run_test "recover-server-ranges-user-commit-3:exit:0" "" ""
+let j+=1
+[ $TEST == $j ] && run_test "recover-server-ranges-user-ack-3:exit:0" "" ""
+let j+=1
+[ $TEST == $j ] && run_test "recover-server-1:exit:0" "" ""
+let j+=1
+[ $TEST == $j ] && run_test "recover-server-2:exit:0" "" ""
+let j+=1
+[ $TEST == $j ] && run_test "recover-server-3:exit:0" "" ""
+let j+=1
+[ $TEST == $j ] && run_test "recover-server-4:exit:0" "" ""
+let j+=1
+[ $TEST == $j ] && run_test "recover-server-ranges-user-phantom-load-ranges:throw:0" "" "" ""
+let j+=1
+[ $TEST == $j ] && run_test "recover-server-ranges-user-replay-fragments:throw:0" "" "" ""
+let j+=1
+[ $TEST == $j ] && run_test "recover-server-ranges-user-phantom-prepare-ranges:throw:0" "" "" ""
+let j+=1
+[ $TEST == $j ] && run_test "recover-server-ranges-user-phantom-commit-ranges:throw:0" "" "" ""
+let j+=1
+[ $TEST == $j ] && run_test "recover-server-ranges-user-acknowledge-load:throw:0" "" "" ""
 
-[ "$TEST_1" ] && run_test1 1 "--induce-failure=recover-server-ranges-root-initial-1:exit:0"
-[ "$TEST_2" ] && run_test1 2 "--induce-failure=recover-server-ranges-root-initial-2:exit:0"
-[ "$TEST_3" ] && run_test1 3 "--induce-failure=recover-server-ranges-root-load-3:exit:0"
-[ "$TEST_4" ] && run_test1 4 "--induce-failure=recover-server-ranges-root-replay-3:exit:0"
-[ "$TEST_5" ] && run_test1 5 "--induce-failure=recover-server-ranges-root-prepare-3:exit:0"
-[ "$TEST_6" ] && run_test1 6 "--induce-failure=recover-server-ranges-root-commit-3:exit:0"
-[ "$TEST_7" ] && run_test1 7 "--induce-failure=recover-server-ranges-root-ack-3:exit:0"
-[ "$TEST_8" ] && run_test1 8 "--induce-failure=recover-server-ranges-metadata-load-3:exit:0"
-[ "$TEST_9" ] && run_test1 9 "--induce-failure=recover-server-ranges-metadata-replay-3:exit:0"
-[ "$TEST_10" ] && run_test1 10 "--induce-failure=recover-server-ranges-metadata-prepare-3:exit:0"
-[ "$TEST_11" ] && run_test1 11 "--induce-failure=recover-server-ranges-metadata-commit-3:exit:0"
-[ "$TEST_12" ] && run_test1 12 "--induce-failure=recover-server-ranges-metadata-ack-3:exit:0"
-[ "$TEST_13" ] && run_test1 13 "--induce-failure=recover-server-ranges-user-load-3:exit:0"
-[ "$TEST_14" ] && run_test1 14 "--induce-failure=recover-server-ranges-user-replay-3:exit:0"
-[ "$TEST_15" ] && run_test1 15 "--induce-failure=recover-server-ranges-user-prepare-3:exit:0"
-[ "$TEST_16" ] && run_test1 16 "--induce-failure=recover-server-ranges-user-commit-3:exit:0"
-[ "$TEST_17" ] && run_test1 17 "--induce-failure=recover-server-ranges-user-ack-3:exit:0"
-[ "$TEST_18" ] && run_test1 18 "--induce-failure=recover-server-1:exit:0"
-[ "$TEST_19" ] && run_test1 19 "--induce-failure=recover-server-2:exit:0"
-[ "$TEST_20" ] && run_test1 20 "--induce-failure=recover-server-3:exit:0"
-[ "$TEST_21" ] && run_test1 21 "--induce-failure=recover-server-4:exit:0"
-[ "$TEST_22" ] && run_test1 22 "--induce-failure=recover-server-5:exit:0"
-[ "$TEST_23" ] && run_test1 23 "--induce-failure=recover-server-6:exit:0"
 [ "$TEST_24" ] && run_test1 24 "--induce-failure=recover-server-ranges-root-replay-commit-log:throw"
 [ "$TEST_25" ] && run_test2 25 "--induce-failure=recover-server-ranges-user-load-2:exit:0" "--induce-failure=phantom-load-user-1:exit:0"
 [ "$TEST_26" ] && run_test2 26 "--induce-failure=recover-server-ranges-user-load-2:exit:0" "--induce-failure=phantom-load-user-2:exit:0"

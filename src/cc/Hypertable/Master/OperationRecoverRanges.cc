@@ -44,13 +44,11 @@ OperationRecoverRanges::OperationRecoverRanges(ContextPtr &context,
   m_dependencies.insert(Dependency::RECOVERY_BLOCKER);
   initialize_obstructions_dependencies();
   set_type_str();
-  m_timeout = m_context->props->get_i32("Hypertable.Failover.Timeout");
 }
 
 OperationRecoverRanges::OperationRecoverRanges(ContextPtr &context,
                                     const MetaLog::EntityHeader &header_) 
   : Operation(context, header_), m_plan_generation(0) {
-  m_timeout = m_context->props->get_i32("Hypertable.Failover.Timeout");
 }
 
 void OperationRecoverRanges::execute() {
@@ -59,6 +57,11 @@ void OperationRecoverRanges::execute() {
   HT_INFOF("Entering RecoverServerRanges (%p) %s type=%d plan_generation=%d state=%s",
           (void *)this, m_location.c_str(), m_type, m_plan_generation,
           OperationState::get_text(state));
+
+  if (!m_context->recovery_state().get_replay_future(id())) {
+    create_futures();
+    m_timeout = m_context->props->get_i32("Hypertable.Failover.Timeout");
+  }
 
   switch (state) {
   case OperationState::INITIAL:
@@ -295,9 +298,9 @@ bool OperationRecoverRanges::phantom_load_ranges() {
     try {
       HT_INFOF("Calling phantom_load(plan_generation=%d, location=%s) for %d %s ranges",
                m_plan_generation, location.c_str(), (int)specs.size(), m_type_str.c_str());
-      HT_MAYBE_FAIL(format("recover-server-ranges-%s-replay-commit-log", 
-                  m_type_str.c_str()));
       rsc.phantom_load(addr, m_location, m_plan_generation, fragments, specs, states);
+      HT_MAYBE_FAIL(format("recover-server-ranges-%s-phantom-load-ranges",
+                  m_type_str.c_str()));
     }
     catch (Exception &e) {
       success = false;
@@ -344,10 +347,24 @@ bool OperationRecoverRanges::wait_for_quorum() {
   return true;
 }
 
+void OperationRecoverRanges::create_futures() {
+  RecoveryStepFuturePtr future;
+
+  // Install "replay" future
+  future = new RecoveryStepFuture("replay", m_plan_generation);
+  m_context->recovery_state().install_replay_future(id(), future);
+
+  // Install "prepare" future
+  future = new RecoveryStepFuture("prepare", m_plan_generation);
+  m_context->recovery_state().install_prepare_future(id(), future);
+
+  // Install "commit" future
+  future = new RecoveryStepFuture("commit", m_plan_generation);
+  m_context->recovery_state().install_commit_future(id(), future);
+}
 
 void OperationRecoverRanges::get_new_recovery_plan() {
   int initial_generation = m_plan_generation;
-  RecoveryStepFuturePtr future;
 
   m_context->get_balance_plan_authority()->copy_recovery_plan(m_location,
                                          m_type, m_plan, m_plan_generation);
@@ -356,18 +373,7 @@ void OperationRecoverRanges::get_new_recovery_plan() {
     HT_INFOF("Retrieved new balance plan for %s (type=%s, generation=%d) range count %d",
              m_location.c_str(), m_type_str.c_str(), m_plan_generation,
              (int)m_plan.receiver_plan.size());
-
-    // Install "replay" future
-    future = new RecoveryStepFuture("replay", m_plan_generation);
-    m_context->recovery_state().install_replay_future(id(), future);
-
-    // Install "prepare" future
-    future = new RecoveryStepFuture("prepare", m_plan_generation);
-    m_context->recovery_state().install_prepare_future(id(), future);
-
-    // Install "commit" future
-    future = new RecoveryStepFuture("commit", m_plan_generation);
-    m_context->recovery_state().install_commit_future(id(), future);
+    create_futures();
   }
 
 }
@@ -416,6 +422,8 @@ bool OperationRecoverRanges::replay_fragments() {
           << HT_END;
       rsc.replay_fragments(addr, id(), m_location, m_plan_generation, 
                            m_type, fragments, m_plan.receiver_plan, m_timeout);
+      HT_MAYBE_FAIL(format("recover-server-ranges-%s-replay-fragments",
+                  m_type_str.c_str()));
     }
     catch (Exception &e) {
       HT_ERROR_OUT << e << HT_END;
@@ -456,6 +464,8 @@ bool OperationRecoverRanges::prepare_to_commit() {
         << " ranges to " << location << " (" << m_type_str << ")" << HT_END;
     try {
       rsc.phantom_prepare_ranges(addr, id(), m_location, m_plan_generation, specs, m_timeout);
+      HT_MAYBE_FAIL(format("recover-server-ranges-%s-phantom-prepare-ranges",
+                  m_type_str.c_str()));
     }
     catch (Exception &e) {
       HT_ERROR_OUT << e << HT_END;
@@ -498,6 +508,8 @@ bool OperationRecoverRanges::commit() {
       HT_INFO_OUT << "Issue phantom_commit_ranges for " << specs.size()
           << " ranges to " << location << HT_END;
       rsc.phantom_commit_ranges(addr, id(), m_location, m_plan_generation, specs, m_timeout);
+      HT_MAYBE_FAIL(format("recover-server-ranges-%s-phantom-commit-ranges",
+                  m_type_str.c_str()));
     }
     catch (Exception &e) {
       HT_ERROR_OUT << e << HT_END;
@@ -543,6 +555,8 @@ bool OperationRecoverRanges::acknowledge() {
           << " ranges to " << location << HT_END;
       HT_MAYBE_FAIL(format("recover-server-ranges-%s-14", m_type_str.c_str()));
       rsc.acknowledge_load(addr, range_ptrs, response_map);
+      HT_MAYBE_FAIL(format("recover-server-ranges-%s-acknowledge-load",
+                           m_type_str.c_str()));
       response_map_it = response_map.begin();
       while (response_map_it != response_map.end()) {
         if (response_map_it->second != Error::OK)

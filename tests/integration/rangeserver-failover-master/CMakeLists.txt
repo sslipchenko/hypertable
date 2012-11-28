@@ -4,97 +4,110 @@
 # 2 RangeServers; 1 crashes, and the Master crashes during recovery via
 # the FailureInducer
 #
-add_test(RangeServer-failover-master-1 env TEST_1=1 DATA_SIZE=200000
+add_test(RangeServer-failover-master-1 env TEST=1 DATA_SIZE=200000
          INSTALL_DIR=${INSTALL_DIR}
          bash -x ${CMAKE_CURRENT_SOURCE_DIR}/run.sh)
 
-add_test(RangeServer-failover-master-2 env TEST_2=1 DATA_SIZE=200000
+add_test(RangeServer-failover-master-2 env TEST=2 DATA_SIZE=200000
          INSTALL_DIR=${INSTALL_DIR}
          bash -x ${CMAKE_CURRENT_SOURCE_DIR}/run.sh)
 
-add_test(RangeServer-failover-master-3 env TEST_3=1 DATA_SIZE=200000
+add_test(RangeServer-failover-master-3 env TEST=3 DATA_SIZE=200000
          INSTALL_DIR=${INSTALL_DIR}
          bash -x ${CMAKE_CURRENT_SOURCE_DIR}/run.sh)
 
-add_test(RangeServer-failover-master-4 env TEST_4=1 DATA_SIZE=200000
+add_test(RangeServer-failover-master-4 env TEST=4 DATA_SIZE=200000
          INSTALL_DIR=${INSTALL_DIR}
          bash -x ${CMAKE_CURRENT_SOURCE_DIR}/run.sh)
 
-add_test(RangeServer-failover-master-5 env TEST_5=1 DATA_SIZE=200000
+add_test(RangeServer-failover-master-5 env TEST=5 DATA_SIZE=200000
          INSTALL_DIR=${INSTALL_DIR}
          bash -x ${CMAKE_CURRENT_SOURCE_DIR}/run.sh)
 
-add_test(RangeServer-failover-master-6 env TEST_6=1 DATA_SIZE=200000
+add_test(RangeServer-failover-master-6 env TEST=6 DATA_SIZE=200000
          INSTALL_DIR=${INSTALL_DIR}
          bash -x ${CMAKE_CURRENT_SOURCE_DIR}/run.sh)
 
-add_test(RangeServer-failover-master-7 env TEST_7=1 DATA_SIZE=200000
+add_test(RangeServer-failover-master-7 env TEST=7 DATA_SIZE=200000
          INSTALL_DIR=${INSTALL_DIR}
          bash -x ${CMAKE_CURRENT_SOURCE_DIR}/run.sh)
 
-add_test(RangeServer-failover-master-8 env TEST_8=1 DATA_SIZE=200000
+add_test(RangeServer-failover-master-8 env TEST=8 DATA_SIZE=200000
          INSTALL_DIR=${INSTALL_DIR}
          bash -x ${CMAKE_CURRENT_SOURCE_DIR}/run.sh)
 
-add_test(RangeServer-failover-master-9 env TEST_9=1 DATA_SIZE=200000
+add_test(RangeServer-failover-master-9 env TEST=9 DATA_SIZE=200000
          INSTALL_DIR=${INSTALL_DIR}
          bash -x ${CMAKE_CURRENT_SOURCE_DIR}/run.sh)
 
-add_test(RangeServer-failover-master-10 env TEST_10=1 DATA_SIZE=200000
+add_test(RangeServer-failover-master-10 env TEST=10 DATA_SIZE=200000
          INSTALL_DIR=${INSTALL_DIR}
          bash -x ${CMAKE_CURRENT_SOURCE_DIR}/run.sh)
 
-add_test(RangeServer-failover-master-11 env TEST_11=1 DATA_SIZE=200000
+add_test(RangeServer-failover-master-11 env TEST=11 DATA_SIZE=200000
          INSTALL_DIR=${INSTALL_DIR}
          bash -x ${CMAKE_CURRENT_SOURCE_DIR}/run.sh)
 
-add_test(RangeServer-failover-master-12 env TEST_12=1 DATA_SIZE=200000
+add_test(RangeServer-failover-master-12 env TEST=12 DATA_SIZE=200000
          INSTALL_DIR=${INSTALL_DIR}
          bash -x ${CMAKE_CURRENT_SOURCE_DIR}/run.sh)
 
-add_test(RangeServer-failover-master-13 env TEST_13=1 DATA_SIZE=200000
+add_test(RangeServer-failover-master-13 env TEST=13 DATA_SIZE=200000
          INSTALL_DIR=${INSTALL_DIR}
          bash -x ${CMAKE_CURRENT_SOURCE_DIR}/run.sh)
 
-add_test(RangeServer-failover-master-14 env TEST_14=1 DATA_SIZE=200000
+add_test(RangeServer-failover-master-14 env TEST=14 DATA_SIZE=200000
          INSTALL_DIR=${INSTALL_DIR}
          bash -x ${CMAKE_CURRENT_SOURCE_DIR}/run.sh)
 
-add_test(RangeServer-failover-master-15 env TEST_15=1 DATA_SIZE=200000
+add_test(RangeServer-failover-master-15 env TEST=15 DATA_SIZE=200000
          INSTALL_DIR=${INSTALL_DIR}
          bash -x ${CMAKE_CURRENT_SOURCE_DIR}/run.sh)
 
-add_test(RangeServer-failover-master-16 env TEST_16=1 DATA_SIZE=200000
+add_test(RangeServer-failover-master-16 env TEST=16 DATA_SIZE=200000
          INSTALL_DIR=${INSTALL_DIR}
          bash -x ${CMAKE_CURRENT_SOURCE_DIR}/run.sh)
 
-add_test(RangeServer-failover-master-17 env TEST_17=1 DATA_SIZE=200000
+add_test(RangeServer-failover-master-17 env TEST=17 DATA_SIZE=200000
          INSTALL_DIR=${INSTALL_DIR}
          bash -x ${CMAKE_CURRENT_SOURCE_DIR}/run.sh)
 
-add_test(RangeServer-failover-master-18 env TEST_18=1 DATA_SIZE=200000
+add_test(RangeServer-failover-master-18 env TEST=18 DATA_SIZE=200000
          INSTALL_DIR=${INSTALL_DIR}
          bash -x ${CMAKE_CURRENT_SOURCE_DIR}/run.sh)
 
-add_test(RangeServer-failover-master-19 env TEST_19=1 DATA_SIZE=200000
+add_test(RangeServer-failover-master-19 env TEST=19 DATA_SIZE=200000
          INSTALL_DIR=${INSTALL_DIR}
          bash -x ${CMAKE_CURRENT_SOURCE_DIR}/run.sh)
 
-add_test(RangeServer-failover-master-20 env TEST_20=1 DATA_SIZE=200000
+add_test(RangeServer-failover-master-20 env TEST=20 DATA_SIZE=200000
          INSTALL_DIR=${INSTALL_DIR}
          bash -x ${CMAKE_CURRENT_SOURCE_DIR}/run.sh)
 
-add_test(RangeServer-failover-master-21 env TEST_21=1 DATA_SIZE=200000
+add_test(RangeServer-failover-master-21 env TEST=21 DATA_SIZE=200000
          INSTALL_DIR=${INSTALL_DIR}
          bash -x ${CMAKE_CURRENT_SOURCE_DIR}/run.sh)
 
-add_test(RangeServer-failover-master-22 env TEST_22=1 DATA_SIZE=200000
+add_test(RangeServer-failover-master-22 env TEST=22 DATA_SIZE=200000
          INSTALL_DIR=${INSTALL_DIR}
          bash -x ${CMAKE_CURRENT_SOURCE_DIR}/run.sh)
 
-add_test(RangeServer-failover-master-23 env TEST_23=1 DATA_SIZE=200000
+add_test(RangeServer-failover-master-23 env TEST=23 DATA_SIZE=200000
          INSTALL_DIR=${INSTALL_DIR}
          bash -x ${CMAKE_CURRENT_SOURCE_DIR}/run.sh)
+
+add_test(RangeServer-failover-master-24 env TEST=24 DATA_SIZE=200000
+         INSTALL_DIR=${INSTALL_DIR}
+         bash -x ${CMAKE_CURRENT_SOURCE_DIR}/run.sh)
+
+add_test(RangeServer-failover-master-25 env TEST=25 DATA_SIZE=200000
+         INSTALL_DIR=${INSTALL_DIR}
+         bash -x ${CMAKE_CURRENT_SOURCE_DIR}/run.sh)
+
+add_test(RangeServer-failover-master-26 env TEST=26 DATA_SIZE=200000
+         INSTALL_DIR=${INSTALL_DIR}
+         bash -x ${CMAKE_CURRENT_SOURCE_DIR}/run.sh)
+
 
 #
 # The following 6 tests have the same flow:

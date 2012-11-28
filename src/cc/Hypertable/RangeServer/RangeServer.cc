@@ -3593,7 +3593,6 @@ void RangeServer::replay_fragments(ResponseCallback *cb, int64_t op_id,
         else if (fragment_id != last_fragment_id) {
           replay_buffer.finish_fragment();
           last_fragment_id = fragment_id;
-          num_kv_pairs = 0;
           replay_buffer.set_current_fragment(fragment_id);
         }
 
@@ -3602,6 +3601,7 @@ void RangeServer::replay_fragments(ResponseCallback *cb, int64_t op_id,
 
         table_id.decode(&ptr, &len);
 
+        num_kv_pairs = 0;
         while (ptr < end) {
           // extract the key
           key.ptr = ptr;
@@ -3616,6 +3616,8 @@ void RangeServer::replay_fragments(ResponseCallback *cb, int64_t op_id,
           ++num_kv_pairs;
           replay_buffer.add(table_id, key, value);
         }
+        HT_INFOF("Replayed %d key/value pairs from fragment %s",
+                 (int)num_kv_pairs, log_reader->last_fragment_fname().c_str());
         block_count++;
       }
 
