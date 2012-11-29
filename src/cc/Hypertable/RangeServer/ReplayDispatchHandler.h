@@ -45,36 +45,27 @@ namespace Hypertable {
   public:
     ReplayDispatchHandler(Comm *comm, const String &location, 
                           int plan_generation, int32_t timeout_ms) :
-        m_rsclient(comm, timeout_ms), m_recover_location(location),
-        m_plan_generation(plan_generation), m_timeout_ms(timeout_ms),
-        m_outstanding(0) { }
+      m_rsclient(comm, timeout_ms), m_recover_location(location),
+      m_error(Error::OK), m_plan_generation(plan_generation),
+      m_timeout_ms(timeout_ms), m_outstanding(0) { }
 
-    virtual void handle(EventPtr &event_ptr);
+    virtual void handle(EventPtr &event);
 
     void add(const CommAddress &addr, const QualifiedRangeSpec &range,
              uint32_t fragment, StaticBuffer &buffer);
 
-    bool has_errors() {
-      ScopedLock lock(m_mutex);
-      return (m_range_errors.size()>0 || m_location_errors.size()>0);
-    }
-
-    void get_error_locations(vector<String> &locations);
-    void get_error_ranges(vector<QualifiedRangeSpec> &ranges);
-    void get_completed_ranges(set<QualifiedRangeSpec> &ranges);
-    bool wait_for_completion();
+    void wait_for_completion();
 
   private:
     Mutex         m_mutex;
     boost::condition m_cond;
     RangeServerClient m_rsclient;
     String m_recover_location;
+    String m_error_msg;
+    int32_t m_error;
     int m_plan_generation;
     int32_t m_timeout_ms;
-    size_t        m_outstanding;
-    map<QualifiedRangeSpecManaged, int32_t> m_range_errors;
-    map<String, int32_t> m_location_errors;
-    set<QualifiedRangeSpecManaged> m_completed_ranges;
+    size_t  m_outstanding;
   };
 }
 

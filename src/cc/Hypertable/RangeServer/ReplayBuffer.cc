@@ -57,12 +57,6 @@ void ReplayBuffer::add(const TableIdentifier &table, SerializedKey &key,
   QualifiedRangeSpec range;
   // skip over any cells that are not in the recovery plan
   if (m_plan.get_range_spec(table, row, range)) {
-    // skip over any ranges that have completely received data for this fragment
-    if (m_completed_ranges.find(range) != m_completed_ranges.end()) {
-      HT_DEBUG_OUT << "Skipping key " << row << " which is in completed range"
-          << range << HT_END;
-      return;
-    }
     ReplayBufferMap::iterator it = m_buffer_map.find(range);
     if (it == m_buffer_map.end())
       return;
@@ -89,9 +83,6 @@ void ReplayBuffer::flush() {
   ReplayDispatchHandler handler(m_comm, m_location, m_plan_generation, m_timeout_ms);
 
   foreach_ht(ReplayBufferMap::value_type &vv, m_buffer_map) {
-    // skip over any ranges that have completely received data for this fragment
-    if (m_completed_ranges.find(vv.first) != m_completed_ranges.end())
-      continue;
 
     if (vv.second->memory_used() > 0) {
       RangeReplayBuffer &buffer = *(vv.second.get());
@@ -103,30 +94,8 @@ void ReplayBuffer::flush() {
       buffer.clear();
     }
   }
-  if (handler.wait_for_completion()) {
-    vector<String> locations;
-    vector<QualifiedRangeSpec> specs;
-    handler.get_error_ranges(specs);
-    handler.get_error_locations(locations);
-    foreach_ht(const String &location, locations)
-      m_plan.get_range_specs(location, specs);
-    foreach_ht(QualifiedRangeSpec spec, specs)
-      m_buffer_map.erase(spec);
-  }
 
-  // update set of ranges that have already finished receiving data for
-  // this fragment
-  set<QualifiedRangeSpec> completed_ranges;
-  set<QualifiedRangeSpec>::iterator set_it;
-  handler.get_completed_ranges(completed_ranges);
-  set_it = completed_ranges.begin();
-  while (set_it != completed_ranges.end()) {
-    ReplayBufferMap::iterator it = m_buffer_map.find(*set_it);
-    if (it != m_buffer_map.end()) {
-      m_completed_ranges.insert(it->first);
-      it->second->clear();
-    }
-    ++set_it;
-  }
+  handler.wait_for_completion();
+
   m_memory_used=0;
 }

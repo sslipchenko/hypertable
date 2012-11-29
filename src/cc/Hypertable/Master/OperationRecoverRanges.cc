@@ -124,7 +124,7 @@ void OperationRecoverRanges::execute() {
 
     try {
       if (!replay_fragments()) {
-        HT_MAYBE_FAIL(format("recover-server-ranges-%s-2", m_type_str.c_str()));
+        HT_MAYBE_FAIL(format("recover-server-ranges-%s-replay-2", m_type_str.c_str()));
         break;
       }
     }
@@ -433,7 +433,7 @@ bool OperationRecoverRanges::replay_fragments() {
 
   Timer tt(m_timeout);
   if (!future->wait_for_completion(tt)) {
-    HT_ERROR_OUT << "phantom_prepare_ranges failed" << HT_END;
+    HT_ERROR_OUT << "replay_fragments failed" << HT_END;
     // TODO: Notify administrator
     return false;
   }
@@ -475,7 +475,7 @@ bool OperationRecoverRanges::prepare_to_commit() {
 
   Timer tt(m_timeout);
   if (!future->wait_for_completion(tt)) {
-    HT_ERROR_OUT << "phantom_prepare_ranges failed" << HT_END;
+    HT_ERROR_OUT << "prepare_to_commit failed" << HT_END;
     // TODO: Notify administrator
     return false;
   }
@@ -519,7 +519,7 @@ bool OperationRecoverRanges::commit() {
 
   Timer tt(m_timeout);
   if (!future->wait_for_completion(tt)) {
-    HT_ERROR_OUT << "phantom_commit_ranges failed" << HT_END;
+    HT_ERROR_OUT << "commit failed" << HT_END;
     // TODO: Notify administrator
     return false;
   }
@@ -578,9 +578,12 @@ bool OperationRecoverRanges::acknowledge() {
     }
   }
 
-  // Purge successfully acknowledged ranges from recovery plan
-  if (!acknowledged.empty())
+  // Purge successfully acknowledged ranges from recovery plan(s)
+  if (!acknowledged.empty()) {
     bpa->remove_from_receiver_plan(m_location, m_type, acknowledged);
+    foreach_ht (const QualifiedRangeSpec &spec, acknowledged)
+      m_plan.receiver_plan.remove(spec);
+  }
 
   // at this point all the players have prepared or failed in
   // creating phantom ranges

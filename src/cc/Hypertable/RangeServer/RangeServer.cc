@@ -3629,10 +3629,9 @@ void RangeServer::replay_fragments(ResponseCallback *cb, int64_t op_id,
       HT_THROWF(e.code(), "%s: %s", log_reader->last_fragment_fname().c_str(), e.what());
     }
 
-    HT_MAYBE_FAIL("replay-fragments-1");
-    HT_MAYBE_FAIL_X("replay-fragments-user-1", type==RangeSpec::USER);
-
     replay_buffer.flush();
+
+    HT_MAYBE_FAIL_X("replay-fragments-user-1", type==RangeSpec::USER);
 
     HT_INFO_OUT << "Finished playing " << fragments.size() << " fragments from "
                 << log_dir << HT_END;
@@ -3649,8 +3648,6 @@ void RangeServer::replay_fragments(ResponseCallback *cb, int64_t op_id,
     }
     return;
   }
-
-  HT_MAYBE_FAIL("replay-fragments-2");
 
   try {
     m_master_client->replay_complete(op_id, location, plan_generation,
@@ -3686,7 +3683,7 @@ void RangeServer::phantom_load(ResponseCallback *cb, const String &location,
 
   HT_ASSERT(!specs.empty());
 
-  HT_MAYBE_FAIL_X("phantom-load-user-1", specs[0].table.is_user());
+  HT_MAYBE_FAIL_X("phantom-load-user", specs[0].table.is_user());
 
   {
     ScopedLock lock(m_failover_mutex);
@@ -3751,15 +3748,13 @@ void RangeServer::phantom_load(ResponseCallback *cb, const String &location,
       }
     }
     catch (Exception &e) {
-      HT_ERRORF("Phantom receive failed '%s'", e.what());
+      HT_ERROR_OUT << "Phantom load failed - " << e << HT_END;
       cb->error(e.code(), e.what());
       return;
     }
 
     phantom_range_map->set_loaded();
   }
-
-  HT_MAYBE_FAIL_X("phantom-load-user-2", specs[0].table.is_user());
 
   cb->response_ok();
 }
@@ -3773,6 +3768,9 @@ void RangeServer::phantom_update(ResponseCallbackPhantomUpdate *cb,
   FailoverPhantomRangeMap::iterator failover_map_it;
   PhantomRangeMapPtr phantom_range_map;
   PhantomRangePtr phantom_range;
+
+  HT_MAYBE_FAIL_X("phantom-update-user", range.table.is_user());
+  HT_MAYBE_FAIL_X("phantom-update-metadata", range.table.is_metadata());
 
   {
     ScopedLock lock(m_failover_mutex);
@@ -3926,8 +3924,6 @@ void RangeServer::phantom_prepare_ranges(ResponseCallback *cb, int64_t op_id,
       phantom_range->populate_range_and_log(Global::log_dfs,
                                             Global::log_dir, &is_empty);
 
-      HT_MAYBE_FAIL_X("phantom-prepare-ranges-user-1", rr.table.is_user());
-
       HT_DEBUG_OUT << "populated range and log for range " << rr << HT_END;
 
       RangePtr range = phantom_range->get_range();
@@ -3998,7 +3994,7 @@ void RangeServer::phantom_prepare_ranges(ResponseCallback *cb, int64_t op_id,
       phantom_range->set_staged();
     }
 
-    HT_MAYBE_FAIL_X("phantom-prepare-ranges-user-2", specs.back().table.is_user());
+    HT_MAYBE_FAIL_X("phantom-prepare-ranges-user-1", specs.back().table.is_user());
 
     HT_DEBUG_OUT << "write all range entries to rsml" << HT_END;
     // write metalog entities
@@ -4008,7 +4004,8 @@ void RangeServer::phantom_prepare_ranges(ResponseCallback *cb, int64_t op_id,
       HT_THROW(Error::SERVER_SHUTTING_DOWN,
                Global::location_initializer->get());
 
-    HT_MAYBE_FAIL_X("phantom-prepare-ranges-user-3", specs.back().table.is_user());
+    HT_MAYBE_FAIL_X("phantom-prepare-ranges-root-2", specs.back().is_root());
+    HT_MAYBE_FAIL_X("phantom-prepare-ranges-user-2", specs.back().table.is_user());
 
     phantom_range_map->set_prepared();
 
@@ -4024,14 +4021,15 @@ void RangeServer::phantom_prepare_ranges(ResponseCallback *cb, int64_t op_id,
     return;
   }
 
-  HT_MAYBE_FAIL("phantom-prepare-ranges-4");
-
   try {
     m_master_client->phantom_prepare_complete(op_id, location, plan_generation, Error::OK, "");
   }
   catch (Exception &e) {
     HT_ERROR_OUT << e << HT_END;
   }
+
+  HT_MAYBE_FAIL("phantom-prepare-ranges-user-3");
+
 }
 
 void RangeServer::phantom_commit_ranges(ResponseCallback *cb, int64_t op_id,
@@ -4203,7 +4201,6 @@ void RangeServer::phantom_commit_ranges(ResponseCallback *cb, int64_t op_id,
 
     phantom_range_map->set_committed();
 
-    HT_MAYBE_FAIL_X("phantom-commit-user-4", specs.back().table.is_user());
   }
   catch (Exception &e) {
     HT_ERROR_OUT << e << HT_END;
@@ -4220,6 +4217,8 @@ void RangeServer::phantom_commit_ranges(ResponseCallback *cb, int64_t op_id,
     
     m_master_client->phantom_commit_complete(op_id, location, plan_generation, Error::OK, "");
 
+    HT_MAYBE_FAIL_X("phantom-commit-user-4", specs.back().table.is_user());
+
     HT_DEBUG_OUT << "phantom_commit_complete sent to master for num_ranges="
         << specs.size() << HT_END;
 
@@ -4231,31 +4230,6 @@ void RangeServer::phantom_commit_ranges(ResponseCallback *cb, int64_t op_id,
       if (m_timer_handler)
         m_timer_handler->schedule_maintenance();
     }
-
-    /**
-    boost::xtime now;
-    boost::xtime_get(&now, boost::TIME_UTC_);
-    int priority = 0;
-    // schedule maintenance if needed
-    vector<MaintenanceTask*> maintenance_tasks;
-    foreach_ht(RangePtr &range, range_vec) {
-      if (range->get_state() == RangeState::SPLIT_LOG_INSTALLED ||
-          range->get_state() == RangeState::SPLIT_SHRUNK)
-        maintenance_tasks.push_back(new MaintenanceTaskSplit(0, priority++,
-                    now, range));
-      else if (range->get_state() == RangeState::RELINQUISH_LOG_INSTALLED)
-        maintenance_tasks.push_back(new MaintenanceTaskRelinquish(0, priority++,
-                    now, range));
-      else
-        HT_ASSERT(range->get_state() == RangeState::STEADY);
-    }
-    if (!maintenance_tasks.empty()) {
-      for (size_t i=0; i<maintenance_tasks.size(); i++)
-        Global::maintenance_queue->add(maintenance_tasks[i]);
-        // XXX: SJ i am here do we need to wait till
-        // maintenance_tasks are complete?
-    }
-    */
 
   }
   catch (Exception &e) {

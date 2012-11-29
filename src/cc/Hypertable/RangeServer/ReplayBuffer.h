@@ -55,7 +55,6 @@ namespace Hypertable {
     Comm *m_comm;
     RangeRecoveryReceiverPlan &m_plan;
     typedef map<QualifiedRangeSpec, RangeReplayBufferPtr> ReplayBufferMap;
-    std::set<QualifiedRangeSpec> m_completed_ranges;
     ReplayBufferMap m_buffer_map;
     String m_location;
     int m_plan_generation;
