@@ -143,6 +143,9 @@ void PhantomRange::populate_range_and_log(FilesystemPtr &log_dfs,
     }
   }
   m_phantom_log->close();
+
+  metalog_entity->state.set_transfer_log(m_phantom_logname);
+
   HT_INFO_OUT << "Created phantom log " << m_phantom_logname
       << " for range " << m_range_spec << HT_END;
   m_state = RANGE_PREPARED;

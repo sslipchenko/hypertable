@@ -586,7 +586,7 @@ void RangeServer::local_recover() {
   CommitLogReaderPtr metadata_log_reader;
   CommitLogReaderPtr user_log_reader;
   RangeDataVector range_data;
-  std::vector<MetaLog::EntityPtr> entities;
+  std::vector<MetaLog::EntityPtr> entities, stripped_entities;
   MetaLog::EntityRange *range_entity;
   int priority = 0;
 
@@ -613,14 +613,22 @@ void RangeServer::local_recover() {
         add_mark_file_to_commit_logs("user");
       }
 
-      // Populated Global::work_queue
+      // Populated Global::work_queue and strip out PHANTOM ranges
       {
         MetaLog::EntityTask *task_entity;
         foreach_ht(MetaLog::EntityPtr &entity, entities) {
           if ((task_entity = dynamic_cast<MetaLog::EntityTask *>(entity.get())) != 0)
             Global::add_to_work_queue(task_entity);
+          else if ((range_entity = dynamic_cast<MetaLog::EntityRange *>(entity.get())) != 0 &&
+                   (range_entity->state.state & RangeState::PHANTOM) != 0) {
+            Global::log_dfs->rmdir(range_entity->state.transfer_log);
+            continue;
+          }
+          stripped_entities.push_back(entity);
         }
       }
+
+      entities.swap(stripped_entities);
 
       Global::rsml_writer = new MetaLog::Writer(Global::log_dfs,
               rsml_definition, Global::log_dir + "/" + rsml_definition->name(),

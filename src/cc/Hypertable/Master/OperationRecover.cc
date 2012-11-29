@@ -364,8 +364,10 @@ void OperationRecover::read_rsml() {
             m_user_states.push_back(RangeState(m_arena, range->state));
           }
         }
-        else
-          HT_INFO_OUT << "Range " << *range << ": PHANTOM; skipping" << HT_END;
+        else {
+          // Cleanup unused transfer log
+          m_context->dfs->rmdir(range->state.transfer_log);
+        }
       }
     }
   }
