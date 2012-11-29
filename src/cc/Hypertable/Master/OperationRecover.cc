@@ -35,6 +35,7 @@
 using namespace Hypertable;
 using namespace Hyperspace;
 
+
 OperationRecover::OperationRecover(ContextPtr &context, 
         RangeServerConnectionPtr &rsc)
   : Operation(context, MetaLog::EntityType::OPERATION_RECOVER_SERVER),
@@ -57,85 +58,12 @@ OperationRecover::OperationRecover(ContextPtr &context,
   m_subop_dependency = format("operation-id-%lld", (Lld)id());
 }
 
-void OperationRecover::notification_hook() {
-  // Recovery will only continue if 40% of the RangeServers are running. This
-  // setting can be overwritten with the parameter --Hypertable.Failover.Quorum
-  StringSet active_locations;
-  m_context->rsc_manager->get_connected_servers(active_locations);
-  size_t quorum_percent =
-          m_context->props->get_i32("Hypertable.Failover.Quorum.Percentage");
-  size_t servers_total = m_context->rsc_manager->server_count();
-  size_t servers_required = (servers_total * quorum_percent) / 100;
-  size_t servers_up = active_locations.size();
-  size_t servers_down = servers_total - servers_up;
-  if (servers_required == 0)
-    servers_required = 1;
-
-  HT_ASSERT(m_rsc != 0);
-
-  String msg = format(
-"Dear administrator,\\n"
-"\\n"
-"The RangeServer %s (%s) is no longer available and is\\n"
-"about to be recovered. All ranges of %s are moved to other machines.\\n"
-"After you fixed the failing node please manually delete the file\\n"
-"\"run/location\" in the Hypertable directory on %s (usually\\n"
-"/opt/hypertable/<version>) before restarting Hypertable on this node.\\n"
-"\\n"
-"Current statistics:\\n"
-"\\n"
-"%u server(s) total\\n"
-"%u server(s) up\\n"
-"%u server(s) down\\n"
-"\\n"
-"Recovery will only continue if at least %u RangeServers (%u%%) are running.\\n"
-"This setting can be overwritten with the parameter --Hypertable.Failover.Quorum.\\n"
-"\\n"
-"The file Hypertable.RangeServer.log on %s has information why\\n"
-"the RangeServer had to be recovered.\\n"
-"\\n", 
-    m_rsc->location().c_str(), 
-    m_rsc->hostname().c_str(),
-    m_rsc->location().c_str(),
-    m_rsc->hostname().c_str(),
-    (unsigned)servers_total, 
-    (unsigned)servers_up, 
-    (unsigned)servers_down, 
-    (unsigned)servers_required, 
-    (unsigned)quorum_percent,
-    m_rsc->hostname().c_str());
-
-  m_context->notification_hook(NotificationHookType::NOTICE, msg);
-}
-
-void OperationRecover::notification_hook_failure(const Exception &e) {
-  HT_ASSERT(m_rsc != 0);
-
-  String msg = format(
-"Dear administrator,\\n"
-"\\n"
-"The RangeServer %s (%s) is no longer available, but there were errors\\n"
-"during recovery and therefore manual intervention is required.\\n"
-"\\n"
-"The errors are:\\n"
-"Error code: %u\\n"
-"Error text: %s\\n"
-"\\n"
-"The files Hypertable.Master.log and Hypertable.RangeServer.log on %s have\\n"
-"more information about the failures.\\n"
-"\\n", 
-    m_rsc->location().c_str(), 
-    m_rsc->hostname().c_str(),
-    e.code(), e.what(),
-    m_rsc->hostname().c_str());
-
-  m_context->notification_hook(NotificationHookType::ERROR, msg);
-}
 
 void OperationRecover::execute() {
   std::vector<Entity *> entities;
   Operation *sub_op;
   int state = get_state();
+  String subject, message;
 
   HT_INFOF("Entering RecoverServer %s state=%s this=%p",
            m_location.c_str(), OperationState::get_text(state), (void *)this);
@@ -144,16 +72,27 @@ void OperationRecover::execute() {
   else
     HT_ASSERT(m_location == m_rsc->location());
 
+  if (m_hostname.empty() && m_rsc)
+    m_hostname = m_rsc->hostname();
+
   if (!acquire_server_lock()) {
-    m_rsc->set_recovering(false);
+    if (m_rsc)
+      m_rsc->set_recovering(false);
     complete_ok();
     return;
   }
 
   switch (state) {
   case OperationState::INITIAL:
-    // use an external script to inform the administrator about the recovery
-    notification_hook();
+
+    // Send notification
+    subject = format("NOTICE: Recovery of %s (%s) starting",
+                     m_location.c_str(), m_hostname.c_str());
+    message = format("Failure of range server %s (%s) has been detected.  "
+                     "Starting recovery...", m_location.c_str(),
+                     m_hostname.c_str());
+    HT_INFO_OUT << message << HT_END;
+    m_context->notification_hook(subject, message);
 
     // read rsml figure out what types of ranges lived on this server
     // and populate the various vectors of ranges
@@ -223,6 +162,12 @@ void OperationRecover::execute() {
     clear_server_state();
     HT_MAYBE_FAIL("recover-server-4");
     complete_ok();
+    // Send notification
+    subject = format("NOTICE: Recovery of %s (%s) succeeded",
+                     m_location.c_str(), m_hostname.c_str());
+    message = format("Recovery of range server %s (%s) has succeeded.",
+                     m_location.c_str(), m_hostname.c_str());
+    m_context->notification_hook(subject, message);
     break;
 
   default:
@@ -240,6 +185,7 @@ OperationRecover::~OperationRecover() {
 
 
 bool OperationRecover::acquire_server_lock() {
+  String subject, message;
 
   if (m_lock_acquired)
     return true;
@@ -259,9 +205,16 @@ bool OperationRecover::acquire_server_lock() {
                                     LOCK_MODE_EXCLUSIVE, &lock_status,
                                     &sequencer);
     if (lock_status != LOCK_STATUS_GRANTED) {
-      HT_INFO_OUT << "Couldn't obtain lock on '" << fname 
-                  << "' due to conflict, lock_status=" << lock_status << HT_END;      
-      //notification_hook_failure(Exception(Error::HYPERSPACE_LOCK_CONFLICT, fname));
+      HT_INFO_OUT << "Couldn't obtain lock on '" << fname
+                  << "' due to conflict, lock_status=" << lock_status << HT_END;
+      // Send notification
+      subject = format("NOTICE: Recovery of %s (%s) aborted",
+                       m_location.c_str(), m_hostname.c_str());
+      message = format("Aborting recovery of range server %s (%s) because "
+                       "unable to aquire lock.", m_location.c_str(),
+                       m_hostname.c_str());
+      HT_INFO_OUT << message << HT_END;
+      m_context->notification_hook(subject, message);
       return false;
     }
 
@@ -277,7 +230,15 @@ bool OperationRecover::acquire_server_lock() {
   catch (Exception &e) {
     HT_ERROR_OUT << "Problem obtaining " << m_location 
                  << " hyperspace lock (" << e << "), aborting..." << HT_END;
-    notification_hook_failure(e);
+    // Send notification
+    subject = format("ERROR: Recovery of %s (%s) failed",
+                     m_location.c_str(), m_hostname.c_str());
+    message 
+      = format("Attempt to aquire lock on range server %s (%s) failed.\\n\\n"
+               "  %s - %s\\n", m_location.c_str(), m_hostname.c_str(),
+               Error::get_text(e.code()), e.what());
+    HT_ERROR_OUT << subject << ": " << e << HT_END;
+    m_context->notification_hook(subject, message);
     return false;
   }
   return true;

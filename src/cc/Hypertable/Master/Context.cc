@@ -43,24 +43,11 @@ Context::~Context() {
 }
 
 
-void Context::notification_hook(int type, const String &message) {
-  String type_str;
-  switch (type) {
-    case NotificationHookType::NOTICE:
-      type_str = "NOTICE";
-      break;
-    case NotificationHookType::ERROR:
-      type_str = "ERROR";
-      break;
-    default:
-      type_str = "unknown type";
-      break;
-  };
+void Context::notification_hook(const String &subject, const String &message) {
 
   String cmd = format("%s/conf/notification-hook.sh '%s' '%s'", 
-          System::install_dir.c_str(), type_str.c_str(), message.c_str());
-
-  HT_DEBUG_OUT << "notification-hook (" << type_str << "): " << cmd << HT_END;
+                      System::install_dir.c_str(), subject.c_str(),
+                      message.c_str());
 
   int ret = ::system(cmd.c_str());
   HT_INFO_OUT << "notification-hook returned: " << ret << HT_END;
@@ -106,35 +93,6 @@ void Context::replay_complete(EventPtr &event) {
   else
     HT_WARN_OUT << "No Recovery replay step future found for operation=" << id << HT_END;
 
-    /**
-    if (notify) {
-      String msg;
-      msg = 
-"Dear administrator,\\n"
-"\\n"
-"The recently started recovery operation reported failures when recovering\\n"
-"log file fragments.  The following fragments are corrupt:\\n\\n";
-      RecoveryReplayCounter::ErrorMap::iterator it;
-      for (it = errors.begin(); it != errors.end(); ++it) {
-        if (it->second != Error::OK) {
-          msg += format("\t fragment id %u: error 0x%x (%s)\\n",
-                  it->first, it->second, Error::get_text(it->second));
-          HT_ERRORF("Corrupted logfile fragment %u: error 0x%x (%s)",
-                  it->first, it->second, Error::get_text(it->second));
-        }
-      }
-      msg += 
-"\\n\\n"
-"The log files on the Master and the RangeServer(s) will have more information\\n"
-"about the error.\\n\\n";
-
-      notification_hook(NotificationHookType::ERROR, msg);
-    }
-  }
-
-  HT_DEBUG_OUT << "Exitting replay_complete for op_id=" << id << " plan_generation="
-               << plan_generation << " num_ranges=" << nn << " from " << event->proxy << HT_END;
-    */
 }
 
 void Context::prepare_complete(EventPtr &event) {
@@ -160,8 +118,6 @@ void Context::prepare_complete(EventPtr &event) {
   }
   else
     HT_WARN_OUT << "No Recovery prepare step future found for operation=" << id << HT_END;
-
-  return;
 }
 
 void Context::commit_complete(EventPtr &event) {
@@ -187,8 +143,6 @@ void Context::commit_complete(EventPtr &event) {
   }
   else
     HT_WARN_OUT << "No Recovery commit step future found for operation=" << id << HT_END;
-
-  return;
 }
 
 

@@ -30,10 +30,10 @@ recipient=root
 
 ###############################################################################
 
-type=$1
+subject=$1
 message=$2
 
 # write the information to a file
-echo -e $type >> /tmp/failover-run9-output
-echo -e $message >> /tmp/failover-run9-output
+echo -e "SUBJECT: $subject" >> /tmp/failover-run9-output
+echo -e "$message\n" >> /tmp/failover-run9-output
 

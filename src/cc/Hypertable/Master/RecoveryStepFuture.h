@@ -40,7 +40,7 @@ namespace Hypertable {
   class RecoveryStepFuture : public ReferenceCount {
   public:
 
-    typedef std::map<const String, std::pair<int32_t, String> > RecoveryStepErrorMapT;
+    typedef std::map<const String, std::pair<int32_t, String> > ErrorMapT;
 
     RecoveryStepFuture(const String &label, int plan_generation) :
       m_label(label), m_plan_generation(plan_generation) { }
@@ -67,7 +67,7 @@ namespace Hypertable {
       m_outstanding.erase(location);
 
       // purge from error map
-      RecoveryStepErrorMapT::iterator iter = m_error_map.find(location);
+      ErrorMapT::iterator iter = m_error_map.find(location);
       if (iter != m_error_map.end())
         m_error_map.erase(iter);
 
@@ -87,7 +87,7 @@ namespace Hypertable {
         return;
       }
 
-      RecoveryStepErrorMapT::iterator iter = m_error_map.find(location);
+      ErrorMapT::iterator iter = m_error_map.find(location);
 
       m_outstanding.erase(location);
 
@@ -102,7 +102,7 @@ namespace Hypertable {
     bool wait_for_completion(Timer &timer) {
       ScopedLock lock(m_mutex);
       boost::xtime expire_time;
-      RecoveryStepErrorMapT::iterator iter;
+      ErrorMapT::iterator iter;
 
       timer.start();
 
@@ -123,13 +123,18 @@ namespace Hypertable {
       return m_error_map.empty();
     }
 
+    void get_error_map(ErrorMapT &error_map) {
+      ScopedLock lock(m_mutex);
+      error_map = m_error_map;
+    }
+
   protected:
     Mutex m_mutex;
     boost::condition m_cond;
     String m_label;
     StringSet m_outstanding;
     StringSet m_success;
-    RecoveryStepErrorMapT m_error_map;
+    ErrorMapT m_error_map;
     int m_plan_generation;
   };
   typedef intrusive_ptr<RecoveryStepFuture> RecoveryStepFuturePtr;

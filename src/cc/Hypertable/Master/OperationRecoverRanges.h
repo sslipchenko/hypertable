@@ -71,6 +71,7 @@ namespace Hypertable {
     String m_type_str;
     uint32_t m_timeout;
     int m_plan_generation;
+    time_t m_last_notification;
   };
 
   typedef intrusive_ptr<OperationRecoverRanges> OperationRecoverRangesPtr;

@@ -38,7 +38,8 @@ using namespace Hypertable;
 OperationRecoverRanges::OperationRecoverRanges(ContextPtr &context,
         const String &location, int type)
   : Operation(context, MetaLog::EntityType::OPERATION_RECOVER_SERVER_RANGES),
-    m_location(location), m_type(type), m_plan_generation(0) {
+    m_location(location), m_type(type), m_plan_generation(0),
+    m_last_notification(0) {
   HT_ASSERT(type != RangeSpec::UNKNOWN);
   m_timeout = m_context->props->get_i32("Hypertable.Failover.Timeout");
   m_dependencies.insert(Dependency::RECOVERY_BLOCKER);
@@ -48,7 +49,7 @@ OperationRecoverRanges::OperationRecoverRanges(ContextPtr &context,
 
 OperationRecoverRanges::OperationRecoverRanges(ContextPtr &context,
                                     const MetaLog::EntityHeader &header_) 
-  : Operation(context, header_), m_plan_generation(0) {
+  : Operation(context, header_), m_plan_generation(0), m_last_notification(0) {
 }
 
 void OperationRecoverRanges::execute() {
@@ -337,10 +338,16 @@ bool OperationRecoverRanges::wait_for_quorum() {
 
   if (active_locations.size() < quorum || active_locations.size() == 0) {
     // wait for at least half the servers to be up before proceeding
-    HT_INFO_OUT << "Only " << active_locations.size()
-        << " servers ready, total servers=" << total_servers << " quorum="
-        << quorum << ", wait for servers" << HT_END;
-
+    // Send notification
+    String subject, message;
+    subject = format("ERROR: Recovery of %s suspended", m_location.c_str());
+    message = format("Recovery of range server %s has been suspended because\\n"
+                     "only %d out of %d servers are available.  Required\\n"
+                     "quorum is %d.\\n", m_location.c_str(),
+                     (int)active_locations.size(), (int)total_servers,
+                     (int)quorum);
+    m_context->notification_hook(subject, message);
+    HT_WARN_OUT << message << HT_END;
     m_context->op->activate(Dependency::RECOVERY_BLOCKER);
     return false;
   }
@@ -423,7 +430,7 @@ bool OperationRecoverRanges::replay_fragments() {
       rsc.replay_fragments(addr, id(), m_location, m_plan_generation, 
                            m_type, fragments, m_plan.receiver_plan, m_timeout);
       HT_MAYBE_FAIL(format("recover-server-ranges-%s-replay-fragments",
-                  m_type_str.c_str()));
+                           m_type_str.c_str()));
     }
     catch (Exception &e) {
       HT_ERROR_OUT << e << HT_END;
@@ -433,8 +440,26 @@ bool OperationRecoverRanges::replay_fragments() {
 
   Timer tt(m_timeout);
   if (!future->wait_for_completion(tt)) {
-    HT_ERROR_OUT << "replay_fragments failed" << HT_END;
-    // TODO: Notify administrator
+    String str;
+    String message = 
+      format("Failure encountered during REPLAY FRAGMENTS step of recovery\\n"
+             "of range server %s\\n\\n", m_location.c_str());
+    RecoveryStepFuture::ErrorMapT error_map;
+    future->get_error_map(error_map);
+    for (RecoveryStepFuture::ErrorMapT::iterator iter=error_map.begin();
+         iter != error_map.end(); ++iter) {
+      str = String("player ") + iter->first + ": " + Error::get_text(iter->second.first)
+        + " - " + iter->second.second;
+      message += str + "\\n";
+      HT_ERROR_OUT << "replay_fragments failed for " << str << HT_END;
+    }
+    time_t now = time(0);
+    if (now - m_last_notification > 60) {
+      String subject = format("ERROR: Replay failure during recovery of %s",
+                              m_location.c_str());
+      m_context->notification_hook(subject, message);
+      m_last_notification = now;
+    }
     return false;
   }
 
@@ -476,7 +501,6 @@ bool OperationRecoverRanges::prepare_to_commit() {
   Timer tt(m_timeout);
   if (!future->wait_for_completion(tt)) {
     HT_ERROR_OUT << "prepare_to_commit failed" << HT_END;
-    // TODO: Notify administrator
     return false;
   }
 
@@ -520,7 +544,6 @@ bool OperationRecoverRanges::commit() {
   Timer tt(m_timeout);
   if (!future->wait_for_completion(tt)) {
     HT_ERROR_OUT << "commit failed" << HT_END;
-    // TODO: Notify administrator
     return false;
   }
 

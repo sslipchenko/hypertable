@@ -42,16 +42,16 @@ cp ${SCRIPT_DIR}/run9-notification-hook.sh ${HYPERTABLE_HOME}/conf/notification-
 
 # stop and start servers
 $HT_HOME/bin/start-test-servers.sh --no-rangeserver --no-thriftbroker \
-    --clear --induce-failure=bad-log-fragments-1:signal:0 \
-    --config=${SCRIPT_DIR}/test.cfg
+    --clear --config=${SCRIPT_DIR}/test.cfg
 # start both rangeservers
 $HT_HOME/bin/ht Hypertable.RangeServer --verbose --pidfile=$RS1_PIDFILE \
    --Hypertable.RangeServer.ProxyName=rs1 \
    --Hypertable.RangeServer.Port=38060 --config=${SCRIPT_DIR}/test.cfg 2>&1 > rangeserver.rs1.output&
 sleep 10
 $HT_HOME/bin/ht Hypertable.RangeServer --verbose --pidfile=$RS2_PIDFILE \
-   --Hypertable.RangeServer.ProxyName=rs2 \
-   --Hypertable.RangeServer.Port=38061 --config=${SCRIPT_DIR}/test.cfg 2>&1 > rangeserver.rs2.output&
+    --Hypertable.RangeServer.ProxyName=rs2 \
+    --induce-failure=replay-fragments-user-0:throw:0 \
+    --Hypertable.RangeServer.Port=38061 --config=${SCRIPT_DIR}/test.cfg 2>&1 > rangeserver.rs2.output&
 
 # create table
 $HT_HOME/bin/ht shell --no-prompt < $SCRIPT_DIR/create-table.hql
@@ -81,6 +81,7 @@ wait_for_recovery
 killall Hypertable.Master
 killall Hyperspace.Master
 stop_rs2
+$HT_HOME/bin/stop-servers.sh
 
 # check if the hook was executed
 sed "s/HOSTNAME/`hostname`/" ${SCRIPT_DIR}/failover-run9-golden > golden

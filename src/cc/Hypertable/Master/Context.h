@@ -61,13 +61,6 @@ namespace Hypertable {
   class ReferenceManager;
   class BalancePlanAuthority;
 
-  namespace NotificationHookType {
-    enum {
-      NOTICE,
-      ERROR
-    };
-  }
-
   class Context : public ReferenceCount {
 
     class RecoveryState {
@@ -149,8 +142,8 @@ namespace Hypertable {
     void prepare_complete(EventPtr &event);
     void commit_complete(EventPtr &event);
 
-    // spawn notification hook
-    void notification_hook(int type, const String &message);
+    // invoke notification hook
+    void notification_hook(const String &subject, const String &message);
 
     // set the BalancePlanAuthority
     void set_balance_plan_authority(BalancePlanAuthority *bpa);

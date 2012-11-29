@@ -69,13 +69,6 @@ namespace Hypertable {
     // cleans up after this operation is complete
     void clear_server_state();
 
-    // spawn conf/notification-hook.sh and inform the administrator that
-    // a rangeserver is about to be recovered
-    void notification_hook();
-
-    // report an error during recovery
-    void notification_hook_failure(const Exception &e);
-
     // persisted state
     String m_location;
     vector<QualifiedRangeSpec> m_root_specs;
@@ -90,6 +83,7 @@ namespace Hypertable {
     CharArena m_arena;
     RangeServerConnectionPtr m_rsc;
     String m_subop_dependency;
+    String m_hostname;
     uint64_t m_hyperspace_handle;
     bool m_lock_acquired;
   };
