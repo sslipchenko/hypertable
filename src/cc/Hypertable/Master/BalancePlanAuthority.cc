@@ -192,9 +192,9 @@ void BalancePlanAuthority::get_receiver_plan_locations(const String &recovery_lo
   ScopedLock lock(m_mutex);
   HT_ASSERT(m_map.find(recovery_location) != m_map.end());
   RangeRecoveryPlanPtr plan = m_map[recovery_location].plans[type];
-  HT_ASSERT(plan && plan->type == type);
 
-  plan->receiver_plan.get_locations(locations);
+  if (plan)
+    plan->receiver_plan.get_locations(locations);
 }
 
 

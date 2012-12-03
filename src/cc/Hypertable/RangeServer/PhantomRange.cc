@@ -32,7 +32,7 @@ PhantomRange::PhantomRange(const QualifiedRangeSpec &spec,
                            SchemaPtr &schema,
                            const vector<uint32_t> &fragments) 
   : m_range_spec(spec), m_range_state(state), m_schema(schema),
-    m_outstanding(fragments.size()), m_state(INIT), m_staged(false) {
+    m_outstanding(fragments.size()), m_state(LOADED) {
   foreach_ht(uint32_t fragment, fragments) {
     HT_ASSERT(m_fragments.count(fragment) == 0);
     FragmentDataPtr data = new FragmentData(fragment);
@@ -57,14 +57,6 @@ bool PhantomRange::add(uint32_t fragment, EventPtr &event) {
   }
   else {
     HT_ASSERT(m_outstanding);
-#if 0
-    HT_INFOF("more=%s, m_outstanding=%d", more ? "true" : "false", (int)m_outstanding);
-    if (!more) {
-      --m_outstanding;
-      if (!m_outstanding)
-        m_state = FINISHED_REPLAY;
-    }
-#endif
     it->second->add(event);
   }
   return true;
@@ -82,73 +74,82 @@ void PhantomRange::create_range(MasterClientPtr &master_client,
         TableInfoPtr &table_info, FilesystemPtr &log_dfs, String &log_dir) { 
   ScopedLock lock(m_mutex);
 
-  if (m_state >= RANGE_CREATED)
-    HT_INFO_OUT << "Range already created for phantom range " << m_range_spec 
-        << HT_END;
-  else {
-    m_range = new Range(master_client, &m_range_spec.table, m_schema,
-            &m_range_spec.range, table_info.get(), &m_range_state, true);
-    // replay existing transfer log
-    m_range->recovery_finalize();
-    m_range->metalog_entity()->state.state =
-        m_range->metalog_entity()->state.state | RangeState::PHANTOM;
-    m_range_state.state |= RangeState::PHANTOM;
-    m_state = RANGE_CREATED;
-  }
+  m_range = new Range(master_client, &m_range_spec.table, m_schema,
+                      &m_range_spec.range, table_info.get(), &m_range_state, true);
+  // replay existing transfer log
+  m_range->recovery_finalize();
+  m_range->metalog_entity()->state.state =
+    m_range->metalog_entity()->state.state | RangeState::PHANTOM;
+  m_range_state.state |= RangeState::PHANTOM;
 }
 
 void PhantomRange::populate_range_and_log(FilesystemPtr &log_dfs, 
         const String &log_dir, bool *is_empty) {
   ScopedLock lock(m_mutex);
   *is_empty = true;
-  if (m_state == RANGE_PREPARED) {
-    HT_INFO_OUT << "Range already prepared for phantom range " 
-        << m_range_spec << HT_END;
-    return ;
-  }
 
   MetaLog::EntityRange *metalog_entity = m_range->metalog_entity();
-  char md5DigestStr[33];
 
-  /**
-   * Create phantom log
-   */
-  md5_trunc_modified_base64(metalog_entity->spec.end_row, md5DigestStr);
-  md5DigestStr[16] = 0;
-  time_t now = 0;
-
-  do {
-    if (now != 0)
-      poll(0, 0, 1200);
-    now = time(0);
-    m_phantom_logname = log_dir + "/" + metalog_entity->table.id + "/" +
-                        md5DigestStr + "-" + (int)now;
-  } while (log_dfs->exists(m_phantom_logname));
-
-  log_dfs->mkdirs(m_phantom_logname);
-
-  m_phantom_log = new CommitLog(log_dfs, m_phantom_logname, false);
-  size_t table_id_len = m_range_spec.table.encoded_length();
-  DynamicBuffer dbuf(table_id_len);
-  int64_t latest_revision;
-
-  Locker<Range> range_lock(*(m_range.get()));
-  foreach_ht (FragmentMap::value_type &vv, m_fragments) {
-    dbuf.clear();
-    m_range_spec.table.encode(&dbuf.ptr);
-    vv.second->merge(m_range, dbuf, &latest_revision);
-    if (dbuf.fill() > table_id_len) {
-      *is_empty = false;
-      m_phantom_log->write(dbuf, latest_revision, false);
-    }
+  if ((metalog_entity->state.state & ~RangeState::PHANTOM) == RangeState::SPLIT_SHRUNK) {
+    m_phantom_logname = metalog_entity->state.transfer_log;
+    CommitLogReaderPtr phantom_log_reader = new CommitLogReader(log_dfs, m_phantom_logname);
+    // Scan log blocks to set latest revision
+    BlockCompressionHeaderCommitLog header;
+    const uint8_t *base;
+    size_t len;
+    while (phantom_log_reader->next(&base, &len, &header))
+      ;
+    m_phantom_log = phantom_log_reader.get();
+    *is_empty = m_phantom_log->get_latest_revision() == TIMESTAMP_MIN;
+    HT_INFO_OUT << "Using transfer log " << m_phantom_logname
+                << " as phantom log for range " << m_range_spec
+                << " because in SPLIT_SHURNK state" << HT_END;
   }
-  m_phantom_log->close();
+  else {
+    char md5DigestStr[33];
+    CommitLogPtr phantom_log;
 
-  metalog_entity->state.set_transfer_log(m_phantom_logname);
+    /**
+     * Create phantom log
+     */
+    md5_trunc_modified_base64(metalog_entity->spec.end_row, md5DigestStr);
+    md5DigestStr[16] = 0;
+    time_t now = 0;
 
-  HT_INFO_OUT << "Created phantom log " << m_phantom_logname
-      << " for range " << m_range_spec << HT_END;
-  m_state = RANGE_PREPARED;
+    do {
+      if (now != 0)
+        poll(0, 0, 1200);
+      now = time(0);
+      m_phantom_logname = log_dir + "/" + metalog_entity->table.id + "/" +
+        md5DigestStr + "-" + (int)now;
+    } while (log_dfs->exists(m_phantom_logname));
+
+    log_dfs->mkdirs(m_phantom_logname);
+
+    phantom_log = new CommitLog(log_dfs, m_phantom_logname, false);
+    size_t table_id_len = m_range_spec.table.encoded_length();
+    DynamicBuffer dbuf(table_id_len);
+    int64_t latest_revision;
+
+    Locker<Range> range_lock(*(m_range.get()));
+    foreach_ht (FragmentMap::value_type &vv, m_fragments) {
+      dbuf.clear();
+      m_range_spec.table.encode(&dbuf.ptr);
+      vv.second->merge(m_range, dbuf, &latest_revision);
+      if (dbuf.fill() > table_id_len) {
+        *is_empty = false;
+        phantom_log->write(dbuf, latest_revision, false);
+      }
+    }
+    phantom_log->close();
+
+    m_phantom_log = phantom_log.get();
+
+    metalog_entity->state.set_transfer_log(m_phantom_logname);
+
+    HT_INFO_OUT << "Created phantom log " << m_phantom_logname
+                << " for range " << m_range_spec << HT_END;
+  }
 }
 
 const String & PhantomRange::get_phantom_logname() {
@@ -156,17 +157,40 @@ const String & PhantomRange::get_phantom_logname() {
   return m_phantom_logname;
 }
 
-CommitLogPtr PhantomRange::get_phantom_log() {
+CommitLogBasePtr PhantomRange::get_phantom_log() {
   ScopedLock lock(m_mutex);
   return m_phantom_log;
 }
 
-void PhantomRange::set_staged() {
+void PhantomRange::set_replayed() {
   ScopedLock lock(m_mutex);
-  m_staged = true;
+  HT_ASSERT((m_state & REPLAYED) == 0);
+  m_state |= REPLAYED;
 }
 
-bool PhantomRange::staged() {
+bool PhantomRange::replayed() {
   ScopedLock lock(m_mutex);
-  return m_staged;
+  return (m_state & REPLAYED) == REPLAYED;
+}
+
+void PhantomRange::set_prepared() {
+  ScopedLock lock(m_mutex);
+  HT_ASSERT((m_state & PREPARED) == 0);
+  m_state |= PREPARED;
+}
+
+bool PhantomRange::prepared() {
+  ScopedLock lock(m_mutex);
+  return (m_state & PREPARED) == PREPARED;
+}
+
+void PhantomRange::set_committed() {
+  ScopedLock lock(m_mutex);
+  HT_ASSERT((m_state & COMMITTED) == 0);
+  m_state |= COMMITTED;
+}
+
+bool PhantomRange::committed() {
+  ScopedLock lock(m_mutex);
+  return (m_state & COMMITTED) == COMMITTED;
 }

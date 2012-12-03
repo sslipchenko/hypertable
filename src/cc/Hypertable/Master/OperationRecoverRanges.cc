@@ -201,7 +201,8 @@ void OperationRecoverRanges::execute() {
     }
     HT_MAYBE_FAIL(format("recover-server-ranges-%s-ack-3", m_type_str.c_str()));
 
-    if (recovery_plan_has_changed()) {
+    if (recovery_plan_has_changed() || !m_redo_set.empty()) {
+      m_redo_set.clear();
       set_state(OperationState::INITIAL);
       break;
     }
@@ -550,6 +551,10 @@ bool OperationRecoverRanges::commit() {
   else
     m_plan.receiver_plan.get_locations(locations);
 
+  // Erase locations marked for "redo"
+  foreach_ht (const String &location, m_redo_set)
+    locations.erase(location);
+
   future->register_locations(locations);
 
   foreach_ht(const String &location, locations) {
@@ -572,8 +577,18 @@ bool OperationRecoverRanges::commit() {
 
   Timer tt(m_timeout);
   if (!future->wait_for_completion(tt)) {
-    HT_ERROR_OUT << "commit failed" << HT_END;
-    return false;
+    bool retval = true;
+    RecoveryStepFuture::ErrorMapT error_map;
+    future->get_error_map(error_map);
+    for (RecoveryStepFuture::ErrorMapT::iterator iter=error_map.begin();
+         iter != error_map.end(); ++iter) {
+      if (iter->second.first == Error::RANGESERVER_PHANTOM_RANGE_MAP_NOT_FOUND)
+        m_redo_set.insert(iter->first);
+      else
+        retval = false;
+    }
+    HT_INFO_OUT << "commit failed" << HT_END;
+    return retval;
   }
 
   return true;
@@ -598,6 +613,10 @@ bool OperationRecoverRanges::acknowledge() {
   }
   else
     m_plan.receiver_plan.get_locations(locations);
+
+  // Erase locations marked for "redo"
+  foreach_ht (const String &location, m_redo_set)
+    locations.erase(location);
 
   foreach_ht(const String &location, locations) {
     addr.set_proxy(location);

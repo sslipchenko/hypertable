@@ -668,8 +668,7 @@ void RangeServer::local_recover() {
           else if (rd.range->get_state() == RangeState::RELINQUISH_LOG_INSTALLED)
             maintenance_tasks.push_back(new MaintenanceTaskRelinquish(0, priority++, now, rd.range));
           else
-            HT_ASSERT((rd.range->get_state() & ~RangeState::PHANTOM)
-                    == RangeState::STEADY);
+            HT_ASSERT(rd.range->get_state() == RangeState::STEADY);
         }
       }
 
@@ -726,8 +725,7 @@ void RangeServer::local_recover() {
           else if (rd.range->get_state() == RangeState::RELINQUISH_LOG_INSTALLED)
             maintenance_tasks.push_back(new MaintenanceTaskRelinquish(1, priority++, now, rd.range));
           else
-            HT_ASSERT((rd.range->get_state() & ~RangeState::PHANTOM)
-                    == RangeState::STEADY);
+            HT_ASSERT(rd.range->get_state() == RangeState::STEADY);
         }
       }
 
@@ -786,8 +784,7 @@ void RangeServer::local_recover() {
           else if (rd.range->get_state() == RangeState::RELINQUISH_LOG_INSTALLED)
             maintenance_tasks.push_back(new MaintenanceTaskRelinquish(2, priority++, now, rd.range));
           else
-            HT_ASSERT((rd.range->get_state() & ~RangeState::PHANTOM)
-                    == RangeState::STEADY);
+            HT_ASSERT(rd.range->get_state() == RangeState::STEADY);
         }
       }
 
@@ -3751,8 +3748,17 @@ void RangeServer::phantom_load(ResponseCallback *cb, const String &location,
           phantom_tableinfo_map->set(spec.table.id, table_info);
         }
 
-        SchemaPtr schema = table_info->get_schema();
-        phantom_range_map->insert(spec, state, schema, fragments);
+        if (!live(spec)) {
+          SchemaPtr schema = table_info->get_schema();
+          phantom_range_map->insert(spec, state, schema, fragments);
+          // If range is in SPLIT_SHURNK state, that means the split log was
+          // installed and the range was compacted, so replay is not needed
+          if (state.state == RangeState::SPLIT_SHRUNK) {
+            PhantomRangePtr phantom_range;
+            phantom_range_map->get(spec, phantom_range);
+            phantom_range->set_replayed();
+          }
+        }
       }
     }
     catch (Exception &e) {
@@ -3807,8 +3813,7 @@ void RangeServer::phantom_update(ResponseCallbackPhantomUpdate *cb,
     HT_ASSERT(phantom_range_map->loaded());
 
     phantom_range_map->get(range, phantom_range);
-    HT_ASSERT(phantom_range.get());
-    if (!phantom_range->add(fragment, event)) {
+    if (phantom_range && !phantom_range->replayed() && !phantom_range->add(fragment, event)) {
       String msg = format("fragment %d completely received for range "
                           "%s[%s..%s]", fragment, range.table.id, range.range.start_row,
                           range.range.end_row);
@@ -3894,7 +3899,10 @@ void RangeServer::phantom_prepare_ranges(ResponseCallback *cb, int64_t op_id,
       //HT_DEBUG_OUT << "Creating Range object for range " << rr << HT_END;
       // create a real range and its transfer log
       phantom_range_map->get(rr, phantom_range);
-      HT_ASSERT(phantom_range.get());
+
+      // If already staged, continue with next range
+      if (!phantom_range || phantom_range->prepared())
+        continue;
 
       if (!Global::metadata_table) {
         ScopedLock lock(m_mutex);
@@ -3926,7 +3934,7 @@ void RangeServer::phantom_prepare_ranges(ResponseCallback *cb, int64_t op_id,
       bool is_empty = true;
 
       // If already staged, continue with next range
-      if (phantom_range->staged())
+      if (phantom_range->prepared())
         continue;
 
       phantom_range->populate_range_and_log(Global::log_dfs,
@@ -3977,7 +3985,7 @@ void RangeServer::phantom_prepare_ranges(ResponseCallback *cb, int64_t op_id,
           log = Global::user_log;
       }
 
-      CommitLogPtr phantom_log = phantom_range->get_phantom_log();
+      CommitLogBasePtr phantom_log = phantom_range->get_phantom_log();
       HT_ASSERT(phantom_log && log);
       int error = Error::OK;
       if (!is_empty
@@ -3999,7 +4007,7 @@ void RangeServer::phantom_prepare_ranges(ResponseCallback *cb, int64_t op_id,
 
       phantom_table_info->add_range(range, true);
         
-      phantom_range->set_staged();
+      phantom_range->set_prepared();
     }
 
     HT_MAYBE_FAIL_X("phantom-prepare-ranges-user-1", specs.back().table.is_user());
@@ -4066,7 +4074,7 @@ void RangeServer::phantom_commit_ranges(ResponseCallback *cb, int64_t op_id,
 
   cb->response_ok();
 
-  if (already_live(specs)) {
+  if (live(specs)) {
     try {
       m_master_client->phantom_commit_complete(op_id, location, plan_generation, Error::OK, "");
     }
@@ -4102,7 +4110,7 @@ void RangeServer::phantom_commit_ranges(ResponseCallback *cb, int64_t op_id,
     Locker<PhantomRangeMap> lock(*phantom_range_map);
 
     // Double-check to see if concurrent method call flipped them live
-    if (already_live(specs))
+    if (live(specs))
       return;
 
     if (phantom_range_map->committed()) {
@@ -4129,10 +4137,9 @@ void RangeServer::phantom_commit_ranges(ResponseCallback *cb, int64_t op_id,
 
       // Fetch phantom_range object
       phantom_range_map->get(rr, phantom_range);
-      if (!phantom_range) {
-        HT_THROWF(Error::RANGESERVER_RANGE_NOT_FOUND,
-                  "no live or phantom range found for %s", range_name.c_str());
-      }
+
+      if (!phantom_range || phantom_range->committed())
+        continue;
 
       range = phantom_range->get_range();
 
@@ -4186,6 +4193,8 @@ void RangeServer::phantom_commit_ranges(ResponseCallback *cb, int64_t op_id,
         HT_DEBUG_OUT << "Updated attr Location of " << root_filename << " to "
                      << our_location << HT_END;
       }
+
+      phantom_range->set_committed();
     }
 
     // flush mutator
@@ -4254,7 +4263,7 @@ void RangeServer::phantom_commit_ranges(ResponseCallback *cb, int64_t op_id,
   }
 }
 
-bool RangeServer::already_live(const vector<QualifiedRangeSpec> &ranges) {
+bool RangeServer::live(const vector<QualifiedRangeSpec> &ranges) {
   TableInfoPtr table_info;
   size_t live_count = 0;
   foreach_ht (const QualifiedRangeSpec &qrs, ranges) {
@@ -4263,9 +4272,17 @@ bool RangeServer::already_live(const vector<QualifiedRangeSpec> &ranges) {
         live_count++;
     }
   }
-  HT_ASSERT(live_count == 0 || live_count == ranges.size());
 
   return live_count == ranges.size();
+}
+
+bool RangeServer::live(const QualifiedRangeSpec &spec) {
+  TableInfoPtr table_info;
+  if (m_live_map->get(spec.table.id, table_info)) {
+    if (table_info->has_range(&spec.range))
+      return true;
+  }
+  return false;
 }
 
 

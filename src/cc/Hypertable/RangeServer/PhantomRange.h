@@ -44,10 +44,11 @@ namespace Hypertable {
 
   public:
     enum State {
-      INIT=0,
-      FINISHED_REPLAY=1,
-      RANGE_CREATED=2,
-      RANGE_PREPARED=3
+      LOADED    = 0x00000001,
+      REPLAYED  = 0x00000002,
+      PREPARED  = 0x00000004,
+      COMMITTED = 0x00000008,
+      CANCELLED = 0x00000010
     };
 
     PhantomRange(const QualifiedRangeSpec &spec, const RangeState &state,
@@ -73,10 +74,17 @@ namespace Hypertable {
     }
 
     void populate_range_and_log(FilesystemPtr &log_dfs, const String &log_dir, bool *is_empty);
-    CommitLogPtr get_phantom_log();
+    CommitLogBasePtr get_phantom_log();
     const String &get_phantom_logname();
-    void set_staged();
-    bool staged();
+
+    void set_replayed();
+    bool replayed();
+
+    void set_prepared();
+    bool prepared();
+
+    void set_committed();
+    bool committed();
 
   private:
     typedef std::map<uint32_t, FragmentDataPtr> FragmentMap;
@@ -87,10 +95,9 @@ namespace Hypertable {
     SchemaPtr        m_schema;
     size_t           m_outstanding;
     RangePtr         m_range;
-    CommitLogPtr     m_phantom_log;
+    CommitLogBasePtr m_phantom_log;
     String           m_phantom_logname;
     int              m_state;
-    bool             m_staged;
   };
 
   typedef intrusive_ptr<PhantomRange> PhantomRangePtr;

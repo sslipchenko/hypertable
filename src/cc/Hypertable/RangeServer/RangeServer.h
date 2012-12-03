@@ -206,7 +206,8 @@ namespace Hypertable {
                        int64_t revision, int64_t *revisionp,
                        bool timeorder_desc);
 
-    bool already_live(const vector<QualifiedRangeSpec> &ranges);
+    bool live(const vector<QualifiedRangeSpec> &ranges);
+    bool live(const QualifiedRangeSpec &spec);
 
     class UpdateContext {
     public:

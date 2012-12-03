@@ -69,6 +69,7 @@ namespace Hypertable {
     String m_parent_dependency;
     int m_type;
     RangeRecoveryPlan m_plan;
+    StringSet m_redo_set;
     String m_type_str;
     uint32_t m_timeout;
     int m_plan_generation;
