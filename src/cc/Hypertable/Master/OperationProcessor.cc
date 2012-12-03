@@ -672,7 +672,12 @@ void OperationProcessor::Worker::recompute_order() {
   //write_graphviz(std::cout, m_context.graph, make_label_writer(m_context.label));
 
   m_context.execution_order.clear();
-  topological_sort(m_context.graph, std::back_inserter(m_context.execution_order));
+  try {
+    topological_sort(m_context.graph, std::back_inserter(m_context.execution_order));
+  }
+  catch (std::invalid_argument &e) {
+    write_graphviz(std::cout, m_context.graph, make_label_writer(m_context.label));
+  }
 
   ExecutionList::iterator iter;
 

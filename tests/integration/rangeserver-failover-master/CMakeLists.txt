@@ -1,9 +1,3 @@
-#
-# The following 23 tests have the same flow:
-#
-# 2 RangeServers; 1 crashes, and the Master crashes during recovery via
-# the FailureInducer
-#
 add_test(RangeServer-failover-master-1 env TEST=1 DATA_SIZE=200000
          INSTALL_DIR=${INSTALL_DIR}
          bash -x ${CMAKE_CURRENT_SOURCE_DIR}/run.sh)

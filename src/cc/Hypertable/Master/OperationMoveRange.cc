@@ -62,7 +62,6 @@ OperationMoveRange::OperationMoveRange(ContextPtr &context, EventPtr &event)
   const uint8_t *ptr = event->payload;
   size_t remaining = event->payload_len;
   decode_request(&ptr, &remaining);
-  initialize_dependencies();
 }
 
 void OperationMoveRange::initialize_dependencies() {
@@ -74,15 +73,9 @@ void OperationMoveRange::initialize_dependencies() {
   m_dependencies.insert(Utility::range_hash_string(m_table, m_range, ""));
 
   if (!strcmp(m_table.id, TableIdentifier::METADATA_ID)) {
-    if (*m_range.start_row == 0 && !strcmp(m_range.end_row, Key::END_ROOT_ROW))
-      m_obstructions.insert(Dependency::ROOT);
-    else {
-      m_obstructions.insert(Dependency::METADATA);
-      m_dependencies.insert(Dependency::ROOT);
-    }
+    m_dependencies.insert(Dependency::ROOT);
   }
   else if (!strncmp(m_table.id, "0/", 2)) {
-    m_obstructions.insert(Dependency::SYSTEM);
     m_dependencies.insert(Dependency::ROOT);
     m_dependencies.insert(Dependency::METADATA);
   }
@@ -91,6 +84,7 @@ void OperationMoveRange::initialize_dependencies() {
     m_dependencies.insert(Dependency::METADATA);
     m_dependencies.insert(Dependency::SYSTEM);
   }
+  m_obstructions.insert(String("OperationMove ") + m_range_name);
   m_obstructions.insert(String("id:") + m_table.id);
 }
 
@@ -120,14 +114,7 @@ void OperationMoveRange::execute() {
     HT_INFOF("MoveRange %s: destination is %s (previous: %s)",
             m_range_name.c_str(), m_destination.c_str(),
             old_destination.c_str());
-    if (m_destination != old_destination)
-      m_context->mml_writer->record_state(this);
-
-    {
-      ScopedLock lock(m_mutex);
-      m_dependencies.insert(m_destination);
-      m_state = OperationState::STARTED;
-    }
+    set_state(OperationState::STARTED);
     HT_MAYBE_FAIL("move-range-INITIAL-a");
     m_context->mml_writer->record_state(this);
     HT_MAYBE_FAIL("move-range-INITIAL-b");
@@ -293,6 +280,7 @@ void OperationMoveRange::decode_request(const uint8_t **bufp, size_t *remainp) {
           m_range.end_row);
   m_hash_code = Utility::range_hash_code(m_table, m_range,
           String("OperationMoveRange-") + m_source);
+  initialize_dependencies();
 }
 
 void OperationMoveRange::decode_result(const uint8_t **bufp, size_t *remainp) {

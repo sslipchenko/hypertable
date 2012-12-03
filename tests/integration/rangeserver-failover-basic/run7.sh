@@ -17,6 +17,20 @@ RUN_DIR=`pwd`
 # get rid of all old logfiles
 \rm -rf $HT_HOME/log/*
 
+start_master() {
+  set_start_vars Hypertable.Master
+  check_pidfile $pidfile && return 0
+
+  check_server --config=${SCRIPT_DIR}/test.cfg master
+  if [ $? != 0 ] ; then
+      $HT_HOME/bin/ht Hypertable.Master --verbose --pidfile=$MASTER_PIDFILE \
+          --config=${SCRIPT_DIR}/test.cfg 2>&1 > $MASTER_LOG&
+    wait_for_server_up master "$pidname" --config=${SCRIPT_DIR}/test.cfg
+  else
+    echo "WARNING: $pidname already running."
+  fi
+}
+
 wait_for_recovery() {
   grep "Leaving RecoverServer rs1 state=COMPLETE" $MASTER_LOG
   while [ $? -ne "0" ]
@@ -52,9 +66,10 @@ rm metadata.* keys.* rs*dump.*
 rm -rf fs fs_pre
 $HT_HOME/bin/start-test-servers.sh --no-rangeserver --no-thriftbroker \
     --no-master --clear --config=${SCRIPT_DIR}/test.cfg
+
 # start the master
-$HT_HOME/bin/ht Hypertable.Master --verbose --pidfile=$MASTER_PIDFILE \
-   --config=${SCRIPT_DIR}/test.cfg 2>&1 > $MASTER_LOG&
+start_master
+
 # start the rangeservers
 $HT_HOME/bin/ht Hypertable.RangeServer --verbose --pidfile=$RS1_PIDFILE \
    --Hypertable.RangeServer.ProxyName=rs1 \

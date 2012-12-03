@@ -27,8 +27,10 @@
 
 #include "OperationRecover.h"
 #include "OperationRecoverRanges.h"
+#include "OperationRelinquishAcknowledge.h"
 #include "Hypertable/Lib/MetaLogReader.h"
 #include "Hypertable/Lib/MetaLogEntityRange.h"
+#include "Hypertable/RangeServer/MetaLogEntityTaskAcknowledgeRelinquish.h"
 #include "Hypertable/RangeServer/MetaLogDefinitionRangeServer.h"
 #include "BalancePlanAuthority.h"
 
@@ -112,41 +114,37 @@ void OperationRecover::execute() {
     HT_ASSERT(!m_subop_dependency.empty());
     if (m_root_specs.size()) {
       sub_op = new OperationRecoverRanges(m_context, m_location,
-                                          RangeSpec::ROOT);
+                                          RangeSpec::ROOT, m_subop_dependency);
       HT_INFO_OUT << "Number of root ranges to recover for location " 
           << m_location << "="
           << m_root_specs.size() << HT_END;
-      sub_op->add_obstruction(m_subop_dependency);
       m_sub_ops.push_back(sub_op);
       entities.push_back(sub_op);
     }
     if (m_metadata_specs.size()) {
       sub_op = new OperationRecoverRanges(m_context, m_location,
-                                          RangeSpec::METADATA);
+                                          RangeSpec::METADATA, m_subop_dependency);
       HT_INFO_OUT << "Number of metadata ranges to recover for location "
           << m_location << "="
           << m_metadata_specs.size() << HT_END;
-      sub_op->add_obstruction(m_subop_dependency);
       m_sub_ops.push_back(sub_op);
       entities.push_back(sub_op);
     }
     if (m_system_specs.size()) {
       sub_op = new OperationRecoverRanges(m_context, m_location,
-                                          RangeSpec::SYSTEM);
+                                          RangeSpec::SYSTEM, m_subop_dependency);
       HT_INFO_OUT << "Number of system ranges to recover for location "
           << m_location << "="
           << m_system_specs.size() << HT_END;
-      sub_op->add_obstruction(m_subop_dependency);
       m_sub_ops.push_back(sub_op);
       entities.push_back(sub_op);
     }
     if (m_user_specs.size()) {
       sub_op = new OperationRecoverRanges(m_context, m_location,
-                                          RangeSpec::USER);
+                                          RangeSpec::USER, m_subop_dependency);
       HT_INFO_OUT << "Number of user ranges to recover for location " 
           << m_location << "="
           << m_user_specs.size() << HT_END;
-      sub_op->add_obstruction(m_subop_dependency);
       m_sub_ops.push_back(sub_op);
       entities.push_back(sub_op);
     }
@@ -292,6 +290,7 @@ void OperationRecover::read_rsml() {
       = new MetaLog::DefinitionRangeServer(m_location.c_str());
   MetaLog::ReaderPtr rsml_reader;
   MetaLog::EntityRange *range;
+  MetaLog::EntityTaskAcknowledgeRelinquish *ack_task;
   vector<MetaLog::EntityPtr> entities;
   String logfile;
 
@@ -329,6 +328,11 @@ void OperationRecover::read_rsml() {
           // Cleanup unused transfer log
           m_context->dfs->rmdir(range->state.transfer_log);
         }
+      }
+      else if ((ack_task = dynamic_cast<MetaLog::EntityTaskAcknowledgeRelinquish *>(entity.get())) != 0) {
+        OperationRelinquishAcknowledge ack_op(m_context, ack_task->location,
+                                      &ack_task->table, &ack_task->range_spec);
+        ack_op.execute();
       }
     }
   }

@@ -55,6 +55,7 @@ namespace Hypertable {
 
     void get_locations(StringSet &locations) const;
 
+    void get_range_specs(vector<QualifiedRangeSpec> &specs);
 
     void get_range_specs(const String &location, vector<QualifiedRangeSpec> &specs);
 

@@ -186,14 +186,17 @@ void BalancePlanAuthority::remove_from_replay_plan(const String &recovery_locati
   m_mml_writer->record_state(this);  
 }
 
-void BalancePlanAuthority::remove_locations_in_recovery(StringSet &locations) {
+
+void BalancePlanAuthority::get_receiver_plan_locations(const String &recovery_location, int type,
+                                                       StringSet &locations) {
   ScopedLock lock(m_mutex);
-  RecoveryPlanMap::iterator iter;
-  for (iter = m_map.begin(); iter != m_map.end(); ++iter) {
-    if (locations.count(iter->first) > 0)
-      locations.erase(iter->first);
-  }
+  HT_ASSERT(m_map.find(recovery_location) != m_map.end());
+  RangeRecoveryPlanPtr plan = m_map[recovery_location].plans[type];
+  HT_ASSERT(plan && plan->type == type);
+
+  plan->receiver_plan.get_locations(locations);
 }
+
 
 bool BalancePlanAuthority::recovery_complete(const String &location, int type) {
   ScopedLock lock(m_mutex);

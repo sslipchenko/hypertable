@@ -33,18 +33,19 @@
 #include "OperationProcessor.h"
 #include "BalancePlanAuthority.h"
 
+#include <algorithm>
+#include <iostream>
+#include <set>
+
 using namespace Hypertable;
 
 OperationRecoverRanges::OperationRecoverRanges(ContextPtr &context,
-        const String &location, int type)
+        const String &location, int type, const String &parent_dependency)
   : Operation(context, MetaLog::EntityType::OPERATION_RECOVER_SERVER_RANGES),
-    m_location(location), m_type(type), m_plan_generation(0),
-    m_last_notification(0) {
+    m_location(location), m_parent_dependency(parent_dependency),
+    m_type(type), m_plan_generation(0), m_last_notification(0) {
   HT_ASSERT(type != RangeSpec::UNKNOWN);
-  m_timeout = m_context->props->get_i32("Hypertable.Failover.Timeout");
-  m_dependencies.insert(Dependency::RECOVERY_BLOCKER);
   initialize_obstructions_dependencies();
-  set_type_str();
 }
 
 OperationRecoverRanges::OperationRecoverRanges(ContextPtr &context,
@@ -60,14 +61,18 @@ void OperationRecoverRanges::execute() {
           OperationState::get_text(state));
 
   if (!m_context->recovery_state().get_replay_future(id())) {
-    create_futures();
     m_timeout = m_context->props->get_i32("Hypertable.Failover.Timeout");
+    set_type_str();
+    if (get_new_recovery_plan())
+      return;
+    create_futures();
   }
 
   switch (state) {
   case OperationState::INITIAL:
 
-    get_new_recovery_plan();
+    if (get_new_recovery_plan())
+      return;
 
     // if there are no ranges then there is nothing to do
     if (m_plan.receiver_plan.empty()) {
@@ -234,6 +239,10 @@ const String OperationRecoverRanges::label() {
 
 void OperationRecoverRanges::initialize_obstructions_dependencies() {
   ScopedLock lock(m_mutex);
+  m_dependencies.clear();
+  m_obstructions.clear();
+  m_obstructions.insert(m_parent_dependency);
+  m_dependencies.insert(Dependency::RECOVERY_BLOCKER);
   switch (m_type) {
   case RangeSpec::ROOT:
     m_obstructions.insert(Dependency::ROOT);
@@ -254,15 +263,24 @@ void OperationRecoverRanges::initialize_obstructions_dependencies() {
     m_dependencies.insert(Dependency::SYSTEM);
     break;
   }
+
+  vector<QualifiedRangeSpec> specs;
+  m_plan.receiver_plan.get_range_specs(specs);
+  foreach_ht (QualifiedRangeSpec &spec, specs)
+    m_dependencies.insert(format("OperationMove %s[%s..%s]",
+                                 spec.table.id, spec.range.start_row,
+                                 spec.range.end_row));
 }
 
 size_t OperationRecoverRanges::encoded_state_length() const {
-  return Serialization::encoded_length_vstr(m_location) + 4 + 4 +
+  return Serialization::encoded_length_vstr(m_location) + 
+    Serialization::encoded_length_vstr(m_parent_dependency) + 4 + 4 +
     m_plan.encoded_length();
 }
 
 void OperationRecoverRanges::encode_state(uint8_t **bufp) const {
   Serialization::encode_vstr(bufp, m_location);
+  Serialization::encode_vstr(bufp, m_parent_dependency);
   Serialization::encode_i32(bufp, m_type);
   Serialization::encode_i32(bufp, m_plan_generation);
   m_plan.encode(bufp);
@@ -276,8 +294,8 @@ void OperationRecoverRanges::decode_state(const uint8_t **bufp,
 void OperationRecoverRanges::decode_request(const uint8_t **bufp,
         size_t *remainp) {
   m_location = Serialization::decode_vstr(bufp, remainp);
+  m_parent_dependency = Serialization::decode_vstr(bufp, remainp);
   m_type = Serialization::decode_i32(bufp, remainp);
-  set_type_str();
   m_plan_generation = Serialization::decode_i32(bufp, remainp);
   m_plan.decode(bufp, remainp);
 }
@@ -370,7 +388,7 @@ void OperationRecoverRanges::create_futures() {
   m_context->recovery_state().install_commit_future(id(), future);
 }
 
-void OperationRecoverRanges::get_new_recovery_plan() {
+bool OperationRecoverRanges::get_new_recovery_plan() {
   int initial_generation = m_plan_generation;
 
   m_context->get_balance_plan_authority()->copy_recovery_plan(m_location,
@@ -381,8 +399,11 @@ void OperationRecoverRanges::get_new_recovery_plan() {
              m_location.c_str(), m_type_str.c_str(), m_plan_generation,
              (int)m_plan.receiver_plan.size());
     create_futures();
+    initialize_obstructions_dependencies();
+    m_context->mml_writer->record_state(this);
+    return true;
   }
-
+  return false;
 }
 
 void OperationRecoverRanges::set_type_str() {
@@ -511,15 +532,23 @@ bool OperationRecoverRanges::commit() {
   StringSet locations;
   RangeServerClient rsc(m_context->comm);
   CommAddress addr;
+  BalancePlanAuthority *bpa = m_context->get_balance_plan_authority();
 
   RecoveryStepFuturePtr future = 
     m_context->recovery_state().get_commit_future(id());
 
   HT_ASSERT(future);
 
-  m_plan.receiver_plan.get_locations(locations);
-
-  m_context->get_balance_plan_authority()->remove_locations_in_recovery(locations);
+  if (recovery_plan_has_changed()) {
+    StringSet existing_locations, new_locations;
+    m_plan.receiver_plan.get_locations(existing_locations);
+    bpa->get_receiver_plan_locations(m_location, m_type, new_locations);
+    std::set_intersection(existing_locations.begin(), existing_locations.end(),
+                          new_locations.begin(), new_locations.end(),
+                          std::inserter(locations, locations.end()));
+  }
+  else
+    m_plan.receiver_plan.get_locations(locations);
 
   future->register_locations(locations);
 
@@ -559,9 +588,16 @@ bool OperationRecoverRanges::acknowledge() {
   CharArena arena;
   BalancePlanAuthority *bpa = m_context->get_balance_plan_authority();
 
-  m_plan.receiver_plan.get_locations(locations);
-
-  bpa->remove_locations_in_recovery(locations);    
+  if (recovery_plan_has_changed()) {
+    StringSet existing_locations, new_locations;
+    m_plan.receiver_plan.get_locations(existing_locations);
+    bpa->get_receiver_plan_locations(m_location, m_type, new_locations);
+    std::set_intersection(existing_locations.begin(), existing_locations.end(),
+                          new_locations.begin(), new_locations.end(),
+                          std::inserter(locations, locations.end()));
+  }
+  else
+    m_plan.receiver_plan.get_locations(locations);
 
   foreach_ht(const String &location, locations) {
     addr.set_proxy(location);

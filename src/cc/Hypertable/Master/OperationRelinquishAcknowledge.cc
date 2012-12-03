@@ -36,6 +36,13 @@
 
 using namespace Hypertable;
 
+OperationRelinquishAcknowledge::OperationRelinquishAcknowledge(ContextPtr &ctx,
+              const String &source, TableIdentifier *table, RangeSpec *range)
+  : Operation(ctx, MetaLog::EntityType::OPERATION_RELINQUISH_ACKNOWLEDGE),
+    m_source(source), m_table(*table), m_range(*range) {
+}
+
+
 OperationRelinquishAcknowledge::OperationRelinquishAcknowledge(ContextPtr &context, EventPtr &event) 
   : Operation(context, event, MetaLog::EntityType::OPERATION_RELINQUISH_ACKNOWLEDGE) {
   const uint8_t *ptr = event->payload;

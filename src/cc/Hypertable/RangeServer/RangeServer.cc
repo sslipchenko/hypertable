@@ -1772,7 +1772,7 @@ RangeServer::load_range(ResponseCallback *cb, const TableIdentifier *table,
       m_live_map->add_staged_range(table, range, range_state->transfer_log);
     }
 
-    HT_MAYBE_FAIL_X("metadata-load-range-5", table->is_metadata());
+    HT_MAYBE_FAIL_X("metadata-load-range-4", table->is_metadata());
 
     if (cb && (error = cb->response_ok()) != Error::OK)
       HT_ERRORF("Problem sending OK response - %s", Error::get_text(error));
@@ -4152,6 +4152,10 @@ void RangeServer::phantom_commit_ranges(ResponseCallback *cb, int64_t op_id,
        * METADATA table, or /hypertable/root{location} attribute of Hyperspace
        * if it is the root range.
        */
+      {
+        String range_str = format("%s[%s..%s]", rr.table.id, rr.range.start_row, rr.range.end_row);
+        HT_INFOF("Taking ownership of range %s", range_str.c_str());
+      }
       mutator = Global::metadata_table->create_mutator();
       if (!is_root) {
         String metadata_key_str = format("%s:%s", rr.table.id,rr.range.end_row);

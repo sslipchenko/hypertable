@@ -30,7 +30,9 @@ check_logs() {
   echo "Found $total_count out of `wc -l missing-keys.txt` missing keys in $2 logs"
 }
 
-diff dbdump.22 golden_dump.txt | fgrep "> " | cut -b3- > missing-keys.txt
+DUMPFILE=`ls -1art dbdump.* | tail -1`
+
+diff $DUMPFILE golden_dump.txt | fgrep "> " | cut -b3- > missing-keys.txt
 
 #$HT_HOME/bin/clean-database.sh
 #cp -r fs $HT_HOME

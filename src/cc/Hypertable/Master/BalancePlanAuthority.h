@@ -80,7 +80,8 @@ namespace Hypertable {
     void remove_from_replay_plan(const String &recovery_location, int type,
                                  const String &replay_location);
 
-    void remove_locations_in_recovery(StringSet &locations);
+    void get_receiver_plan_locations(const String &location, int type,
+                                     StringSet &locations);
 
     bool recovery_complete(const String &location, int type);
 

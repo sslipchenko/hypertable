@@ -285,12 +285,13 @@ RangeLocator::find(const TableIdentifier *table, const char *row_key,
   CommAddress addr;
   RowInterval ri;
   bool inclusive = (row_key == 0 || *row_key == 0) ? true : false;
+  bool root_lookup = table->is_metadata() && (row_key == 0 || strcmp(row_key, Key::END_ROOT_ROW) < 0);
 
   //HT_DEBUG_OUT << "Trying to locate " << table->id <<  "[" << row_key
   //    << "]" << " hard=" << hard << " m_root_stale=" << m_root_stale << " root_addr="
   //    << m_root_range_info.addr.to_str() << HT_END;
 
-  if (m_root_stale) {
+  if (m_root_stale || (hard && root_lookup)) {
     if ((error = read_root_location(timer)) != Error::OK)
       return error;
   }
@@ -304,10 +305,9 @@ RangeLocator::find(const TableIdentifier *table, const char *row_key,
     return Error::OK;
 
   /**
-   * If key is on root METADATA range, return root range information
+   * If key is on ROOT metadata range, return root range information
    */
-  if (table->is_metadata() && (row_key == 0
-      || strcmp(row_key, Key::END_ROOT_ROW) < 0)) {
+  if (root_lookup) {
     rane_loc_infop->start_row = "";
     rane_loc_infop->end_row = Key::END_ROOT_ROW;
     rane_loc_infop->addr = addr;
@@ -380,6 +380,7 @@ RangeLocator::find(const TableIdentifier *table, const char *row_key,
     }
 
     if ((error = process_metadata_scanblock(scan_block, timer)) != Error::OK) {
+      m_root_stale = true;
       m_range_server.destroy_scanner(addr, scan_block.get_scanner_id(), 0);
       return error;
     }
@@ -426,9 +427,10 @@ RangeLocator::find(const TableIdentifier *table, const char *row_key,
   // meta_scan_spec.interval = ????;
 
   if (m_conn_manager &&
-      !m_conn_manager->wait_for_connection(addr, timer.remaining())) {
-    if (timer.expired())
-      HT_THROW_(Error::REQUEST_TIMEOUT);
+      !m_conn_manager->wait_for_connection(addr, 10000)) {
+    m_cache->invalidate(TableIdentifier::METADATA_ID,
+                        meta_keys.start+TableIdentifier::METADATA_ID_LENGTH+1);
+    return Error::COMM_NOT_CONNECTED;
   }
 
   try {
@@ -527,13 +529,10 @@ int RangeLocator::process_metadata_scanblock(ScanBlock &scan_block, Timer &timer
             //HT_DEBUG_OUT << "Trying to connect to " << range_loc_info.addr.to_str()
             //    << " for range [" << range_loc_info.start_row << ".." << range_loc_info.end_row
             //    << "]" << HT_END;
-	    if (!m_conn_manager->wait_for_connection(range_loc_info.addr, timer.remaining())) {
-              if (timer.expired()) {
-                //HT_DEBUG_OUT << "Error trying to connect to " << range_loc_info.addr.to_str()
-                //      << " for range [" << range_loc_info.start_row << ".." << range_loc_info.end_row
-                //      << "], request timed out" << HT_END;
-                HT_THROW_(Error::REQUEST_TIMEOUT);
-              }
+	    if (!m_conn_manager->wait_for_connection(range_loc_info.addr, 10000)) {
+              if (timer.expired())
+                return Error::REQUEST_TIMEOUT;
+              return Error::COMM_NOT_CONNECTED;
 	    }
 	  }
 
@@ -601,13 +600,10 @@ int RangeLocator::process_metadata_scanblock(ScanBlock &scan_block, Timer &timer
       //HT_DEBUG_OUT << "Trying to connect to " << range_loc_info.addr.to_str()
       //    << " for range [" << range_loc_info.start_row << ".." << range_loc_info.end_row
       //    << "]" << HT_END;
-      if (!m_conn_manager->wait_for_connection(range_loc_info.addr, timer.remaining())) {
-        if (timer.expired()) {
-          //HT_INFO_OUT << "Error trying to connect to " << range_loc_info.addr.to_str()
-          //      << " for range [" << range_loc_info.start_row << ".."
-          //      << range_loc_info.end_row << "], request timed out" << HT_END;
-          HT_THROW_(Error::REQUEST_TIMEOUT);
-        }
+      if (!m_conn_manager->wait_for_connection(range_loc_info.addr, 10000)) {
+        if (timer.expired())
+          return Error::REQUEST_TIMEOUT;
+        return Error::COMM_NOT_CONNECTED;
       }
     }
 
@@ -662,7 +658,6 @@ int RangeLocator::read_root_location(Timer &timer) {
   }
 
   if (m_conn_manager) {
-    uint32_t after_remaining, remaining = timer.remaining();
 
     /**
      * NOTE: This block assumes that a change of root address
@@ -676,12 +671,13 @@ int RangeLocator::read_root_location(Timer &timer) {
     m_conn_manager->add(addr, m_root_metadata_retry_interval,
                         "Root RangeServer");
 
-    if (!m_conn_manager->wait_for_connection(addr, remaining)) {
-      after_remaining = timer.remaining();
-      HT_ERRORF("Timeout (%u millis) waiting for root RangeServer connection "
-                "- %s", remaining - after_remaining,
-                addr.to_str().c_str());
-      return Error::REQUEST_TIMEOUT;
+    if (!m_conn_manager->wait_for_connection(addr, 10000)) {
+      if (timer.expired()) {
+        HT_ERRORF("Timeout waiting for root RangeServer connection - %s",
+                  addr.to_str().c_str());
+        return Error::REQUEST_TIMEOUT;
+      }
+      return Error::COMM_NOT_CONNECTED;
     }
   }
 

@@ -14,8 +14,27 @@ RUN_DIR=`pwd`
 # get rid of all old logfiles
 \rm -rf $HT_HOME/log/*
 
+# shut down range servers
+kill -9 `cat $HT_HOME/run/Hypertable.RangeServer.*.pid`
+
 # Dumping cores slows things down unnecessarily for normal test runs
 #ulimit -c 0
+
+start_master() {
+    local INDUCER_ARG=$1
+    shift
+    set_start_vars Hypertable.Master
+    check_pidfile $pidfile && return 0
+
+    check_server --config=${SCRIPT_DIR}/test.cfg master
+    if [ $? != 0 ] ; then
+        $HT_HOME/bin/ht Hypertable.Master --verbose --pidfile=$HT_HOME/run/Hypertable.Master.pid \
+            --config=${SCRIPT_DIR}/test.cfg $INDUCER_ARG 2>&1 > master.output.$TEST&
+        wait_for_server_up master "$pidname" --config=${SCRIPT_DIR}/test.cfg
+    else
+        echo "WARNING: $pidname already running."
+    fi
+}
 
 wait_for_recovery() {
   local id=$1
@@ -104,14 +123,12 @@ run_test() {
     echo $MASTER_INDUCED_FAILURE | grep ":exit:" > /dev/null
     if [ $? == 0 ] ; then
         MASTER_EXIT=true
+        set_start_vars Hypertable.Master
         $SCRIPT_DIR/master-launcher.sh $INDUCER_ARG > master.output.$TEST 2>&1 &
+        wait_for_server_up master "$pidname" --config=${SCRIPT_DIR}/test.cfg        
     else
-        $HT_HOME/bin/Hypertable.Master --verbose \
-            --pidfile=$HT_HOME/run/Hypertable.Master.pid \
-            --config=${SCRIPT_DIR}/test.cfg \
-            $INDUCER_ARG > master.output.$TEST 2>&1 &
+        start_master $INDUCER_ARG
     fi
-    sleep 10
 
     local j
     let j=1
@@ -192,6 +209,8 @@ run_test() {
     else
         echo "Test $TEST PASSED." >> report.txt
     fi
+
+    sleep 5
 
     # shut down range servers
     kill -9 `cat $HT_HOME/run/Hypertable.RangeServer.*.pid`

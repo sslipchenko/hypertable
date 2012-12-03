@@ -41,8 +41,6 @@ rm -rf fs fs_pre
 $HT_HOME/bin/start-test-servers.sh --no-rangeserver --no-thriftbroker \
     --clear --config=${SCRIPT_DIR}/test.cfg
 # start both rangeservers
-#$HT_HOME/bin/ht valgrind -v --log-file=vg_rs1.log --track-origins=yes \
-#   $HT_HOME/bin/Hypertable.RangeServer --verbose --pidfile=$RS1_PIDFILE \
 $HT_HOME/bin/ht Hypertable.RangeServer --verbose --pidfile=$RS1_PIDFILE \
    --Hypertable.RangeServer.ProxyName=rs1 \
    --Hypertable.RangeServer.Port=38060 --config=${SCRIPT_DIR}/test.cfg 2>&1 > rangeserver.rs1.output&

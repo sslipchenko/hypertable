@@ -36,7 +36,7 @@ namespace Hypertable {
   class OperationRecoverRanges : public Operation {
   public:
     OperationRecoverRanges(ContextPtr &context, const String &location,
-                           int type);
+                           int type, const String &parent_dependency);
 
     OperationRecoverRanges(ContextPtr &context,
             const MetaLog::EntityHeader &header_);
@@ -57,7 +57,7 @@ namespace Hypertable {
     void initialize_obstructions_dependencies();
     bool wait_for_quorum();
     void create_futures();
-    void get_new_recovery_plan();
+    bool get_new_recovery_plan();
     bool prepare_to_commit();
     bool replay_fragments();
     bool phantom_load_ranges();
@@ -66,6 +66,7 @@ namespace Hypertable {
     void set_type_str();
 
     String m_location;
+    String m_parent_dependency;
     int m_type;
     RangeRecoveryPlan m_plan;
     String m_type_str;
