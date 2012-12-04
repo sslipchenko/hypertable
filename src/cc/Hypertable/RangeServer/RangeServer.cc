@@ -3929,12 +3929,12 @@ void RangeServer::phantom_prepare_ranges(ResponseCallback *cb, int64_t op_id,
 
     CommitLog *log;
     foreach_ht(const QualifiedRangeSpec &rr, specs) {
-      phantom_range_map->get(rr, phantom_range);
-      HT_ASSERT(phantom_range.get());
       bool is_empty = true;
 
-      // If already staged, continue with next range
-      if (phantom_range->prepared())
+      phantom_range_map->get(rr, phantom_range);
+
+      // If already prepared, continue with next range
+      if (!phantom_range || phantom_range->prepared())
         continue;
 
       phantom_range->populate_range_and_log(Global::log_dfs,
@@ -3985,7 +3985,7 @@ void RangeServer::phantom_prepare_ranges(ResponseCallback *cb, int64_t op_id,
           log = Global::user_log;
       }
 
-      CommitLogBasePtr phantom_log = phantom_range->get_phantom_log();
+      CommitLogReaderPtr phantom_log = phantom_range->get_phantom_log();
       HT_ASSERT(phantom_log && log);
       int error = Error::OK;
       if (!is_empty

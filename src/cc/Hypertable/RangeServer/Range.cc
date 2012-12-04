@@ -552,6 +552,14 @@ void Range::relinquish() {
   // below because the state and range spec only change by maintenance
   // that is protected by m_maintenance_guard (which we're holding)
 
+  // Make sure range is in a relinquishable state
+  if (m_metalog_entity->state.state != RangeState::STEADY &&
+      m_metalog_entity->state.state != RangeState::RELINQUISH_LOG_INSTALLED) {
+    HT_INFOF("Cancelling relinquish because range is not in relinquishable state (%s)",
+             RangeState::get_text(m_metalog_entity->state.state).c_str());
+    return;
+  }
+
   try {
     switch (m_metalog_entity->state.state) {
     case (RangeState::STEADY):
@@ -785,6 +793,15 @@ void Range::split() {
 
   HT_ASSERT(!m_is_root);
 
+  // Make sure range is in a splittable state
+  if (m_metalog_entity->state.state != RangeState::STEADY &&
+      m_metalog_entity->state.state != RangeState::SPLIT_LOG_INSTALLED &&
+      m_metalog_entity->state.state != RangeState::SPLIT_SHRUNK) {
+    HT_INFOF("Cancelling split because range is not in splittable state (%s)",
+             RangeState::get_text(m_metalog_entity->state.state).c_str());
+    return;
+  }
+
   try {
     switch (m_metalog_entity->state.state) {
 
@@ -810,7 +827,7 @@ void Range::split() {
     m_maintenance_generation++;
   }
 
-  HT_INFOF("Split Complete.  New Range end_row=%s", m_metalog_entity->spec.start_row);
+  HT_INFOF("Split Complete.  New Range end_row=%s", m_metalog_entity->spec.end_row);
 }
 
 
@@ -1273,6 +1290,15 @@ void Range::compact(MaintenanceFlag::Map &subtask_map) {
   AccessGroupVector ag_vector(0);
   int flags = 0;
 
+  // Make sure range is in a compactible state
+  if (m_metalog_entity->state.state == RangeState::RELINQUISH_LOG_INSTALLED ||
+      m_metalog_entity->state.state == RangeState::SPLIT_LOG_INSTALLED ||
+      m_metalog_entity->state.state == RangeState::SPLIT_SHRUNK) {
+    HT_INFOF("Cancelling compact because range is not in compactable state (%s)",
+             RangeState::get_text(m_metalog_entity->state.state).c_str());
+    return;
+  }
+
   {
     ScopedLock lock(m_schema_mutex);
     ag_vector = m_access_group_vector;
@@ -1340,6 +1366,15 @@ void Range::purge_memory(MaintenanceFlag::Map &subtask_map) {
   RangeMaintenanceGuard::Activator activator(m_maintenance_guard);
   AccessGroupVector ag_vector(0);
   uint64_t memory_purged = 0;
+
+  // Make sure range is in a compactible state
+  if (m_metalog_entity->state.state == RangeState::RELINQUISH_LOG_INSTALLED ||
+      m_metalog_entity->state.state == RangeState::SPLIT_LOG_INSTALLED ||
+      m_metalog_entity->state.state == RangeState::SPLIT_SHRUNK) {
+    HT_INFOF("Cancelling memory purge because range is not in purgeable state (%s)",
+             RangeState::get_text(m_metalog_entity->state.state).c_str());
+    return;
+  }
 
   {
     ScopedLock lock(m_schema_mutex);

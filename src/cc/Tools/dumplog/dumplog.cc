@@ -114,7 +114,7 @@ int main(int argc, char **argv) {
       display_log_block_summary(dfs_client, "", log_reader.get());
     }
     else
-      display_log(dfs_client, "", log_reader.get(), has("display_values"));
+      display_log(dfs_client, "", log_reader.get(), has("display-values"));
   }
   catch (Exception &e) {
     HT_ERROR_OUT << e << HT_END;

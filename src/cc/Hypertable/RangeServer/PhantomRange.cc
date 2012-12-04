@@ -92,15 +92,6 @@ void PhantomRange::populate_range_and_log(FilesystemPtr &log_dfs,
 
   if ((metalog_entity->state.state & ~RangeState::PHANTOM) == RangeState::SPLIT_SHRUNK) {
     m_phantom_logname = metalog_entity->state.transfer_log;
-    CommitLogReaderPtr phantom_log_reader = new CommitLogReader(log_dfs, m_phantom_logname);
-    // Scan log blocks to set latest revision
-    BlockCompressionHeaderCommitLog header;
-    const uint8_t *base;
-    size_t len;
-    while (phantom_log_reader->next(&base, &len, &header))
-      ;
-    m_phantom_log = phantom_log_reader.get();
-    *is_empty = m_phantom_log->get_latest_revision() == TIMESTAMP_MIN;
     HT_INFO_OUT << "Using transfer log " << m_phantom_logname
                 << " as phantom log for range " << m_range_spec
                 << " because in SPLIT_SHURNK state" << HT_END;
@@ -143,13 +134,21 @@ void PhantomRange::populate_range_and_log(FilesystemPtr &log_dfs,
     }
     phantom_log->close();
 
-    m_phantom_log = phantom_log.get();
-
     metalog_entity->state.set_transfer_log(m_phantom_logname);
 
     HT_INFO_OUT << "Created phantom log " << m_phantom_logname
                 << " for range " << m_range_spec << HT_END;
   }
+
+  m_phantom_log = new CommitLogReader(log_dfs, m_phantom_logname);
+  // Scan log blocks to set latest revision
+  BlockCompressionHeaderCommitLog header;
+  const uint8_t *base;
+  size_t len;
+  while (m_phantom_log->next(&base, &len, &header))
+    ;
+  *is_empty = m_phantom_log->get_latest_revision() == TIMESTAMP_MIN;
+
 }
 
 const String & PhantomRange::get_phantom_logname() {
@@ -157,7 +156,7 @@ const String & PhantomRange::get_phantom_logname() {
   return m_phantom_logname;
 }
 
-CommitLogBasePtr PhantomRange::get_phantom_log() {
+CommitLogReaderPtr PhantomRange::get_phantom_log() {
   ScopedLock lock(m_mutex);
   return m_phantom_log;
 }

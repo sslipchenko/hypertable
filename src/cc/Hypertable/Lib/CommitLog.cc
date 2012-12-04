@@ -250,6 +250,9 @@ int CommitLog::link_log(CommitLogBase *log_base) {
     }
     log_base->fragment_queue().clear();
 
+    struct LtClfip swo;
+    sort(m_fragment_queue.begin(), m_fragment_queue.end(), swo);
+
   }
   catch (Hypertable::Exception &e) {
     HT_ERRORF("Problem linking external log into commit log - %s", e.what());

@@ -28,17 +28,6 @@
 using namespace std;
 using namespace Hypertable;
 
-namespace {
-
-  enum {
-    LOADED    = 0x00000001,
-    REPLAYED  = 0x00000002,
-    PREPARED  = 0x00000004,
-    COMMITTED = 0x00000008,
-    CANCELLED = 0x00000010
-  };
-
-}
 
 PhantomRangeMap::PhantomRangeMap(int plan_generation) : 
   m_plan_generation(plan_generation), m_state(0) {
@@ -77,33 +66,33 @@ bool PhantomRangeMap::initial() const {
 }
 
 void PhantomRangeMap::set_loaded() {
-  HT_ASSERT((m_state & LOADED) == 0);
-  m_state |= LOADED;
+  HT_ASSERT((m_state & PhantomRange::LOADED) == 0);
+  m_state |= PhantomRange::LOADED;
 }
 
 bool PhantomRangeMap::loaded() const {
-  return (m_state & LOADED) == LOADED;
+  return (m_state & PhantomRange::LOADED) == PhantomRange::LOADED;
 }
 
 
 bool PhantomRangeMap::replayed() const {
-  return (m_state & REPLAYED) == REPLAYED;
+  return (m_state & PhantomRange::REPLAYED) == PhantomRange::REPLAYED;
 }
 
 void PhantomRangeMap::set_prepared() {
-  HT_ASSERT((m_state & PREPARED) == 0);
-  m_state |= PREPARED;
+  HT_ASSERT((m_state & PhantomRange::PREPARED) == 0);
+  m_state |= PhantomRange::PREPARED;
 }
 
 bool PhantomRangeMap::prepared() const {
-  return (m_state & PREPARED) == PREPARED;
+  return (m_state & PhantomRange::PREPARED) == PhantomRange::PREPARED;
 }
 
 void PhantomRangeMap::set_committed() {
-  HT_ASSERT((m_state & COMMITTED) == 0);
-  m_state |= COMMITTED;
+  HT_ASSERT((m_state & PhantomRange::COMMITTED) == 0);
+  m_state |= PhantomRange::COMMITTED;
 }
 
 bool PhantomRangeMap::committed() const {
-  return (m_state & COMMITTED) == COMMITTED;
+  return (m_state & PhantomRange::COMMITTED) == PhantomRange::COMMITTED;
 }

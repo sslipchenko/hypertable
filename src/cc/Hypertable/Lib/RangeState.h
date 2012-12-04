@@ -62,6 +62,8 @@ namespace Hypertable {
     void encode(uint8_t **bufp) const;
     virtual void decode(const uint8_t **bufp, size_t *remainp);
 
+    static String get_text(uint8_t state);
+
     uint8_t state;
     int64_t timestamp;
     uint64_t soft_limit;

@@ -74,7 +74,7 @@ namespace Hypertable {
     }
 
     void populate_range_and_log(FilesystemPtr &log_dfs, const String &log_dir, bool *is_empty);
-    CommitLogBasePtr get_phantom_log();
+    CommitLogReaderPtr get_phantom_log();
     const String &get_phantom_logname();
 
     void set_replayed();
@@ -95,7 +95,7 @@ namespace Hypertable {
     SchemaPtr        m_schema;
     size_t           m_outstanding;
     RangePtr         m_range;
-    CommitLogBasePtr m_phantom_log;
+    CommitLogReaderPtr m_phantom_log;
     String           m_phantom_logname;
     int              m_state;
   };

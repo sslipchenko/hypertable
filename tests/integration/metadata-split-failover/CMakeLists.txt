@@ -18,6 +18,6 @@ add_test(METADATA-split-failover-5 env TEST=5 DATA_SIZE=200000
          INSTALL_DIR=${INSTALL_DIR}
          bash -x ${CMAKE_CURRENT_SOURCE_DIR}/run.sh)
 
-#add_test(METADATA-split-failover-6 env TEST=6 DATA_SIZE=200000
-#         INSTALL_DIR=${INSTALL_DIR}
-#         bash -x ${CMAKE_CURRENT_SOURCE_DIR}/run.sh)
+add_test(METADATA-split-failover-6 env TEST=6 DATA_SIZE=200000
+         INSTALL_DIR=${INSTALL_DIR}
+         bash -x ${CMAKE_CURRENT_SOURCE_DIR}/run.sh)
