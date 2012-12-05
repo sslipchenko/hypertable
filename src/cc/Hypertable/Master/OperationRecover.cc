@@ -326,10 +326,6 @@ void OperationRecover::read_rsml() {
             m_user_states.push_back(RangeState(m_arena, range->state));
           }
         }
-        else {
-          // Cleanup unused transfer log
-          m_context->dfs->rmdir(range->state.transfer_log);
-        }
       }
       else if ((ack_task = dynamic_cast<MetaLog::EntityTaskAcknowledgeRelinquish *>(entity.get())) != 0) {
         OperationRelinquishAcknowledge ack_op(m_context, ack_task->location,
