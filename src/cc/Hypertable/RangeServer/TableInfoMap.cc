@@ -119,8 +119,6 @@ void TableInfoMap::add_staged_range(const TableIdentifier *table, RangePtr &rang
     }
   }
 
-  HT_MAYBE_FAIL_X("metadata-load-range-4", table->is_metadata());
-
   (*iter).second->add_staged_range(range);
 }
 

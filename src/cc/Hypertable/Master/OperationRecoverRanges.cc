@@ -37,6 +37,8 @@
 #include <iostream>
 #include <set>
 
+#define OPERATION_RECOVER_RANGES_VERSION 1
+
 using namespace Hypertable;
 
 OperationRecoverRanges::OperationRecoverRanges(ContextPtr &context,
@@ -274,12 +276,13 @@ void OperationRecoverRanges::initialize_obstructions_dependencies() {
 }
 
 size_t OperationRecoverRanges::encoded_state_length() const {
-  return Serialization::encoded_length_vstr(m_location) + 
+  return 2 + Serialization::encoded_length_vstr(m_location) + 
     Serialization::encoded_length_vstr(m_parent_dependency) + 4 + 4 +
     m_plan.encoded_length();
 }
 
 void OperationRecoverRanges::encode_state(uint8_t **bufp) const {
+  Serialization::encode_i16(bufp, OPERATION_RECOVER_RANGES_VERSION);
   Serialization::encode_vstr(bufp, m_location);
   Serialization::encode_vstr(bufp, m_parent_dependency);
   Serialization::encode_i32(bufp, m_type);
@@ -294,6 +297,8 @@ void OperationRecoverRanges::decode_state(const uint8_t **bufp,
 
 void OperationRecoverRanges::decode_request(const uint8_t **bufp,
         size_t *remainp) {
+  // skip version for now
+  Serialization::decode_i16(bufp, remainp);
   m_location = Serialization::decode_vstr(bufp, remainp);
   m_parent_dependency = Serialization::decode_vstr(bufp, remainp);
   m_type = Serialization::decode_i32(bufp, remainp);

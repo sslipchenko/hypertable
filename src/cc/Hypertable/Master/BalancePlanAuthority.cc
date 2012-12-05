@@ -30,6 +30,8 @@
 #include "EntityType.h"
 #include "Utility.h"
 
+#define BPA_VERSION 1
+
 using namespace Hypertable;
 
 BalancePlanAuthority::BalancePlanAuthority(ContextPtr context,
@@ -66,7 +68,7 @@ BalancePlanAuthority::display(std::ostream &os)
 size_t 
 BalancePlanAuthority::encoded_length() const
 {
-  size_t len = 4 + 4;
+  size_t len = 2 + 4 + 4;
   RecoveryPlanMap::const_iterator it = m_map.begin();
   while (it != m_map.end()) {
     len += Serialization::encoded_length_vstr(it->first);
@@ -83,6 +85,7 @@ BalancePlanAuthority::encoded_length() const
 void 
 BalancePlanAuthority::encode(uint8_t **bufp) const
 {
+  Serialization::encode_i16(bufp, (int16_t)BPA_VERSION);
   Serialization::encode_i32(bufp, m_generation);
   Serialization::encode_i32(bufp, m_map.size());
   RecoveryPlanMap::const_iterator it = m_map.begin();
@@ -104,8 +107,10 @@ void
 BalancePlanAuthority::decode(const uint8_t **bufp, size_t *remainp)
 {
   ScopedLock lock(m_mutex);
-  m_generation = Serialization::decode_i32(bufp, remainp);
 
+  // skip version for now
+  Serialization::decode_i16(bufp, remainp);
+  m_generation = Serialization::decode_i32(bufp, remainp);
   int num_servers = Serialization::decode_i32(bufp, remainp);
   for (int i = 0; i < num_servers; i++) {
     String rs = Serialization::decode_vstr(bufp, remainp);
