@@ -3944,7 +3944,6 @@ void RangeServer::phantom_prepare_ranges(ResponseCallback *cb, int64_t op_id,
 
       RangePtr range = phantom_range->get_range();
       {
-        CommitLogReaderPtr log_reader;
         if (rr.is_root()) {
           if (!root_log_exists){
             ScopedLock lock(m_drop_table_mutex);

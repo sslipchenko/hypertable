@@ -86,62 +86,94 @@ void PhantomRange::create_range(MasterClientPtr &master_client,
 void PhantomRange::populate_range_and_log(FilesystemPtr &log_dfs, 
         const String &log_dir, bool *is_empty) {
   ScopedLock lock(m_mutex);
+  const char *split_point = 0;
+  bool split_off_high = true;
+  size_t table_id_len = m_range_spec.table.encoded_length();
+  DynamicBuffer dbuf_phantom(table_id_len);
+  DynamicBuffer dbuf_split(table_id_len);
+  CommitLogPtr split_log;
+
   *is_empty = true;
 
   MetaLog::EntityRange *metalog_entity = m_range->metalog_entity();
+  int state = metalog_entity->state.state & ~RangeState::PHANTOM;
 
-  if ((metalog_entity->state.state & ~RangeState::PHANTOM) == RangeState::SPLIT_SHRUNK) {
-    m_phantom_logname = metalog_entity->state.transfer_log;
-    HT_INFO_OUT << "Using transfer log " << m_phantom_logname
-                << " as phantom log for range " << m_range_spec
-                << " because in SPLIT_SHURNK state" << HT_END;
-  }
-  else {
-    char md5DigestStr[33];
-    CommitLogPtr phantom_log;
-
-    /**
-     * Create phantom log
-     */
-    md5_trunc_modified_base64(metalog_entity->spec.end_row, md5DigestStr);
-    md5DigestStr[16] = 0;
-    time_t now = 0;
-
-    do {
-      if (now != 0)
-        poll(0, 0, 1200);
-      now = time(0);
-      m_phantom_logname = log_dir + "/" + metalog_entity->table.id + "/" +
-        md5DigestStr + "-" + (int)now;
-    } while (log_dfs->exists(m_phantom_logname));
-
-    log_dfs->mkdirs(m_phantom_logname);
-
-    phantom_log = new CommitLog(log_dfs, m_phantom_logname, false);
-    size_t table_id_len = m_range_spec.table.encoded_length();
-    DynamicBuffer dbuf(table_id_len);
-    int64_t latest_revision;
-
-    Locker<Range> range_lock(*(m_range.get()));
-    foreach_ht (FragmentMap::value_type &vv, m_fragments) {
-      dbuf.clear();
-      m_range_spec.table.encode(&dbuf.ptr);
-      vv.second->merge(m_range, dbuf, &latest_revision);
-      if (dbuf.fill() > table_id_len) {
-        *is_empty = false;
-        phantom_log->write(dbuf, latest_revision, false);
-      }
+  if (state == RangeState::RELINQUISH_LOG_INSTALLED ||
+      state == RangeState::SPLIT_LOG_INSTALLED ||
+      state == RangeState::SPLIT_SHRUNK) {
+    // Set phantom log to "original transfer log"
+    if (!metalog_entity->original_transfer_log.empty())
+      m_phantom_logname = metalog_entity->original_transfer_log;
+    else {
+      m_phantom_logname = create_log(log_dfs, log_dir, metalog_entity);
+      metalog_entity->original_transfer_log = m_phantom_logname;
     }
-    phantom_log->close();
-
-    metalog_entity->state.set_transfer_log(m_phantom_logname);
-
-    HT_INFO_OUT << "Created phantom log " << m_phantom_logname
-                << " for range " << m_range_spec << HT_END;
+    if (state == RangeState::SPLIT_LOG_INSTALLED ||
+        state == RangeState::SPLIT_SHRUNK) {
+      split_point = metalog_entity->state.split_point;
+      split_log = new CommitLog(log_dfs, metalog_entity->state.transfer_log,
+                                m_range_spec.table.is_metadata());
+      split_off_high = strcmp(metalog_entity->state.split_point,
+                              metalog_entity->state.old_boundary_row) < 0;
+    }
+  }  
+  else {
+    // Set phantom log to "transfer log"
+    if (metalog_entity->state.transfer_log &&
+        *metalog_entity->state.transfer_log != 0)
+      m_phantom_logname = metalog_entity->state.transfer_log;
+    else {
+      m_phantom_logname = create_log(log_dfs, log_dir, metalog_entity);
+      metalog_entity->state.set_transfer_log(m_phantom_logname);
+    }
   }
 
+  CommitLogPtr phantom_log = new CommitLog(log_dfs, m_phantom_logname,
+                                           m_range_spec.table.is_metadata());
+  int64_t latest_revision_phantom, latest_revision_split;
+
+  Locker<Range> range_lock(*(m_range.get()));
+  foreach_ht (FragmentMap::value_type &vv, m_fragments) {
+
+    // setup "phantom" buffer
+    dbuf_phantom.clear();
+    m_range_spec.table.encode(&dbuf_phantom.ptr);
+
+    if (split_log) {
+      // setup "phantom" buffer
+      dbuf_split.clear();
+      m_range_spec.table.encode(&dbuf_split.ptr);
+      if (split_off_high)
+        vv.second->merge(m_range, split_point,
+                         dbuf_phantom, &latest_revision_phantom, true,
+                         dbuf_split, &latest_revision_split, state != RangeState::SPLIT_SHRUNK);
+      else
+        vv.second->merge(m_range, split_point,
+                         dbuf_split, &latest_revision_split, state != RangeState::SPLIT_SHRUNK,
+                         dbuf_phantom, &latest_revision_phantom, true);
+    }
+    else {
+      vv.second->merge(m_range, "",
+                       dbuf_phantom, &latest_revision_phantom, true,
+                       dbuf_phantom, &latest_revision_phantom, true);
+    }
+    if (dbuf_phantom.fill() > table_id_len)
+      phantom_log->write(dbuf_phantom, latest_revision_phantom, false);
+    if (split_log && dbuf_split.fill() > table_id_len)
+      split_log->write(dbuf_split, latest_revision_split, false);
+  }
+  if (split_log) {
+    split_log->sync();
+    split_log->close();
+  }
+  phantom_log->sync();
+  phantom_log->close();
+
+  HT_INFO_OUT << "Created phantom log " << m_phantom_logname
+              << " for range " << m_range_spec << HT_END;
+
+  // Scan log to load blocks and determine if log is empty
   m_phantom_log = new CommitLogReader(log_dfs, m_phantom_logname);
-  // Scan log blocks to set latest revision
   BlockCompressionHeaderCommitLog header;
   const uint8_t *base;
   size_t len;
@@ -192,4 +224,24 @@ void PhantomRange::set_committed() {
 bool PhantomRange::committed() {
   ScopedLock lock(m_mutex);
   return (m_state & COMMITTED) == COMMITTED;
+}
+
+String PhantomRange::create_log(FilesystemPtr &log_dfs, const String &log_dir,
+                                MetaLog::EntityRange *range_entity) {
+  char md5DigestStr[33];
+  String logname;
+
+  md5_trunc_modified_base64(range_entity->spec.end_row, md5DigestStr);
+  md5DigestStr[16] = 0;
+  time_t now = 0;
+
+  do {
+    if (now != 0)
+      poll(0, 0, 1200);
+    now = time(0);
+    logname = log_dir + "/" + range_entity->table.id + "/" + md5DigestStr + "-" + (int)now;
+  } while (log_dfs->exists(logname));
+
+  log_dfs->mkdirs(logname);
+  return logname;
 }

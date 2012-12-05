@@ -31,8 +31,9 @@ void FragmentData::add(EventPtr &event) {
   return;
 }
 
-void FragmentData::merge(RangePtr &range, DynamicBuffer &dbuf,
-        int64_t *latest_revision) {
+void FragmentData::merge(RangePtr &range, const char *split_point,
+                         DynamicBuffer &dbuf_lower, int64_t *latest_revision_lower, bool add_lower,
+                         DynamicBuffer &dbuf_upper, int64_t *latest_revision_upper, bool add_upper) {
   String location;
   QualifiedRangeSpec range_spec;
   DeserializedFragments fragments;
@@ -40,14 +41,11 @@ void FragmentData::merge(RangePtr &range, DynamicBuffer &dbuf,
   SerializedKey serkey;
   ByteString value;
   int plan_generation;
-  size_t num_kv_pairs=0;
-
-  *latest_revision = TIMESTAMP_MIN;
-
-  HT_DEBUG_OUT << "num events in fragment "<< m_id<< "=" << m_data.size()
-      << HT_END;
-
+  DynamicBuffer *dbufp;
   size_t total_size = 0;
+
+  *latest_revision_lower = TIMESTAMP_MIN;
+  *latest_revision_upper = TIMESTAMP_MIN;
 
   // de-serialize all objects
   foreach_ht(EventPtr &event, m_data) {
@@ -65,11 +63,13 @@ void FragmentData::merge(RangePtr &range, DynamicBuffer &dbuf,
     fragments.push_back(Fragment(base, size));
   }
 
-  // resize the buffer
-  dbuf.ensure(total_size);
+  // resize the buffers
+  dbuf_lower.ensure(total_size);
+  dbuf_upper.ensure(total_size);
 
   foreach_ht(Fragment &fragment, fragments) {
     const uint8_t *mod, *mod_end;
+
     mod_end = fragment.first + fragment.second;
     mod = fragment.first;
 
@@ -78,18 +78,24 @@ void FragmentData::merge(RangePtr &range, DynamicBuffer &dbuf,
       value.ptr = mod + serkey.length();
       HT_ASSERT(serkey.ptr <= mod_end && value.ptr <= mod_end);
       HT_ASSERT(key.load(serkey));
-      if (key.revision > *latest_revision)
-        *latest_revision = key.revision;
-      //HT_DEBUG_OUT << "adding key " << key.row << " from fragment " << m_id
-      //    << ", event " << std::hex << event.get() << HT_END;
-      range->add(key, value);
+      if (strcmp(key.row, split_point) <= 0) {
+        if (key.revision > *latest_revision_lower)
+          *latest_revision_lower = key.revision;
+        if (add_lower)
+          range->add(key, value);
+        dbufp = &dbuf_lower;
+      }
+      else {
+        if (key.revision > *latest_revision_upper)
+          *latest_revision_upper = key.revision;
+        if (add_upper)
+          range->add(key, value);
+        dbufp = &dbuf_upper;
+      }
       // skip to next kv pair
       value.next();
+      dbufp->add_unchecked((const void *)mod, value.ptr-mod);
       mod = value.ptr;
-      ++num_kv_pairs;
     }
-    dbuf.add_unchecked((const void *)fragment.first, fragment.second);
   }
-  HT_DEBUG_OUT << "Inserted " << num_kv_pairs << " k/v pairs into range "
-      << range->get_name() << HT_END;
 }
