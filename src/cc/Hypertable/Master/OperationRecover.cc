@@ -31,8 +31,11 @@
 #include "Hypertable/Lib/MetaLogReader.h"
 #include "Hypertable/Lib/MetaLogEntityRange.h"
 #include "Hypertable/RangeServer/MetaLogEntityTaskAcknowledgeRelinquish.h"
+#include "Hypertable/RangeServer/MetaLogEntityTaskRemoveTransferLog.h"
 #include "Hypertable/RangeServer/MetaLogDefinitionRangeServer.h"
 #include "BalancePlanAuthority.h"
+#include "ReferenceManager.h"
+#include "Utility.h"
 
 #define OPERATION_RECOVER_VERSION 1
 
@@ -293,6 +296,7 @@ void OperationRecover::read_rsml() {
   MetaLog::ReaderPtr rsml_reader;
   MetaLog::EntityRange *range;
   MetaLog::EntityTaskAcknowledgeRelinquish *ack_task;
+  MetaLog::EntityTaskRemoveTransferLog *rm_log_task;
   vector<MetaLog::EntityPtr> entities;
   String logfile;
 
@@ -305,10 +309,20 @@ void OperationRecover::read_rsml() {
       if ((range = dynamic_cast<MetaLog::EntityRange *>(entity.get())) != 0) {
         QualifiedRangeSpec spec;
         // skip phantom ranges, let whoever was recovering them deal with them
-        if (!(range->state.state & RangeState::PHANTOM)) {
+        if (!range->load_acknowledged) {
+          HT_INFO_OUT << "Skipping unacknowledged range " << *range << HT_END;
+        }
+        else if (range->state.state & RangeState::PHANTOM) {
+          HT_INFO_OUT << "Skipping PHANTOM range " << *range << HT_END;
+        }
+        else {
           HT_INFO_OUT << "Range " << *range << ": not PHANTOM; including" << HT_END;
           spec.table = range->table;
           spec.range = range->spec;
+
+          if (range->state.state == RangeState::SPLIT_SHRUNK)
+            handle_split_shrunk(range);
+
           if (spec.is_root()) {
             m_root_specs.push_back(QualifiedRangeSpec(m_arena, spec));
             m_root_states.push_back(RangeState(m_arena, range->state));
@@ -332,12 +346,56 @@ void OperationRecover::read_rsml() {
                                       &ack_task->table, &ack_task->range_spec);
         ack_op.execute();
       }
+      else if ((rm_log_task = dynamic_cast<MetaLog::EntityTaskRemoveTransferLog *>(entity.get())) != 0) {
+        HT_INFOF("Removing transfer log %s", rm_log_task->transfer_log.c_str());
+        if (m_context->dfs->exists(rm_log_task->transfer_log))
+          m_context->dfs->rmdir(rm_log_task->transfer_log);
+      }
     }
   }
   catch (Exception &e) {
     HT_FATAL_OUT << e << HT_END;
   }
 }
+
+
+void OperationRecover::handle_split_shrunk(MetaLog::EntityRange *range_entity) {
+  bool split_off_high = strcmp(range_entity->state.split_point,
+                               range_entity->state.old_boundary_row) < 0;
+  RangeSpec range;
+  TableIdentifier *tablep = &range_entity->table;
+
+  if (split_off_high) {
+    range.start_row = range_entity->spec.end_row;
+    range.end_row = range_entity->state.old_boundary_row;
+  }
+  else {
+    range.start_row = range_entity->state.old_boundary_row;
+    range.end_row = range_entity->spec.start_row;
+  }
+
+  int64_t hash_code = Utility::range_hash_code(*tablep, range,
+                                               String("OperationMoveRange-") + m_location);
+
+  OperationPtr operation = m_context->reference_manager->get(hash_code);
+  if (operation) {
+    if (operation->remove_approval_add(0x01)) {
+      m_context->reference_manager->remove(hash_code);
+      m_context->mml_writer->record_removal(operation.get());
+    }
+    int64_t soft_limit = range_entity->state.soft_limit;
+    range_entity->state.clear();
+    range_entity->state.soft_limit = soft_limit;
+
+    if (!range_entity->original_transfer_log.empty()) {
+      HT_INFOF("Removing transfer log %s", range_entity->original_transfer_log.c_str());
+      if (m_context->dfs->exists(range_entity->original_transfer_log))
+        m_context->dfs->rmdir(range_entity->original_transfer_log);
+    }
+  }
+  
+}
+
 
 size_t OperationRecover::encoded_state_length() const {
   size_t len = 2 + Serialization::encoded_length_vstr(m_location) + 16;

@@ -4162,9 +4162,11 @@ void RangeServer::phantom_commit_ranges(ResponseCallback *cb, int64_t op_id,
         String range_str = format("%s[%s..%s]", rr.table.id, rr.range.start_row, rr.range.end_row);
         HT_INFOF("Taking ownership of range %s", range_str.c_str());
       }
-      mutator = Global::metadata_table->create_mutator();
       if (!is_root) {
         String metadata_key_str = format("%s:%s", rr.table.id,rr.range.end_row);
+
+        if (!mutator)
+          mutator = Global::metadata_table->create_mutator();
 
         // Take ownership of the range
         key.row = metadata_key_str.c_str();
@@ -4197,7 +4199,8 @@ void RangeServer::phantom_commit_ranges(ResponseCallback *cb, int64_t op_id,
     }
 
     // flush mutator
-    mutator->flush();
+    if (mutator)
+      mutator->flush();
 
     HT_MAYBE_FAIL_X("phantom-commit-user-2", specs.back().table.is_user());
 

@@ -32,7 +32,6 @@
 #include "OperationRecoverRanges.h"
 #include "OperationRecoveryBlocker.h"
 #include "OperationProcessor.h"
-#include "ReferenceManager.h"
 #include "Utility.h"
 
 #include <algorithm>
@@ -58,7 +57,6 @@ OperationRecoverRanges::OperationRecoverRanges(ContextPtr &context,
 }
 
 void OperationRecoverRanges::execute() {
-  BalancePlanAuthority *bpa = m_context->get_balance_plan_authority();
   int state = get_state();
 
   HT_INFOF("Entering RecoverServerRanges (%p) %s type=%d plan_generation=%d state=%s",
@@ -85,40 +83,6 @@ void OperationRecoverRanges::execute() {
                m_location.c_str(), m_type_str.c_str());
       complete_ok();
       break;
-    }
-
-    /**
-     * For each range that is in the SPLIT_SHRUNK state, check to see if
-     * there is a pending OperationMoveRange.  If so, approve removal and
-     * remove it from plan
-     */
-    {
-      vector<QualifiedRangeSpec> specs, removed_specs;
-      vector<RangeState> states;
-      vector<MetaLog::Entity *> entities;
-      vector<OperationPtr> operations;
-      m_plan.receiver_plan.get_range_specs_and_states(specs, states);
-      for (size_t i=0; i<specs.size(); i++) {
-        if (states[i].state == RangeState::SPLIT_SHRUNK) {
-          int64_t hash_code = Utility::range_hash_code(specs[i].table, specs[i].range,
-                                         String("OperationMoveRange-") + m_location);
-          OperationPtr operation = m_context->reference_manager->get(hash_code);
-          if (operation) {
-            OperationMoveRange *move_op = dynamic_cast<OperationMoveRange *>(operation.get());
-            HT_ASSERT(move_op);
-            HT_ASSERT(move_op->remove_approval_add(0x01));
-            operations.push_back(operation);
-            entities.push_back(operation.get());
-            removed_specs.push_back(specs[i]);
-            m_context->reference_manager->remove(hash_code);
-            operation->mark_for_removal();
-          }
-        }
-      }
-      if (!removed_specs.empty()) {
-        bpa->remove_from_receiver_plan(m_location, m_type, removed_specs, entities);
-        return;
-      }
     }
 
     HT_MAYBE_FAIL(format("recover-server-ranges-%s-initial-1", m_type_str.c_str()));

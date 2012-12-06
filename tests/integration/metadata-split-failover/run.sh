@@ -204,17 +204,17 @@ rm -f report.txt
 gen_test_data
 
 let j=1
-[ $TEST == $j ] && run_test "metadata-split-1:exit:1" ""
+[ $TEST == $j ] && run_test "metadata-split-1:exit:1" "" ""
 let j+=1
-[ $TEST == $j ] && run_test "metadata-split-2:exit:1" ""
+[ $TEST == $j ] && run_test "metadata-split-2:exit:1" "" ""
 let j+=1
-[ $TEST == $j ] && run_test "metadata-split-3:exit:1" ""
+[ $TEST == $j ] && run_test "metadata-split-3:exit:1" "" ""
 let j+=1
-[ $TEST == $j ] && run_test "metadata-split-4:exit:1" ""
+[ $TEST == $j ] && run_test "metadata-split-4:exit:1" "" ""
 let j+=1
-[ $TEST == $j ] && run_test "metadata-load-range-3:exit:2" ""
+[ $TEST == $j ] && run_test "metadata-load-range-3:exit:2" "" ""
 let j+=1
-[ $TEST == $j ] && run_test "metadata-load-range-4:exit:2" ""
+[ $TEST == $j ] && run_test "metadata-load-range-4:exit:2" "" ""
 let j+=1
 
 

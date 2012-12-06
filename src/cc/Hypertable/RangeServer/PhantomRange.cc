@@ -165,12 +165,16 @@ void PhantomRange::populate_range_and_log(FilesystemPtr &log_dfs,
   if (split_log) {
     split_log->sync();
     split_log->close();
+    HT_INFO_OUT << "Created split log " << metalog_entity->state.transfer_log
+                << " for range " << m_range_spec << ", state=" 
+                << metalog_entity->state << HT_END;
   }
   phantom_log->sync();
   phantom_log->close();
 
   HT_INFO_OUT << "Created phantom log " << m_phantom_logname
-              << " for range " << m_range_spec << HT_END;
+              << " for range " << m_range_spec << ", state=" 
+              << metalog_entity->state << HT_END;
 
   // Scan log to load blocks and determine if log is empty
   m_phantom_log = new CommitLogReader(log_dfs, m_phantom_logname);
