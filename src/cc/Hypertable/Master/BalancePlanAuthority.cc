@@ -166,7 +166,8 @@ BalancePlanAuthority::remove_recovery_plan(const String &location)
 }
 
 void BalancePlanAuthority::remove_from_receiver_plan(const String &location, int type,
-                                                     const vector<QualifiedRangeSpec> &specs) {
+                                                     const vector<QualifiedRangeSpec> &specs,
+                                                     std::vector<Entity *> &entities) {
   ScopedLock lock(m_mutex);
   HT_ASSERT(m_map.find(location) != m_map.end());
   RangeRecoveryPlanPtr plan = m_map[location].plans[type];
@@ -175,8 +176,18 @@ void BalancePlanAuthority::remove_from_receiver_plan(const String &location, int
   foreach_ht (const QualifiedRangeSpec &spec, specs)
     plan->receiver_plan.remove(spec);
 
-  m_mml_writer->record_state(this);
+  entities.push_back(this);
+
+  m_mml_writer->record_state(entities);
 }
+
+
+void BalancePlanAuthority::remove_from_receiver_plan(const String &location, int type,
+                                                     const vector<QualifiedRangeSpec> &specs) {
+  std::vector<Entity *> entities;
+  remove_from_receiver_plan(location, type, specs, entities);
+}
+
 
 void BalancePlanAuthority::remove_from_replay_plan(const String &recovery_location, int type,
                                                    const String &replay_location) {
@@ -240,6 +251,11 @@ BalancePlanAuthority::create_recovery_plan(const String &location,
   if (m_map.find(location) != m_map.end())
     return;
 
+  // Update "active" server set
+  m_active.clear();
+  m_context->rsc_manager->get_connected_servers(m_active);
+  m_active_iter = m_active.begin();
+
   // walk through the existing plans and move all ranges from that server
   // to other servers
   RecoveryPlanMap::iterator it;
@@ -265,18 +281,16 @@ BalancePlanAuthority::create_recovery_plan(const String &location,
   plans.plans[RangeSpec::USER]
     = create_range_plan(location, RangeSpec::USER, user_specs, user_states);
 
-  // Remove ALL ranges that are FROM the failing node or are about
-  // to be moved TO the failing node. These ranges are already part
-  // of the balance plan anyway.
-  // TODO really? verify this
-  MoveSetT::iterator iter = m_current_set.begin();
-  while (iter != m_current_set.end()) {
+  // For all active moves in the "current set" whose destination is that of
+  // the failed node, assign a new destination
+  for (MoveSetT::iterator iter = m_current_set.begin();
+       iter != m_current_set.end(); ++iter) {
     if (location == (*iter)->dest_location) {
-      HT_INFO_OUT << "XXX " << location << ": " << *iter << HT_END;
-      MoveSetT::iterator iter2 = iter;
-      m_current_set.erase(iter2);
+      if (m_active_iter == m_active.end())
+        m_active_iter = m_active.begin();
+      (*iter)->dest_location = *m_active_iter;
+      m_active_iter++;
     }
-    ++iter;
   }
 
   // store the new plan
@@ -313,9 +327,6 @@ BalancePlanAuthority::create_range_plan(const String &location, int type,
 
   const char *type_strings[] = { "root", "metadata", "system", "user", "UNKNOWN" };
 
-  StringSet active_locations;
-  m_context->rsc_manager->get_connected_servers(active_locations);
-
   vector<uint32_t> fragments;
 
   RangeRecoveryPlan *plan = new RangeRecoveryPlan(type);
@@ -326,25 +337,23 @@ BalancePlanAuthority::create_range_plan(const String &location, int type,
   CommitLogReader clr(m_context->dfs, log_dir);
   clr.get_init_fragment_ids(fragments);
 
-  StringSet::const_iterator location_it = active_locations.begin();
-
   HT_ASSERT(specs.size() == states.size());
 
   // round robin through the locations and assign the ranges
   for (size_t i=0; i<specs.size(); i++) {
-    if (location_it == active_locations.end())
-      location_it = active_locations.begin();
-    plan->receiver_plan.insert(*location_it, specs[i], states[i]);
-    ++location_it;
+    if (m_active_iter == m_active.end())
+      m_active_iter = m_active.begin();
+    plan->receiver_plan.insert(*m_active_iter, specs[i], states[i]);
+    ++m_active_iter;
   }
 
-  location_it = active_locations.begin();
+  m_active_iter = m_active.begin();
   // round robin through the locations and assign the fragments
   foreach_ht (uint32_t fragment, fragments) {
-    if (location_it == active_locations.end())
-      location_it = active_locations.begin();
-    plan->replay_plan.insert(fragment, *location_it);
-    ++location_it;
+    if (m_active_iter == m_active.end())
+      m_active_iter = m_active.begin();
+    plan->replay_plan.insert(fragment, *m_active_iter);
+    ++m_active_iter;
   }
 
   HT_INFOF("Added recovery plan with %d fragments for %d %s ranges",
@@ -359,28 +368,24 @@ BalancePlanAuthority::update_range_plan(RangeRecoveryPlanPtr &plan,
                                         const String &location,
                                         const vector<QualifiedRangeSpec> &new_specs)
 { 
-  StringSet active_locations;
-  m_context->rsc_manager->get_connected_servers(active_locations);
 
-  HT_ASSERT(active_locations.find(location) == active_locations.end());
-
-  StringSet::const_iterator location_it = active_locations.begin();
+  HT_ASSERT(m_active.find(location) == m_active.end());
 
   vector<uint32_t> fragments;
   plan->replay_plan.get_fragments(location.c_str(), fragments);
   // round robin through the locations and assign the fragments
   foreach_ht (uint32_t fragment, fragments) {
-    if (location_it == active_locations.end())
-      location_it = active_locations.begin();
-    plan->replay_plan.insert(fragment, *location_it);
-    ++location_it;
+    if (m_active_iter == m_active.end())
+      m_active_iter = m_active.begin();
+    plan->replay_plan.insert(fragment, *m_active_iter);
+    ++m_active_iter;
   }
 
   std::set<QualifiedRangeSpec> purge_ranges;
   foreach_ht (const QualifiedRangeSpec spec, new_specs)
     purge_ranges.insert(spec);
 
-  location_it = active_locations.begin();
+  m_active_iter = m_active.begin();
   vector<QualifiedRangeSpec> specs;
   vector<RangeState> states;
   plan->receiver_plan.get_range_specs_and_states(location, specs, states);
@@ -389,10 +394,10 @@ BalancePlanAuthority::update_range_plan(RangeRecoveryPlanPtr &plan,
     if (purge_ranges.count(specs[i]) > 0)
       plan->receiver_plan.remove(specs[i]);
     else {
-      if (location_it == active_locations.end())
-        location_it = active_locations.begin();
-      plan->receiver_plan.insert(*location_it, specs[i], states[i]);
-      ++location_it;
+      if (m_active_iter == m_active.end())
+        m_active_iter = m_active.begin();
+      plan->receiver_plan.insert(*m_active_iter, specs[i], states[i]);
+      ++m_active_iter;
     }
   }
 
@@ -429,7 +434,6 @@ BalancePlanAuthority::get_balance_destination(const TableIdentifier &table,
   RangeMoveSpecPtr move_spec = new RangeMoveSpec();
 
   move_spec->table = table;
-  move_spec->table.generation = 0;
   move_spec->range = range;
 
   MoveSetT::iterator iter;
@@ -456,7 +460,6 @@ BalancePlanAuthority::balance_move_complete(const TableIdentifier &table,
   HT_INFO_OUT << "balance_move_complete for " << table << " " << range << HT_END;
 
   move_spec->table = table;
-  move_spec->table.generation = 0;
   move_spec->range = range;
 
   MoveSetT::iterator iter;

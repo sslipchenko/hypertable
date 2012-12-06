@@ -195,10 +195,10 @@ bool QualifiedRangeSpec::is_root() const {
 }
 
 bool QualifiedRangeSpec::operator<(const QualifiedRangeSpec &other) const {
-  if (table == other.table)
+  if (!strcmp(table.id, other.table.id))
     return (range < other.range);
   else
-    return (table < other.table);
+    return strcmp(table.id, other.table.id) < 0;
 }
 
 bool QualifiedRangeSpec::operator==(const QualifiedRangeSpec &other) const {

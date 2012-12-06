@@ -75,6 +75,10 @@ namespace Hypertable {
     void remove_recovery_plan(const String &location);
 
     void remove_from_receiver_plan(const String &location, int type,
+                                   const vector<QualifiedRangeSpec> &ranges,
+                                   std::vector<Entity *> &entities);
+
+    void remove_from_receiver_plan(const String &location, int type,
                                    const vector<QualifiedRangeSpec> &ranges);
 
     void remove_from_replay_plan(const String &recovery_location, int type,
@@ -137,6 +141,8 @@ namespace Hypertable {
     ContextPtr m_context;
     MetaLog::WriterPtr m_mml_writer;
     int m_generation;
+    StringSet m_active;
+    StringSet::iterator m_active_iter;
 
     struct RecoveryPlans {
       RangeRecoveryPlanPtr plans[4];
@@ -148,9 +154,10 @@ namespace Hypertable {
     struct lt_move_spec {
       bool operator()(const RangeMoveSpecPtr &ms1,
                       const RangeMoveSpecPtr &ms2) const  {
-        if (ms1->table < ms2->table)
+        int cmp = strcmp(ms1->table.id, ms2->table.id);
+        if (cmp < 0)
           return true;
-        else if (ms1->table == ms2->table) {
+        else if (cmp == 0) {
           if (ms1->range < ms2->range)
             return true;
         }
