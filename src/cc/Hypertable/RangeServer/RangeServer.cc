@@ -1839,6 +1839,8 @@ RangeServer::acknowledge_load(ResponseCallbackAcknowledgeLoad *cb,
         continue;
       }
 
+      HT_MAYBE_FAIL_X("metadata-acknowledge-load", rr.table.is_metadata());
+
       error_map[rr] = Error::OK;
       HT_INFO_OUT << "Range: " << rr <<" acknowledged" << HT_END;
     }

@@ -204,22 +204,21 @@ void OperationMoveRange::execute() {
           range_vec.push_back(&qrs);
           rsc.acknowledge_load(addr, range_vec, response_map);
           map<QualifiedRangeSpec, int>::iterator it = response_map.begin();
-          if (it->second != Error::OK)
+          if (it->second != Error::OK &&
+              it->second != Error::RANGESERVER_TABLE_DROPPED &&
+              it->second != Error::TABLE_NOT_FOUND &&
+              it->second != Error::RANGESERVER_RANGE_NOT_FOUND)
             HT_THROWF(it->second, "Problem acknowledging load range %s to %s",
-                    m_range_name.c_str(), m_destination.c_str());
+                      m_range_name.c_str(), m_destination.c_str());
         }
         catch (Exception &e) {
-          if (e.code() != Error::RANGESERVER_TABLE_DROPPED &&
-              e.code() != Error::TABLE_NOT_FOUND &&
-              e.code() != Error::RANGESERVER_RANGE_NOT_FOUND) {
-            // otherwise the server might be down - go back to the initial state
-            HT_WARNF("Problem acknowledging load range %s: %s - %s (dest %s)",
-                     m_range_name.c_str(), Error::get_text(e.code()),
-                     e.what(), m_destination.c_str());
-            poll(0, 0, 5000);
-            set_state(OperationState::INITIAL);
-            return;
-          }
+          // Destination might be down - go back to the initial state
+          HT_WARNF("Problem acknowledging load range %s: %s - %s (dest %s)",
+                   m_range_name.c_str(), Error::get_text(e.code()),
+                   e.what(), m_destination.c_str());
+          poll(0, 0, 5000);
+          set_state(OperationState::INITIAL);
+          return;
         }
       }
     }
