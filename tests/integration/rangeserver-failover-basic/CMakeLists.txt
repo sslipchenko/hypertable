@@ -47,3 +47,11 @@ add_test(RangeServer-failover-bad-fragments env INSTALL_DIR=${INSTALL_DIR}
 # restarted, but one RangeServer is missing.
 add_test(RangeServer-failover-restart env INSTALL_DIR=${INSTALL_DIR}
          bash -x ${CMAKE_CURRENT_SOURCE_DIR}/run14.sh)
+
+# Fail during load of initial range during create table
+add_test(RangeServer-failover-create-table-1 env TEST=1 INSTALL_DIR=${INSTALL_DIR}
+         bash -x ${CMAKE_CURRENT_SOURCE_DIR}/run-create-table-test.sh)
+
+# Fail during load of initial range during create table
+add_test(RangeServer-failover-create-table-2 env TEST=2 INSTALL_DIR=${INSTALL_DIR}
+         bash -x ${CMAKE_CURRENT_SOURCE_DIR}/run-create-table-test.sh)

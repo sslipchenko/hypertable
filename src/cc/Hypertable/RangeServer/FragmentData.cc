@@ -32,8 +32,8 @@ void FragmentData::add(EventPtr &event) {
 }
 
 void FragmentData::merge(RangePtr &range, const char *split_point,
-                         DynamicBuffer &dbuf_lower, int64_t *latest_revision_lower, bool add_lower,
-                         DynamicBuffer &dbuf_upper, int64_t *latest_revision_upper, bool add_upper) {
+                         DynamicBuffer &dbuf_lower, int64_t *latest_revision_lower,
+                         DynamicBuffer &dbuf_upper, int64_t *latest_revision_upper) {
   String location;
   QualifiedRangeSpec range_spec;
   DeserializedFragments fragments;
@@ -69,6 +69,7 @@ void FragmentData::merge(RangePtr &range, const char *split_point,
 
   foreach_ht(Fragment &fragment, fragments) {
     const uint8_t *mod, *mod_end;
+    size_t kv_pairs = 0;
 
     mod_end = fragment.first + fragment.second;
     mod = fragment.first;
@@ -81,21 +82,22 @@ void FragmentData::merge(RangePtr &range, const char *split_point,
       if (strcmp(key.row, split_point) <= 0) {
         if (key.revision > *latest_revision_lower)
           *latest_revision_lower = key.revision;
-        if (add_lower)
-          range->add(key, value);
+        range->add(key, value);
         dbufp = &dbuf_lower;
       }
       else {
         if (key.revision > *latest_revision_upper)
           *latest_revision_upper = key.revision;
-        if (add_upper)
-          range->add(key, value);
+        range->add(key, value);
         dbufp = &dbuf_upper;
       }
       // skip to next kv pair
       value.next();
       dbufp->add_unchecked((const void *)mod, value.ptr-mod);
+      kv_pairs++;
       mod = value.ptr;
     }
+    if (range->is_metadata())
+      HT_INFOF("Just added %d key/value pairs from fragment", (int)kv_pairs);
   }
 }

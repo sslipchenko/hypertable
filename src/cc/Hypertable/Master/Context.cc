@@ -146,12 +146,6 @@ void Context::commit_complete(EventPtr &event) {
 }
 
 
-bool Context::reassigned(TableIdentifier *table, RangeSpec &range, String &location) {
-  // TBD
-  return false;
-}
-
-
 bool Context::can_accept_ranges(const RangeServerStatistics &stats)
 {
   static int threshold = 0;

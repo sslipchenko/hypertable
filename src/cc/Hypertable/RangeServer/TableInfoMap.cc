@@ -119,6 +119,11 @@ void TableInfoMap::add_staged_range(const TableIdentifier *table, RangePtr &rang
     }
   }
 
+  HT_MAYBE_FAIL_X("add-staged-range-2", !table->is_system());
+
+  // Record range in RSML
+  range->record_state_rsml();
+
   (*iter).second->add_staged_range(range);
 }
 

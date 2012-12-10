@@ -65,8 +65,8 @@ namespace Hypertable {
      * write the contents of this fragment into the Range and the dynamic buffer
      */
     void merge(RangePtr &range, const char *split_point,
-               DynamicBuffer &dbuf_lower, int64_t *latest_revision_lower, bool add_lower,
-               DynamicBuffer &dbuf_upper, int64_t *latest_revision_upper, bool add_upper);
+               DynamicBuffer &dbuf_lower, int64_t *latest_revision_lower,
+               DynamicBuffer &dbuf_upper, int64_t *latest_revision_upper);
 
   protected:
     uint32_t m_id;

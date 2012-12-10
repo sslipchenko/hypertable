@@ -173,8 +173,6 @@ void ConnectionHandler::handle(EventPtr &event) {
                   (Llu)event->header.command);
       }
       if (operation) {
-        HT_INFOF("About to load %u", (unsigned)event->header.command);
-        // Is the following ever used ???
         HT_MAYBE_FAIL_X("connection-handler-before-id-response",
                 event->header.command != MasterProtocol::COMMAND_STATUS &&
                 event->header.command != MasterProtocol::COMMAND_RELINQUISH_ACKNOWLEDGE);

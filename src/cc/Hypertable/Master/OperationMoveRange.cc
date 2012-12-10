@@ -121,9 +121,6 @@ void OperationMoveRange::execute() {
     return;
 
   case OperationState::STARTED:
-    if (!m_context->in_operation)
-      m_context->in_operation = true;
-
     if (m_event) {
       try {
         ResponseCallback cb(m_context->comm, m_event);
@@ -132,8 +129,8 @@ void OperationMoveRange::execute() {
       catch (Exception &e) {
         HT_WARN_OUT << e << HT_END;
       }
+      m_event = 0;
     }
-    m_event = 0;
     set_state(OperationState::LOAD_RANGE);
     HT_MAYBE_FAIL("move-range-STARTED");
 

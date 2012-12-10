@@ -1752,9 +1752,6 @@ RangeServer::load_range(ResponseCallback *cb, const TableIdentifier *table,
         return;
       }
       
-      // Record range in RSML
-      range->record_state_rsml();
-
       // make sure that we don't have a clock skew
       // poll() timeout is in milliseconds, revision and now is in nanoseconds
       int64_t now = Hypertable::get_ts64();
@@ -1769,6 +1766,7 @@ RangeServer::load_range(ResponseCallback *cb, const TableIdentifier *table,
       m_live_map->add_staged_range(table, range, range_state->transfer_log);
     }
 
+    HT_MAYBE_FAIL_X("user-load-range-4", !table->is_system());
     HT_MAYBE_FAIL_X("metadata-load-range-4", table->is_metadata());
 
     if (cb && (error = cb->response_ok()) != Error::OK)
@@ -3753,13 +3751,6 @@ void RangeServer::phantom_load(ResponseCallback *cb, const String &location,
         if (!live(spec)) {
           SchemaPtr schema = table_info->get_schema();
           phantom_range_map->insert(spec, state, schema, fragments);
-          // If range is in SPLIT_SHURNK state, that means the split log was
-          // installed and the range was compacted, so replay is not needed
-          if (state.state == RangeState::SPLIT_SHRUNK) {
-            PhantomRangePtr phantom_range;
-            phantom_range_map->get(spec, phantom_range);
-            phantom_range->set_replayed();
-          }
         }
       }
     }
@@ -3779,7 +3770,7 @@ void RangeServer::phantom_update(ResponseCallbackPhantomUpdate *cb,
         const String &location, int plan_generation, QualifiedRangeSpec &range,
         uint32_t fragment, EventPtr &event) {
   HT_INFO_OUT << "phantom_update location=" << location << ", fragment="
-              << fragment << ", event=" << std::hex << event.get() << HT_END;
+              << fragment << ", range=" << range << HT_END;
 
   FailoverPhantomRangeMap::iterator failover_map_it;
   PhantomRangeMapPtr phantom_range_map;

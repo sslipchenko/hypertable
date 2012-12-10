@@ -127,11 +127,11 @@ namespace {
                 std::vector<MetaLog::EntityPtr> &entities,
                 const String &failure_point,
                 ExpectedResultsMap &expected_operations,
-                std::vector<String> &expected_servers, 
-                BalancePlanAuthority *bpa = NULL) {
+                std::vector<String> &expected_servers) {
     OperationPtr operation;
     RangeServerConnectionPtr rsc;
     std::vector<OperationPtr> operations;
+    std::vector<MetaLog::EntityPtr> tmp_entities;
 
     context->op = new OperationProcessor(context, 4);
 
@@ -159,16 +159,37 @@ namespace {
     entities.clear();
     mml_reader->get_entities(entities);
 
+    // Remove the BalancePlanAuthority object
+    foreach_ht (MetaLog::EntityPtr &entity, entities) {
+      if (dynamic_cast<BalancePlanAuthority *>(entity.get()) == 0)
+        tmp_entities.push_back(entity);
+    }
+    entities.swap(tmp_entities);
+
+#if 0
+    HT_INFO("Entities:");
+    foreach_ht (MetaLog::EntityPtr &entity, entities)
+      HT_INFOF("%s", entity->name().c_str());
+    HT_INFO("Expected Entities:");
+    for (ExpectedResultsMap::iterator iter = expected_operations.begin();
+         iter != expected_operations.end(); ++iter) {
+      HT_INFOF("%s", iter->first.c_str());
+    }
+    foreach_ht (String &server, expected_servers)
+      HT_INFOF("%s", server.c_str());
+#endif
+
     HT_ASSERT(entities.size() == expected_operations.size()
-            + expected_servers.size() + (bpa ? 1 : 0));
+              + expected_servers.size());
 
     for (size_t i = 0; i < entities.size(); i++) {
       bool match = false;
       operation = dynamic_cast<Operation *>(entities[i].get());
       rsc = dynamic_cast<RangeServerConnection *>(entities[i].get());
       if (operation) {
-        const char *ptr = strstr(operation->name().c_str(), " ");
-        String operation_name = ptr ? String(operation->name(), 0, ptr-operation->name().c_str()) : operation->name();
+        String name = operation->name();
+        const char *ptr = strstr(name.c_str(), " ");
+        String operation_name = ptr ? String(name.c_str(), ptr-name.c_str()) : name;
         for (ExpectedResultsMap::iterator iter = expected_operations.begin();
              iter != expected_operations.end(); ++iter) {
           if (operation_name == iter->first &&
@@ -191,10 +212,6 @@ namespace {
         }
         if (!match)
           std::cout << "Unable to find match for '" << rsc->location() << "'" << std::endl;
-      }
-      else {
-        if (bpa && dynamic_cast<BalancePlanAuthority *>(entities[i].get()))
-          match = true;
       }
 
       if (!match) {
@@ -245,6 +262,7 @@ void balance_plan_authority_test(ContextPtr &context);
 
 int main(int argc, char **argv) {
   ContextPtr context = new Context();
+  BalancePlanAuthorityPtr bpa;
   std::vector<MetaLog::EntityPtr> entities;
 
   // Register ourselves as the Comm-layer proxy master
@@ -273,6 +291,8 @@ int main(int argc, char **argv) {
     context->mml_writer = new MetaLog::Writer(context->dfs, context->mml_definition,
                                               log_dir + "/" + context->mml_definition->name(),
                                               entities);
+
+    bpa = context->get_balance_plan_authority();
 
     FailureInducer::instance = new FailureInducer();
     context->request_timeout = 600;
@@ -491,15 +511,20 @@ void create_table_test(ContextPtr &context) {
            expected_operations, expected_servers);
 
   expected_operations.clear();
-  expected_operations.insert( std::pair<String, int32_t>("OperationCreateTable", OperationState::FINALIZE) );
+  expected_operations.insert( std::pair<String, int32_t>("OperationCreateTable", OperationState::ACKNOWLEDGE) );
   run_test(context, log_dir, entities, "create-table-LOAD_RANGE-b:throw:0",
+           expected_operations, expected_servers);
+
+  expected_operations.clear();
+  expected_operations.insert( std::pair<String, int32_t>("OperationCreateTable", OperationState::ACKNOWLEDGE) );
+  run_test(context, log_dir, entities, "create-table-ACKNOWLEDGE:throw:0",
            expected_operations, expected_servers);
 
   context->rsc_manager->disconnect_server(rsc1);
   initialize_test(context, log_dir, entities, "");
   poll(0,0,100);
   context->rsc_manager->connect_server(rsc1, "foo.hypertable.com", InetAddr("localhost", 30267),
-                          InetAddr("localhost", 38060));
+                                       InetAddr("localhost", 38060));
   context->op->wait_for_empty();
 
   context->op->shutdown();
@@ -565,7 +590,7 @@ void create_table_with_index_test(ContextPtr &context) {
   expected_operations.insert( std::pair<String, int32_t>("OperationCreateTable", OperationState::ASSIGN_ID) );
   expected_operations.insert( std::pair<String, int32_t>("OperationCreateTable", OperationState::COMPLETE) );
   expected_operations.insert( std::pair<String, int32_t>("OperationCreateTable", OperationState::COMPLETE) );
-  expected_operations.insert( std::pair<String, int32_t>("OperationCreateTable", OperationState::FINALIZE) );
+  expected_operations.insert( std::pair<String, int32_t>("OperationCreateTable", OperationState::ACKNOWLEDGE) );
   run_test(context, log_dir, entities, "create-table-FINALIZE:throw:0",
            expected_operations, expected_servers);
 
@@ -573,9 +598,9 @@ void create_table_with_index_test(ContextPtr &context) {
   expected_operations.insert( std::pair<String, int32_t>("OperationCreateTable", OperationState::ASSIGN_ID) );
   expected_operations.insert( std::pair<String, int32_t>("OperationCreateTable", OperationState::COMPLETE) );
   expected_operations.insert( std::pair<String, int32_t>("OperationCreateTable", OperationState::COMPLETE) );
-  expected_operations.insert( std::pair<String, int32_t>("OperationCreateTable", OperationState::FINALIZE) );
-  expected_operations.insert( std::pair<String, int32_t>("OperationCreateTable", OperationState::FINALIZE) );
-  expected_operations.insert( std::pair<String, int32_t>("OperationCreateTable", OperationState::FINALIZE) );
+  expected_operations.insert( std::pair<String, int32_t>("OperationCreateTable", OperationState::COMPLETE) );
+  expected_operations.insert( std::pair<String, int32_t>("OperationCreateTable", OperationState::COMPLETE) );
+  expected_operations.insert( std::pair<String, int32_t>("OperationCreateTable", OperationState::ACKNOWLEDGE) );
   run_test(context, log_dir, entities, "create-table-FINALIZE:throw:1",
            expected_operations, expected_servers);
 
@@ -803,10 +828,6 @@ void move_range_test(ContextPtr &context) {
   expected_servers.push_back("rs3");
   expected_servers.push_back("rs4");
 
-  // make sure that there's a reference to the BPA, otherwise run_test()
-  // might delete the pointer
-  BalancePlanAuthorityPtr bpa = context->get_balance_plan_authority();
-
   TableIdentifier table;
   RangeSpec range;
   String transfer_log = "/hypertable/servers/log/xferlog";
@@ -827,7 +848,7 @@ void move_range_test(ContextPtr &context) {
   expected_operations.insert(std::pair<String, int32_t>("OperationMoveRange",
             OperationState::STARTED));
   run_test(context, log_dir, entities, "move-range-INITIAL-b:throw:0",
-           expected_operations, expected_servers, bpa.get());
+           expected_operations, expected_servers);
 
   String initial_location = move_range_operation->get_location();
 
@@ -835,7 +856,7 @@ void move_range_test(ContextPtr &context) {
   expected_operations.insert(std::pair<String, int32_t>("OperationMoveRange",
               OperationState::COMPLETE));
   run_test(context, log_dir, entities, "",
-          expected_operations, expected_servers, bpa.get());
+          expected_operations, expected_servers);
 
   String final_location = move_range_operation->get_location();
 

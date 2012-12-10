@@ -77,6 +77,7 @@ void PhantomRange::create_range(MasterClientPtr &master_client,
   m_range = new Range(master_client, &m_range_spec.table, m_schema,
                       &m_range_spec.range, table_info.get(), &m_range_state, true);
   // replay existing transfer log
+  m_range->recovery_initialize();
   m_range->recovery_finalize();
   m_range->metalog_entity()->state.state =
     m_range->metalog_entity()->state.state | RangeState::PHANTOM;
@@ -108,8 +109,7 @@ void PhantomRange::populate_range_and_log(FilesystemPtr &log_dfs,
       m_phantom_logname = create_log(log_dfs, log_dir, metalog_entity);
       metalog_entity->original_transfer_log = m_phantom_logname;
     }
-    if (state == RangeState::SPLIT_LOG_INSTALLED ||
-        state == RangeState::SPLIT_SHRUNK) {
+    if (state == RangeState::SPLIT_LOG_INSTALLED) {
       split_point = metalog_entity->state.split_point;
       split_log = new CommitLog(log_dfs, metalog_entity->state.transfer_log,
                                 m_range_spec.table.is_metadata());
@@ -145,17 +145,17 @@ void PhantomRange::populate_range_and_log(FilesystemPtr &log_dfs,
       m_range_spec.table.encode(&dbuf_split.ptr);
       if (split_off_high)
         vv.second->merge(m_range, split_point,
-                         dbuf_phantom, &latest_revision_phantom, true,
-                         dbuf_split, &latest_revision_split, state != RangeState::SPLIT_SHRUNK);
+                         dbuf_phantom, &latest_revision_phantom,
+                         dbuf_split, &latest_revision_split);
       else
         vv.second->merge(m_range, split_point,
-                         dbuf_split, &latest_revision_split, state != RangeState::SPLIT_SHRUNK,
-                         dbuf_phantom, &latest_revision_phantom, true);
+                         dbuf_split, &latest_revision_split,
+                         dbuf_phantom, &latest_revision_phantom);
     }
     else {
       vv.second->merge(m_range, "",
-                       dbuf_phantom, &latest_revision_phantom, true,
-                       dbuf_phantom, &latest_revision_phantom, true);
+                       dbuf_phantom, &latest_revision_phantom,
+                       dbuf_phantom, &latest_revision_phantom);
     }
     if (dbuf_phantom.fill() > table_id_len)
       phantom_log->write(dbuf_phantom, latest_revision_phantom, false);

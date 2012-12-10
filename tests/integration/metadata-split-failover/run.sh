@@ -1,4 +1,6 @@
-#!/usr/bin/env bash
+#!/bin/bash -x
+
+#!/usr/bin/env bash -x
 
 HT_HOME=${INSTALL_DIR:-"/opt/hypertable/current"}
 HYPERTABLE_HOME=${HT_HOME}
@@ -16,6 +18,26 @@ RUN_DIR=`pwd`
 
 # Dumping cores slows things down unnecessarily for normal test runs
 #ulimit -c 0
+
+start_master() {
+  set_start_vars Hypertable.Master
+  check_pidfile $pidfile && return 0
+
+  check_server --config=${SCRIPT_DIR}/test.cfg master
+  if [ $? != 0 ] ; then
+      $HT_HOME/bin/Hypertable.Master --verbose \
+        --pidfile=$HT_HOME/run/Hypertable.Master.pid \
+        --Hypertable.Master.Gc.Interval=30000 \
+        --Hypertable.RangeServer.Range.SplitSize=18K \
+        --Hypertable.RangeServer.Range.MetadataSplitSize=20K \
+        --Hypertable.Failover.GracePeriod=30000 \
+        --Hypertable.Failover.Quorum.Percentage=40 \
+        --Hypertable.Connection.Retry.Interval=3000 > master.output.$TEST 2>&1 &
+    wait_for_server_up master "$pidname"
+  else
+    echo "WARNING: $pidname already running."
+  fi
+}
 
 wait_for_recovery() {
   local id=$1
@@ -93,17 +115,7 @@ run_test() {
     $HT_HOME/bin/start-test-servers.sh --no-master --no-rangeserver \
         --no-thriftbroker --clear --DfsBroker.DisableFileRemoval=true
 
-    $HT_HOME/bin/Hypertable.Master --verbose \
-        --pidfile=$HT_HOME/run/Hypertable.Master.pid \
-        --Hypertable.Master.Gc.Interval=30000 \
-        --Hypertable.RangeServer.Range.SplitSize=18K \
-        --Hypertable.RangeServer.Range.MetadataSplitSize=20K \
-        --Hypertable.Failover.GracePeriod=30000 \
-        --Hypertable.Failover.Quorum.Percentage=40 \
-        --Hypertable.Connection.Retry.Interval=3000 > master.output.$TEST 2>&1 &
-
-    #wait_for_server_up "master" "master:38050" "--Hypertable.Master.Port=38050"
-    sleep 10
+    start_master
 
     local j
     let j=1
@@ -140,7 +152,7 @@ run_test() {
     fi
     
   # wait for recovery to complete 
-    wait_for_recovery "rs1"
+    #wait_for_recovery "rs1"
     let j=2
     while [ $j -le $RS_COUNT ] ; do
         if test -n "${INDUCED_FAILURE[$j]}" ; then

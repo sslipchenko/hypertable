@@ -89,11 +89,6 @@ void OperationRegisterServer::execute() {
     m_context->hyperspace->close(handle);
   }
 
-  /* !!! fix this
-     bool balanced = false;
-     if (!m_context->in_operation)
-     balanced = true;
-  */
   if (!m_rsc) {
     m_rsc = new RangeServerConnection(m_location,
                                       m_system_stats.net_info.host_name,

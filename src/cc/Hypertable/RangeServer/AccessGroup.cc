@@ -146,7 +146,8 @@ void AccessGroup::add(const Key &key, const ByteString value) {
       return m_cell_cache_manager->add(key, value);
   }
   else if (!m_recovering) {
-    HT_ERROR("Revision (clock) skew detected! May result in data loss.");
+    HT_ERRORF("Revision (clock) skew detected! Key '%s' revision=%lld, latest_stored=%lld",
+              key.row, (Lld)key.revision, (Lld)m_latest_stored_revision);
     if (m_schema->column_is_counter(key.column_family_code))
       return m_cell_cache_manager->add_counter(key, value);
     else

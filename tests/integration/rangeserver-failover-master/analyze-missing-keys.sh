@@ -12,6 +12,7 @@ check_logs() {
   let total_count=0
   while IFS= read -r log; do
     rm -f $2-log-contents.txt
+    /bin/rm -rf $HT_HOME/fs/local/hypertable/servers/tmp/user/0
     cp $log $HT_HOME/fs/local/hypertable/servers/tmp/user/0
     $HT_HOME/bin/ht dumplog --dfs-timeout=10000 /hypertable/servers/tmp/user >> $2-log-contents.txt
 

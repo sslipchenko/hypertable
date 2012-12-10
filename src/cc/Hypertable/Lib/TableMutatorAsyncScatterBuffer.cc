@@ -31,6 +31,11 @@
 #include "TableMutatorAsyncScatterBuffer.h"
 #include "RangeServerProtocol.h"
 
+#include <poll.h>
+
+#include <boost/random.hpp>
+#include <boost/random/uniform_01.hpp>
+
 using namespace Hypertable;
 
 
@@ -307,9 +312,19 @@ void TableMutatorAsyncScatterBuffer::send(uint32_t flags) {
     }
     catch (Exception &e) {
       if (e.code() == Error::COMM_NOT_CONNECTED) {
+        if (send_buffer->addr.is_proxy())
+          m_range_locator->invalidate_host(send_buffer->addr.proxy);
         send_buffer->add_retries(send_buffer->send_count, 0,
             send_buffer->pending_updates.size);
         m_completion_counter.decrement();
+        // Random wait betwee 0 and 5 seconds
+        boost::mt19937 rng;
+        poll(0, 0, rng()%5000);
+      }
+      else {
+        HT_FATALF("Problem sending updates to %s - %s (%s)",
+                  send_buffer->addr.to_str().c_str(), Error::get_text(e.code()),
+                  e.what());
       }
     }
     send_buffer->pending_updates.own = true;

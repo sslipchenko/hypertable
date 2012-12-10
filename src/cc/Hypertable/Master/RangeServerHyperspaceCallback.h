@@ -48,6 +48,14 @@ namespace Hypertable {
     virtual void lock_released() {
       if (m_context->rsc_manager->disconnect_server(m_rsc)) {
 
+        // Remove by public address
+        CommAddress comm_addr(m_rsc->public_addr());
+        m_context->conn_manager->remove(comm_addr);
+
+        // Remove by location
+        comm_addr.set_proxy(m_rsc->location());
+        m_context->conn_manager->remove(comm_addr);
+
         uint32_t millis = m_context->props->get_i32("Hypertable.Failover.GracePeriod");
         m_context->recovery_barrier_op->advance_into_future(millis);
 

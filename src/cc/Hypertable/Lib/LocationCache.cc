@@ -176,6 +176,25 @@ bool LocationCache::invalidate(const char *table_name, const char *rowkey) {
   return true;
 }
 
+void LocationCache::invalidate_host(const String &hostname) {
+  ScopedLock lock(m_mutex);
+  CommAddress addr;
+
+  addr.set_proxy(hostname);
+  const CommAddress *addrp = get_constant_address(addr);
+
+  LocationMap::iterator iter = m_location_map.begin();
+  Value *val = 0;
+  while (iter != m_location_map.end()) {
+    val = 0;
+    if (iter->second->addrp == addrp)
+      val = iter->second;
+    ++iter;
+    if (val)
+      remove(val);
+  }
+}
+
 
 void LocationCache::display(std::ostream &out) {
   for (Value *value = m_head; value; value = value->prev)
