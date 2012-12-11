@@ -361,13 +361,10 @@ RangeLocator::find(const TableIdentifier *table, const char *row_key,
                                     meta_scan_spec, scan_block, timer);
     }
     catch (Exception &e) {
-      if (e.code() == Error::RANGESERVER_RANGE_NOT_FOUND ||
-          e.code() == Error::COMM_NOT_CONNECTED)
+      if (e.code() == Error::RANGESERVER_RANGE_NOT_FOUND)
         m_root_stale = true;
-      //HT_DEBUG_OUT << "Error trying to locate " << table->id <<  "[" << row_key
-      //    << "]" << " hard=" << hard << " m_root_stale=" << m_root_stale << " root_addr="
-      //    << m_root_range_info.addr.to_str() << " scanning metadata at addr "
-      //    << addr.to_str() << " - "<< e << HT_END;
+      else if (e.code() == Error::COMM_NOT_CONNECTED)
+        invalidate_host(addr.proxy);
 
       SAVE_ERR2(e.code(), e, format("Problem creating scanner for start row "
                 "'%s' on METADATA[..??]", meta_keys.start));
@@ -428,8 +425,7 @@ RangeLocator::find(const TableIdentifier *table, const char *row_key,
 
   if (m_conn_manager &&
       !m_conn_manager->wait_for_connection(addr, 10000)) {
-    m_cache->invalidate(TableIdentifier::METADATA_ID,
-                        meta_keys.start+TableIdentifier::METADATA_ID_LENGTH+1);
+    invalidate_host(addr.proxy);
     return Error::COMM_NOT_CONNECTED;
   }
 
@@ -438,9 +434,12 @@ RangeLocator::find(const TableIdentifier *table, const char *row_key,
                                   meta_scan_spec, scan_block, timer);
   }
   catch (Exception &e) {
-    if (e.code() == Error::RANGESERVER_RANGE_NOT_FOUND || e.code() == Error::COMM_NOT_CONNECTED)
+    if (e.code() == Error::RANGESERVER_RANGE_NOT_FOUND)
       m_cache->invalidate(TableIdentifier::METADATA_ID,
                           meta_keys.start+TableIdentifier::METADATA_ID_LENGTH+1);
+    else if (e.code() == Error::COMM_NOT_CONNECTED)
+      invalidate_host(addr.proxy);
+
     SAVE_ERR2(e.code(), e, format("Problem creating scanner on second-level "
               "METADATA (start row = %s)", ri.start));
     return e.code();
@@ -532,6 +531,7 @@ int RangeLocator::process_metadata_scanblock(ScanBlock &scan_block, Timer &timer
 	    if (!m_conn_manager->wait_for_connection(range_loc_info.addr, 10000)) {
               if (timer.expired())
                 return Error::REQUEST_TIMEOUT;
+              invalidate_host(range_loc_info.addr.proxy);
               return Error::COMM_NOT_CONNECTED;
 	    }
 	  }
