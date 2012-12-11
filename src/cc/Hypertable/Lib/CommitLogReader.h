@@ -92,6 +92,7 @@ namespace Hypertable {
     std::map<uint32_t, uint32_t> m_error_map;
     String                 m_last_fragment_fname;
     int32_t                m_last_fragment_id;
+    bool                   m_verbose;
   };
 
   typedef intrusive_ptr<CommitLogReader> CommitLogReaderPtr;

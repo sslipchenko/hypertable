@@ -67,7 +67,7 @@ namespace {
 CommitLogReader::CommitLogReader(FilesystemPtr &fs, const String &log_dir)
   : CommitLogBase(log_dir), m_fs(fs), m_fragment_queue_offset(0),
     m_block_buffer(256), m_revision(TIMESTAMP_MIN), m_compressor(0),
-    m_last_fragment_id(-1) {
+    m_last_fragment_id(-1), m_verbose(false) {
   if (get_bool("Hypertable.CommitLog.SkipErrors"))
     CommitLogBlockStream::ms_assert_on_error = false;
 
@@ -79,7 +79,7 @@ CommitLogReader::CommitLogReader(FilesystemPtr &fs, const String &log_dir,
         const std::vector<uint32_t> &fragment_filter)
   : CommitLogBase(log_dir), m_fs(fs), m_fragment_queue_offset(0),
     m_block_buffer(256), m_revision(TIMESTAMP_MIN), m_compressor(0),
-    m_last_fragment_id(-1) {
+    m_last_fragment_id(-1), m_verbose(false) {
   if (get_bool("Hypertable.CommitLog.SkipErrors"))
     CommitLogBlockStream::ms_assert_on_error = false;
 
@@ -114,8 +114,9 @@ CommitLogReader::next_raw_block(CommitLogBlockInfo *infop,
     info->block_stream = 0;
 
     if (m_revision == TIMESTAMP_MIN) {
-      HT_WARNF("Skipping log fragment '%s/%u' because unable to read any "
-             " valid blocks", info->log_dir.c_str(), info->num);
+      if (m_verbose)
+        HT_INFOF("Skipping log fragment '%s/%u' because unable to read any "
+                 " valid blocks", info->log_dir.c_str(), info->num);
       m_fragment_queue.erase(fragment_queue_iter);
     }
     else {
@@ -139,8 +140,9 @@ CommitLogReader::next_raw_block(CommitLogBlockInfo *infop,
     goto try_again;
   }
 
-  HT_INFOF("Replaying commit log fragment %s/%u", (*fragment_queue_iter)->log_dir.c_str(),
-	   (*fragment_queue_iter)->num);
+  if (m_verbose)
+    HT_INFOF("Replaying commit log fragment %s/%u", (*fragment_queue_iter)->log_dir.c_str(),
+             (*fragment_queue_iter)->num);
 
   return true;
 }
@@ -221,8 +223,9 @@ void CommitLogReader::load_fragments(String log_dir, CommitLogFileInfo *parent) 
   }
   catch (Hypertable::Exception &e) {
     if (e.code() == Error::DFSBROKER_BAD_FILENAME) {
-      HT_INFOF("Skipping directory '%s' because it does not exist",
-               log_dir.c_str());
+      if (m_verbose)
+        HT_INFOF("Skipping directory '%s' because it does not exist",
+                 log_dir.c_str());
       return;
     }
     HT_THROW2(e.code(), e, e.what());
@@ -246,8 +249,9 @@ void CommitLogReader::load_fragments(String log_dir, CommitLogFileInfo *parent) 
     long num = strtol(listing[i].c_str(), &endptr, 10);
     if (m_fragment_filter.size() && log_dir == m_log_dir &&
       m_fragment_filter.find(num) == m_fragment_filter.end()) {
-      HT_INFOF("Dropping log fragment %s/%ld because it is filtered",
-               log_dir.c_str(), num);
+      if (m_verbose)
+        HT_INFOF("Dropping log fragment %s/%ld because it is filtered",
+                 log_dir.c_str(), num);
       //HT_DEBUG_OUT << "Fragments " << num <<" in " << log_dir
       //    << " is part of CommitLog "
       //    << m_log_dir << " is not in fragment filter of size()="

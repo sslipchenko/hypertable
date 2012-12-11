@@ -65,6 +65,7 @@ namespace {
         ("metadata-tsv", "For each Range, dump StartRow and Location .tsv lines")
         ("location", str()->default_value(""),
          "Used with --metadata-tsv to specify location proxy")
+        ("print-logs", boo()->zero_tokens()->default_value(false), "Print log files, one per line")
         ("show-version", "Display log version number and exit")
         ;
       cmdline_hidden_desc().add_options()("log-path", str(), "dfs log path");
@@ -141,6 +142,7 @@ int main(int argc, char **argv) {
     bool dump_all = has("all");
     bool show_version = has("show-version");
     bool metadata_tsv = has("metadata-tsv");
+    bool print_logs = get_bool("print-logs");
     String location;
 
     if (metadata_tsv) {
@@ -198,7 +200,7 @@ int main(int argc, char **argv) {
     else
       rsml_reader = new MetaLog::Reader(fs, def, log_path);
 
-    if (!metadata_tsv)
+    if (!metadata_tsv && !print_logs)
       cout << "log version: " << rsml_reader->version() << "\n";
 
     if (show_version)
@@ -211,8 +213,8 @@ int main(int argc, char **argv) {
     else
       rsml_reader->get_entities(entities);
 
+    MetaLog::EntityRange *entity_range;
     if (metadata_tsv) {
-      MetaLog::EntityRange *entity_range;
       for (size_t i=0; i<entities.size(); i++) {
         entity_range = dynamic_cast<MetaLog::EntityRange *>(entities[i].get());
         if (entity_range) {
@@ -220,6 +222,18 @@ int main(int argc, char **argv) {
           cout << entity_range->table.id << ":" << entity_range->spec.end_row << "\tLocation\t" << location << "\n";
         }
       }
+    }
+    else if (print_logs) {
+      foreach_ht (MetaLog::EntityPtr &entity, entities) {
+        entity_range = dynamic_cast<MetaLog::EntityRange *>(entity.get());
+        if (entity_range) {
+          if (entity_range->state.transfer_log && *entity_range->state.transfer_log)
+            std::cout << entity_range->state.transfer_log << "\n";
+          if (!entity_range->original_transfer_log.empty())
+            std::cout << entity_range->original_transfer_log << "\n";
+        }
+      }
+      std::cout << std::flush;
     }
     else {
       for (size_t i=0; i<entities.size(); i++)
