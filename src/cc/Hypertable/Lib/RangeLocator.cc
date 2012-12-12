@@ -668,7 +668,7 @@ int RangeLocator::read_root_location(Timer &timer) {
      * still alive, this will have to change.
      */
     if (old_addr.is_set() && old_addr != addr)
-      m_conn_manager->remove(old_addr);
+      invalidate_host(old_addr.proxy);
 
     m_conn_manager->add(addr, m_root_metadata_retry_interval,
                         "Root RangeServer");

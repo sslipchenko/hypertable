@@ -2239,6 +2239,7 @@ void RangeServer::update_qualify_and_transform() {
                                                         start_row, end_row)) {
             if (uc->send_back.error != Error::RANGESERVER_OUT_OF_RANGE
                 && uc->send_back.count > 0) {
+              uc->send_back.len = (mod - request->buffer.base) - uc->send_back.offset;
               request->send_back_vector.push_back(uc->send_back);
               memset(&uc->send_back, 0, sizeof(uc->send_back));
             }
@@ -2277,6 +2278,7 @@ void RangeServer::update_qualify_and_transform() {
           // See if range has some other error preventing it from receiving updates
           if ((error = rulist->range->get_error()) != Error::OK) {
             if (uc->send_back.error != error && uc->send_back.count > 0) {
+              uc->send_back.len = (mod - request->buffer.base) - uc->send_back.offset;
               request->send_back_vector.push_back(uc->send_back);
               memset(&uc->send_back, 0, sizeof(uc->send_back));
             }
