@@ -57,6 +57,17 @@ void RangeRecoveryReceiverPlan::get_locations(StringSet &locations) const {
   }
 }
 
+bool RangeRecoveryReceiverPlan::get_location(const QualifiedRangeSpec &spec, String &location) const {
+  const RangeIndex &range_index = m_plan.get<ByRange>();
+  RangeIndex::iterator range_it = range_index.find(spec);
+  if (range_it != range_index.end()) {
+    location = range_it->location;
+    return true;
+  }
+  return false;
+}
+
+
 void RangeRecoveryReceiverPlan::get_range_specs(vector<QualifiedRangeSpec> &specs) {
   LocationIndex &index = m_plan.get<ByLocation>();
   for (LocationIndex::iterator iter = index.begin(); iter != index.end(); ++iter)

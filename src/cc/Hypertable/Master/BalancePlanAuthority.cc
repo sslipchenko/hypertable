@@ -282,14 +282,31 @@ BalancePlanAuthority::create_recovery_plan(const String &location,
     = create_range_plan(location, RangeSpec::USER, user_specs, user_states);
 
   // For all active moves in the "current set" whose destination is that of
-  // the failed node, assign a new destination
+  // the failed server, assign the destination to be the same as the one
+  // chosen in the recovery plan
+  String new_location;
   for (MoveSetT::iterator iter = m_current_set.begin();
        iter != m_current_set.end(); ++iter) {
     if (location == (*iter)->dest_location) {
-      if (m_active_iter == m_active.end())
-        m_active_iter = m_active.begin();
-      (*iter)->dest_location = *m_active_iter;
-      m_active_iter++;
+      QualifiedRangeSpec spec((*iter)->table, (*iter)->range);
+      if (plans.plans[RangeSpec::ROOT] && plans.plans[RangeSpec::ROOT]->receiver_plan.get_location(spec, new_location))
+        (*iter)->dest_location = new_location;
+      else if (plans.plans[RangeSpec::METADATA] && plans.plans[RangeSpec::METADATA]->receiver_plan.get_location(spec, new_location))
+        (*iter)->dest_location = new_location;
+      else if (plans.plans[RangeSpec::SYSTEM] && plans.plans[RangeSpec::SYSTEM]->receiver_plan.get_location(spec, new_location))
+        (*iter)->dest_location = new_location;
+      else if (plans.plans[RangeSpec::USER] && plans.plans[RangeSpec::USER]->receiver_plan.get_location(spec, new_location))
+        (*iter)->dest_location = new_location;
+      else {
+        HT_INFO_OUT << "Found " << (*iter)->table << " " << (*iter)->range
+                    << " in current set assigned to location "
+                    << location << ", but not in recovery plan" << HT_END;
+        if (m_active_iter == m_active.end())
+          m_active_iter = m_active.begin();
+        (*iter)->dest_location = *m_active_iter;
+        m_active_iter++;
+        continue;
+      }
     }
   }
 
@@ -473,4 +490,3 @@ BalancePlanAuthority::balance_move_complete(const TableIdentifier &table,
 
   return true;
 }
-

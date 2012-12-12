@@ -4069,6 +4069,12 @@ void RangeServer::phantom_commit_ranges(ResponseCallback *cb, int64_t op_id,
   cb->response_ok();
 
   if (live(specs)) {
+    // Remove phantom map
+    {
+      ScopedLock lock(m_failover_mutex);
+      m_failover_map.erase(location);
+    }
+    // Report success
     try {
       m_master_client->phantom_commit_complete(op_id, location, plan_generation, Error::OK, "");
     }
@@ -4107,17 +4113,8 @@ void RangeServer::phantom_commit_ranges(ResponseCallback *cb, int64_t op_id,
     if (live(specs))
       return;
 
-    if (phantom_range_map->committed()) {
-      try {
-        m_master_client->phantom_commit_complete(op_id, location, plan_generation, Error::OK, "");
-      }
-      catch (Exception &e) {
-        HT_ERROR_OUT << e << HT_END;
-      }
-      return;
-    }
-
     HT_ASSERT(phantom_range_map->prepared());
+    HT_ASSERT(!phantom_range_map->committed());
 
     phantom_map = phantom_range_map->get_tableinfo_map();
 

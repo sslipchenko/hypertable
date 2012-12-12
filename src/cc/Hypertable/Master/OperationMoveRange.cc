@@ -214,7 +214,9 @@ void OperationMoveRange::execute() {
                    m_range_name.c_str(), Error::get_text(e.code()),
                    e.what(), m_destination.c_str());
           poll(0, 0, 5000);
-          set_state(OperationState::INITIAL);
+          // Fetch new destination, if it changed, and then try again
+          if (!bpa->get_balance_destination(m_table, m_range, m_destination))
+            m_context->op->unblock(Dependency::SERVERS);
           return;
         }
       }

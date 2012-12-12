@@ -309,10 +309,7 @@ void OperationRecover::read_rsml() {
       if ((range = dynamic_cast<MetaLog::EntityRange *>(entity.get())) != 0) {
         QualifiedRangeSpec spec;
         // skip phantom ranges, let whoever was recovering them deal with them
-        if (!range->load_acknowledged) {
-          HT_INFO_OUT << "Skipping unacknowledged range " << *range << HT_END;
-        }
-        else if (range->state.state & RangeState::PHANTOM) {
+        if (range->state.state & RangeState::PHANTOM) {
           HT_INFO_OUT << "Skipping PHANTOM range " << *range << HT_END;
         }
         else {

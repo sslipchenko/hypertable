@@ -275,13 +275,19 @@ void OperationCreateTable::execute() {
                m_range_name.c_str(), Error::get_text(e.code()),
                e.what(), m_location.c_str());
       poll(0, 0, 5000);
-      set_state(OperationState::ASSIGN_LOCATION);
+      // Fetch new destination, if changed, and then try again
+      range.start_row = 0;
+      range.end_row = Key::END_ROW_MARKER;
+      m_context->get_balance_plan_authority()->get_balance_destination(m_table, range, m_location);
       return;
     }
     HT_MAYBE_FAIL("create-table-ACKNOWLEDGE");
     set_state(OperationState::FINALIZE);
 
   case OperationState::FINALIZE:
+    range.start_row = 0;
+    range.end_row = Key::END_ROW_MARKER;
+    m_context->get_balance_plan_authority()->balance_move_complete(m_table, range);
     {
       String tablefile = m_context->toplevel_dir + "/tables/" + m_table.id;
       m_context->hyperspace->attr_set(tablefile, "x", "", 0);
