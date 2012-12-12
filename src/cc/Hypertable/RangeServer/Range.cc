@@ -1008,81 +1008,71 @@ void Range::split_compact_and_shrink() {
   for (size_t i=0; i<ag_vector.size(); i++)
     ag_vector[i]->run_compaction(MaintenanceFlag::COMPACT_MAJOR|MaintenanceFlag::SPLIT);
 
-  try {
-    String files;
-    String metadata_row_low, metadata_row_high;
-    int64_t total_blocks;
-    KeySpec key_low, key_high;
-    char buf[32];
+  String files;
+  String metadata_row_low, metadata_row_high;
+  int64_t total_blocks;
+  KeySpec key_low, key_high;
+  char buf[32];
 
-    TableMutatorPtr mutator = Global::metadata_table->create_mutator();
+  TableMutatorPtr mutator = Global::metadata_table->create_mutator();
 
-    // For new range with existing end row, update METADATA entry with new
-    // 'StartRow' column.
+  // For new range with existing end row, update METADATA entry with new
+  // 'StartRow' column.
 
-    metadata_row_high = String("") + m_metalog_entity->table.id + ":" + m_metalog_entity->spec.end_row;
-    key_high.row = metadata_row_high.c_str();
-    key_high.row_len = metadata_row_high.length();
-    key_high.column_qualifier = 0;
-    key_high.column_qualifier_len = 0;
-    key_high.column_family = "StartRow";
-    mutator->set(key_high, (uint8_t *)m_metalog_entity->state.split_point,
-                 strlen(m_metalog_entity->state.split_point));
+  metadata_row_high = String("") + m_metalog_entity->table.id + ":" + m_metalog_entity->spec.end_row;
+  key_high.row = metadata_row_high.c_str();
+  key_high.row_len = metadata_row_high.length();
+  key_high.column_qualifier = 0;
+  key_high.column_qualifier_len = 0;
+  key_high.column_family = "StartRow";
+  mutator->set(key_high, (uint8_t *)m_metalog_entity->state.split_point,
+               strlen(m_metalog_entity->state.split_point));
 
-    // This is needed to strip out the "live file" references
-    if (m_split_off_high) {
-      key_high.column_family = "Files";
-      for (size_t i=0; i<ag_vector.size(); i++) {
-        key_high.column_qualifier = ag_vector[i]->get_name();
-        key_high.column_qualifier_len = strlen(ag_vector[i]->get_name());
-        ag_vector[i]->get_file_data(files, &total_blocks, false);
-        if (files != "")
-          mutator->set(key_high, (uint8_t *)files.c_str(), files.length());
-      }
+  // This is needed to strip out the "live file" references
+  if (m_split_off_high) {
+    key_high.column_family = "Files";
+    for (size_t i=0; i<ag_vector.size(); i++) {
+      key_high.column_qualifier = ag_vector[i]->get_name();
+      key_high.column_qualifier_len = strlen(ag_vector[i]->get_name());
+      ag_vector[i]->get_file_data(files, &total_blocks, false);
+      if (files != "")
+        mutator->set(key_high, (uint8_t *)files.c_str(), files.length());
     }
+  }
 
-    // For new range whose end row is the split point, create a new METADATA
-    // entry
-    metadata_row_low = format("%s:%s", m_metalog_entity->table.id, m_metalog_entity->state.split_point);
-    key_low.row = metadata_row_low.c_str();
-    key_low.row_len = metadata_row_low.length();
+  // For new range whose end row is the split point, create a new METADATA
+  // entry
+  metadata_row_low = format("%s:%s", m_metalog_entity->table.id, m_metalog_entity->state.split_point);
+  key_low.row = metadata_row_low.c_str();
+  key_low.row_len = metadata_row_low.length();
+  key_low.column_qualifier = 0;
+  key_low.column_qualifier_len = 0;
+
+  key_low.column_family = "StartRow";
+  mutator->set(key_low, old_start_row.c_str(), old_start_row.length());
+
+  for (size_t i=0; i<ag_vector.size(); i++) {
+    ag_vector[i]->get_file_data(files, &total_blocks, m_split_off_high);
+    key_low.column_family = key_high.column_family = "BlockCount";
+    key_low.column_qualifier = key_high.column_qualifier = ag_vector[i]->get_name();
+    key_low.column_qualifier_len = key_high.column_qualifier_len = strlen(ag_vector[i]->get_name());
+    sprintf(buf, "%llu", (Llu)total_blocks/2);
+    mutator->set(key_low, (uint8_t *)buf, strlen(buf));
+    mutator->set(key_high, (uint8_t *)buf, strlen(buf));
+    if (files != "") {
+      key_low.column_family = "Files";
+      mutator->set(key_low, (uint8_t *)files.c_str(), files.length());
+    }
+  }
+  if (m_split_off_high) {
     key_low.column_qualifier = 0;
     key_low.column_qualifier_len = 0;
-
-    key_low.column_family = "StartRow";
-    mutator->set(key_low, old_start_row.c_str(), old_start_row.length());
-
-    for (size_t i=0; i<ag_vector.size(); i++) {
-      ag_vector[i]->get_file_data(files, &total_blocks, m_split_off_high);
-      key_low.column_family = key_high.column_family = "BlockCount";
-      key_low.column_qualifier = key_high.column_qualifier = ag_vector[i]->get_name();
-      key_low.column_qualifier_len = key_high.column_qualifier_len = strlen(ag_vector[i]->get_name());
-      sprintf(buf, "%llu", (Llu)total_blocks/2);
-      mutator->set(key_low, (uint8_t *)buf, strlen(buf));
-      mutator->set(key_high, (uint8_t *)buf, strlen(buf));
-      if (files != "") {
-        key_low.column_family = "Files";
-        mutator->set(key_low, (uint8_t *)files.c_str(), files.length());
-      }
-    }
-    if (m_split_off_high) {
-      key_low.column_qualifier = 0;
-      key_low.column_qualifier_len = 0;
-      key_low.column_family = "Location";
-      String location = Global::location_initializer->get();
-      mutator->set(key_low, location.c_str(), location.length());
-    }
-
-    mutator->flush();
-
+    key_low.column_family = "Location";
+    String location = Global::location_initializer->get();
+    mutator->set(key_low, location.c_str(), location.length());
   }
-  catch (Hypertable::Exception &e) {
-    // TODO: propagate exception
-    HT_ERROR_OUT <<"Problem updating METADATA after split (new_end="
-        << m_metalog_entity->state.split_point <<", old_end="<< m_metalog_entity->spec.end_row <<") "<< e << HT_END;
-    // need to unblock updates and then return error
-    HT_ABORT;
-  }
+
+  mutator->flush();
 
   /**
    *  Shrink the range
@@ -1543,6 +1533,11 @@ void Range::acknowledge_load() {
 
   if (Global::rsml_writer == 0)
     HT_THROW(Error::SERVER_SHUTTING_DOWN, "Pointer to RSML Writer is NULL");
+
+  HT_MAYBE_FAIL_X("user-range-acknowledge-load-pause-1",
+                  !m_metalog_entity->table.is_system());
+  HT_MAYBE_FAIL_X("user-range-acknowledge-load-1",
+                  !m_metalog_entity->table.is_system());
 
   try {
     Global::rsml_writer->record_state(m_metalog_entity.get());

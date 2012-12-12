@@ -311,7 +311,8 @@ void TableMutatorAsyncScatterBuffer::send(uint32_t flags) {
 
     }
     catch (Exception &e) {
-      if (e.code() == Error::COMM_NOT_CONNECTED) {
+      if (e.code() == Error::COMM_NOT_CONNECTED ||
+          e.code() == Error::COMM_BROKEN_CONNECTION) {
         if (send_buffer->addr.is_proxy())
           m_range_locator->invalidate_host(send_buffer->addr.proxy);
         send_buffer->add_retries(send_buffer->send_count, 0,

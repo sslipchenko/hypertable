@@ -363,7 +363,8 @@ RangeLocator::find(const TableIdentifier *table, const char *row_key,
     catch (Exception &e) {
       if (e.code() == Error::RANGESERVER_RANGE_NOT_FOUND)
         m_root_stale = true;
-      else if (e.code() == Error::COMM_NOT_CONNECTED)
+      else if (e.code() == Error::COMM_NOT_CONNECTED ||
+               e.code() == Error::COMM_BROKEN_CONNECTION)
         invalidate_host(addr.proxy);
 
       SAVE_ERR2(e.code(), e, format("Problem creating scanner for start row "
@@ -437,7 +438,8 @@ RangeLocator::find(const TableIdentifier *table, const char *row_key,
     if (e.code() == Error::RANGESERVER_RANGE_NOT_FOUND)
       m_cache->invalidate(TableIdentifier::METADATA_ID,
                           meta_keys.start+TableIdentifier::METADATA_ID_LENGTH+1);
-    else if (e.code() == Error::COMM_NOT_CONNECTED)
+    else if (e.code() == Error::COMM_NOT_CONNECTED ||
+             e.code() == Error::COMM_BROKEN_CONNECTION)
       invalidate_host(addr.proxy);
 
     SAVE_ERR2(e.code(), e, format("Problem creating scanner on second-level "

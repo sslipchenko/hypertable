@@ -287,7 +287,12 @@ namespace Hypertable {
       return m_metalog_entity->state.state;
     }
 
-    int32_t get_error() { return m_error; }
+    int32_t get_error() {
+      ScopedLock lock(m_mutex);
+      if (!m_metalog_entity->load_acknowledged)
+        return Error::RANGESERVER_RANGE_NOT_YET_ACKNOWLEDGED;
+      return m_error;
+    }
 
     void set_needs_compaction(bool needs_compaction) {
       ScopedLock lock(m_mutex);

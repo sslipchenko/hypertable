@@ -269,6 +269,8 @@ namespace {
       "RANGE SERVER phantom range map not found"},
     { Error::RANGESERVER_RANGES_ALREADY_LIVE,
       "RANGE SERVER ranges already live"},
+    { Error::RANGESERVER_RANGE_NOT_YET_ACKNOWLEDGED,
+      "RANGE SERVER range not yet acknowledged"},
     { Error::HQL_BAD_LOAD_FILE_FORMAT,         "HQL bad load file format" },
     { Error::METALOG_VERSION_MISMATCH, "METALOG version mismatch" },
     { Error::METALOG_BAD_RS_HEADER, "METALOG bad range server metalog header" },

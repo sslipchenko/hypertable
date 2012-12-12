@@ -1,6 +1,4 @@
-#!/bin/bash -x
-
-#!/usr/bin/env bash -x
+#!/usr/bin/env bash
 
 HT_HOME=${INSTALL_DIR:-"/opt/hypertable/current"}
 HYPERTABLE_HOME=${HT_HOME}
@@ -227,6 +225,8 @@ let j+=1
 [ $TEST == $j ] && run_test "metadata-load-range-3:exit:2" "" ""
 let j+=1
 [ $TEST == $j ] && run_test "metadata-load-range-4:exit:2" "" ""
+let j+=1
+[ $TEST == $j ] && run_test "user-range-acknowledge-load-pause-1:pause(10000):3;user-range-acknowledge-load-1:exit:3" "" ""
 let j+=1
 
 

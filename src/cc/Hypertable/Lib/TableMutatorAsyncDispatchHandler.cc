@@ -81,7 +81,8 @@ void TableMutatorAsyncDispatchHandler::handle(EventPtr &event_ptr) {
             HT_ERROR_OUT << e << HT_END;
             break;
           }
-          if (error == Error::RANGESERVER_OUT_OF_RANGE)
+          if (error == Error::RANGESERVER_OUT_OF_RANGE ||
+              error == Error::RANGESERVER_RANGE_NOT_YET_ACKNOWLEDGED)
             m_send_buffer->add_retries(count, offset, len);
           else {
             m_send_buffer->add_errors(error, count, offset, len);
