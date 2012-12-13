@@ -32,8 +32,7 @@ void FragmentData::add(EventPtr &event) {
 }
 
 void FragmentData::merge(RangePtr &range, const char *split_point,
-                         DynamicBuffer &dbuf_lower, int64_t *latest_revision_lower,
-                         DynamicBuffer &dbuf_upper, int64_t *latest_revision_upper) {
+                         DynamicBuffer &dbuf, int64_t *latest_revision) {
   String location;
   QualifiedRangeSpec range_spec;
   DeserializedFragments fragments;
@@ -41,11 +40,9 @@ void FragmentData::merge(RangePtr &range, const char *split_point,
   SerializedKey serkey;
   ByteString value;
   int plan_generation;
-  DynamicBuffer *dbufp;
   size_t total_size = 0;
 
-  *latest_revision_lower = TIMESTAMP_MIN;
-  *latest_revision_upper = TIMESTAMP_MIN;
+  *latest_revision = TIMESTAMP_MIN;
 
   // de-serialize all objects
   foreach_ht(EventPtr &event, m_data) {
@@ -63,9 +60,8 @@ void FragmentData::merge(RangePtr &range, const char *split_point,
     fragments.push_back(Fragment(base, size));
   }
 
-  // resize the buffers
-  dbuf_lower.ensure(total_size);
-  dbuf_upper.ensure(total_size);
+  // resize the buffer
+  dbuf.ensure(total_size);
 
   foreach_ht(Fragment &fragment, fragments) {
     const uint8_t *mod, *mod_end;
@@ -79,21 +75,15 @@ void FragmentData::merge(RangePtr &range, const char *split_point,
       value.ptr = mod + serkey.length();
       HT_ASSERT(serkey.ptr <= mod_end && value.ptr <= mod_end);
       HT_ASSERT(key.load(serkey));
-      if (strcmp(key.row, split_point) <= 0) {
-        if (key.revision > *latest_revision_lower)
-          *latest_revision_lower = key.revision;
-        range->add(key, value);
-        dbufp = &dbuf_lower;
-      }
-      else {
-        if (key.revision > *latest_revision_upper)
-          *latest_revision_upper = key.revision;
-        range->add(key, value);
-        dbufp = &dbuf_upper;
-      }
+
+      if (key.revision > *latest_revision)
+        *latest_revision = key.revision;
+
+      range->add(key, value);
+
       // skip to next kv pair
       value.next();
-      dbufp->add_unchecked((const void *)mod, value.ptr-mod);
+      dbuf.add_unchecked((const void *)mod, value.ptr-mod);
       kv_pairs++;
       mod = value.ptr;
     }

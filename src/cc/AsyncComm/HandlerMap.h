@@ -205,6 +205,9 @@ namespace Hypertable {
       if (iter == m_datagram_handler_map.end())
 	return Error::COMM_NOT_CONNECTED;
 
+      if (m_decomissioned_handlers.count((*iter).second) > 0)
+        return 0;
+
       io_handler_dg = (IOHandlerDatagram *)(*iter).second.get();
 
       return Error::OK;
@@ -360,6 +363,8 @@ namespace Hypertable {
     IOHandler *lookup_handler(const InetAddr &addr) {
       SockAddrMap<IOHandlerPtr>::iterator iter = m_handler_map.find(addr);
       if (iter == m_handler_map.end())
+        return 0;
+      if (m_decomissioned_handlers.count((*iter).second) > 0)
         return 0;
       return (*iter).second.get();
     }

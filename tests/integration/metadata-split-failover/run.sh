@@ -184,7 +184,8 @@ run_test() {
 
     sleep 5
 
-    # shut down range servers
+    # shut down master and range servers
+    kill -9 `cat $HT_HOME/run/Hypertable.Master.pid`
     kill -9 `cat $HT_HOME/run/Hypertable.RangeServer.*.pid`
 
     # Make sure all ranges have been acknowledged

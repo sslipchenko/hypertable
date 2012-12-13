@@ -605,6 +605,7 @@ int RangeLocator::process_metadata_scanblock(ScanBlock &scan_block, Timer &timer
       if (!m_conn_manager->wait_for_connection(range_loc_info.addr, 10000)) {
         if (timer.expired())
           return Error::REQUEST_TIMEOUT;
+        invalidate_host(range_loc_info.addr.proxy);
         return Error::COMM_NOT_CONNECTED;
       }
     }

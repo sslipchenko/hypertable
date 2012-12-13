@@ -76,23 +76,17 @@ void PhantomRange::create_range(MasterClientPtr &master_client,
 
   m_range = new Range(master_client, &m_range_spec.table, m_schema,
                       &m_range_spec.range, table_info.get(), &m_range_state, true);
-  // replay existing transfer log
-  m_range->recovery_initialize();
-  m_range->recovery_finalize();
-  m_range->metalog_entity()->state.state =
-    m_range->metalog_entity()->state.state | RangeState::PHANTOM;
+  m_range->metalog_entity()->state.state |= RangeState::PHANTOM;
   m_range_state.state |= RangeState::PHANTOM;
 }
 
 void PhantomRange::populate_range_and_log(FilesystemPtr &log_dfs, 
         const String &log_dir, bool *is_empty) {
   ScopedLock lock(m_mutex);
-  const char *split_point = 0;
-  bool split_off_high = true;
   size_t table_id_len = m_range_spec.table.encoded_length();
-  DynamicBuffer dbuf_phantom(table_id_len);
-  DynamicBuffer dbuf_split(table_id_len);
-  CommitLogPtr split_log;
+  DynamicBuffer dbuf(table_id_len);
+
+  m_range->recovery_initialize();
 
   *is_empty = true;
 
@@ -109,13 +103,6 @@ void PhantomRange::populate_range_and_log(FilesystemPtr &log_dfs,
       m_phantom_logname = create_log(log_dfs, log_dir, metalog_entity);
       metalog_entity->original_transfer_log = m_phantom_logname;
     }
-    if (state == RangeState::SPLIT_LOG_INSTALLED) {
-      split_point = metalog_entity->state.split_point;
-      split_log = new CommitLog(log_dfs, metalog_entity->state.transfer_log,
-                                m_range_spec.table.is_metadata());
-      split_off_high = strcmp(metalog_entity->state.split_point,
-                              metalog_entity->state.old_boundary_row) < 0;
-    }
   }  
   else {
     // Set phantom log to "transfer log"
@@ -130,47 +117,28 @@ void PhantomRange::populate_range_and_log(FilesystemPtr &log_dfs,
 
   CommitLogPtr phantom_log = new CommitLog(log_dfs, m_phantom_logname,
                                            m_range_spec.table.is_metadata());
-  int64_t latest_revision_phantom, latest_revision_split;
 
-  Locker<Range> range_lock(*(m_range.get()));
-  foreach_ht (FragmentMap::value_type &vv, m_fragments) {
+  {
+    Locker<Range> range_lock(*(m_range.get()));
+    int64_t latest_revision;
 
-    // setup "phantom" buffer
-    dbuf_phantom.clear();
-    m_range_spec.table.encode(&dbuf_phantom.ptr);
+    foreach_ht (FragmentMap::value_type &vv, m_fragments) {
 
-    if (split_log) {
       // setup "phantom" buffer
-      dbuf_split.clear();
-      m_range_spec.table.encode(&dbuf_split.ptr);
-      if (split_off_high)
-        vv.second->merge(m_range, split_point,
-                         dbuf_phantom, &latest_revision_phantom,
-                         dbuf_split, &latest_revision_split);
-      else
-        vv.second->merge(m_range, split_point,
-                         dbuf_split, &latest_revision_split,
-                         dbuf_phantom, &latest_revision_phantom);
+      dbuf.clear();
+      m_range_spec.table.encode(&dbuf.ptr);
+
+      vv.second->merge(m_range, "", dbuf, &latest_revision);
+
+      if (dbuf.fill() > table_id_len)
+        phantom_log->write(dbuf, latest_revision, false);
     }
-    else {
-      vv.second->merge(m_range, "",
-                       dbuf_phantom, &latest_revision_phantom,
-                       dbuf_phantom, &latest_revision_phantom);
-    }
-    if (dbuf_phantom.fill() > table_id_len)
-      phantom_log->write(dbuf_phantom, latest_revision_phantom, false);
-    if (split_log && dbuf_split.fill() > table_id_len)
-      split_log->write(dbuf_split, latest_revision_split, false);
   }
-  if (split_log) {
-    split_log->sync();
-    split_log->close();
-    HT_INFO_OUT << "Created split log " << metalog_entity->state.transfer_log
-                << " for range " << m_range_spec << ", state=" 
-                << metalog_entity->state << HT_END;
-  }
+
   phantom_log->sync();
   phantom_log->close();
+
+  m_range->recovery_finalize();
 
   HT_INFO_OUT << "Created phantom log " << m_phantom_logname
               << " for range " << m_range_spec << ", state=" 

@@ -502,7 +502,12 @@ void IntervalScannerAsync::load_result(ScanCellsPtr &cells) {
   // if scan is over but current scanner is not finished then destroy it
   if (m_eos && !m_cur_scanner_finished) {
     HT_ASSERT(m_fetch_outstanding);
-    m_range_server.destroy_scanner(m_range_info.addr, m_cur_scanner_id, 0);
+    try {
+      m_range_server.destroy_scanner(m_range_info.addr, m_cur_scanner_id, 0);
+    }
+    catch (Exception &e) {
+      HT_ERROR_OUT << e << HT_END;
+    }
     m_invalid_scanner_id_ok=true;
     m_cur_scanner_id = 0;
   }
@@ -547,11 +552,34 @@ void IntervalScannerAsync::do_readahead() {
   // if the current scanner is not finished
   if (!m_cur_scanner_finished) {
     HT_ASSERT(!m_fetch_outstanding && !m_eos && m_current);
-    m_fetch_outstanding = true;
     // request next scanblock and block
-    m_fetch_timer.start();
-    m_range_server.fetch_scanblock(m_range_info.addr, m_cur_scanner_id,
-                                   &m_fetch_handler, m_fetch_timer);
+    while (true) {
+      try {
+        m_fetch_timer.start();
+        m_fetch_outstanding = true;
+        m_range_server.fetch_scanblock(m_range_info.addr, m_cur_scanner_id,
+                                       &m_fetch_handler, m_fetch_timer);
+      }
+      catch (Exception &e) {
+        m_fetch_outstanding = false;
+        m_fetch_timer.reset();
+        if (e.code() == Error::COMM_NOT_CONNECTED ||
+            e.code() == Error::COMM_BROKEN_CONNECTION) {
+          m_range_locator->invalidate_host(m_range_info.addr.proxy);
+          poll(0, 0, 1000);
+          m_fetch_timer.start();
+          m_range_locator->find_loop(&m_table_identifier,
+                                     m_next_range_info.end_row.c_str(),
+                                     &m_next_range_info, m_fetch_timer, true);
+          m_range_info = m_next_range_info;
+          continue;
+        }
+        HT_THROW2F(e.code(), e, "Problem calling RangeServer::fetch_scanblock(%s, sid=%d)",
+                   m_range_info.addr.proxy.c_str(), (int)m_cur_scanner_id);
+      }
+      break;
+    }
+
     // if an OFFSET predicate was specified: return; we don't want to create
     // more scanners till the RangeServer returned the first data
     if (m_scan_spec_builder.get().cell_offset ||
