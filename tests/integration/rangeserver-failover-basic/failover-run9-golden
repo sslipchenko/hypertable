@@ -5,7 +5,7 @@ SUBJECT: ERROR: Replay failure during recovery of rs1
 Failure encountered during REPLAY FRAGMENTS step of recovery
 of range server rs1
 
-player rs2: HYPERTABLE induced failure - /hypertable/servers/rs1/log/user/0: induced failure code 45 replay-fragments-user-0 iteration=0
+player rs2: HYPERTABLE induced failure - {{FRAGMENT}} induced failure code 45 replay-fragments-user-0 iteration=0
 
 
 SUBJECT: NOTICE: Recovery of rs1 (HOSTNAME) succeeded

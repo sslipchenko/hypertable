@@ -84,7 +84,7 @@ stop_rs2
 $HT_HOME/bin/stop-servers.sh
 
 # check if the hook was executed
-cat /tmp/failover-run9-output | sed 's/\/user\/1/\/user\/0/g' > notifications
+cat /tmp/failover-run9-output | sed 's/\/[^ ]*/{{FRAGMENT}}/g' > notifications
 sed "s/HOSTNAME/`hostname`/" ${SCRIPT_DIR}/failover-run9-golden > golden
 diff notifications golden
 

@@ -132,7 +132,7 @@ fi
 #   1. When rs1 is stopped
 #   2. When barrier is pushed back by 5 seconds after rs2 is stopped
 L=`grep "Barrier for RECOVERY will be up" $MASTER_LOG  | wc -l`
-if [ "$L" -ne "2" ]
+if [ "$L" -ne "3" ]
 then
   echo "Test failed"
   exit 1

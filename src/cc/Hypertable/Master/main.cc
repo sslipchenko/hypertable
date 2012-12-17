@@ -288,6 +288,8 @@ int main(int argc, char **argv) {
     operation = new OperationRecoveryBlocker(context);
     operations.push_back(operation);
     context->recovery_barrier_op = new OperationTimedBarrier(context, Dependency::RECOVERY, Dependency::RECOVERY_BLOCKER);
+    uint32_t millis = context->props->get_i32("Hypertable.Failover.GracePeriod");
+    context->recovery_barrier_op->advance_into_future(millis);
     operation = context->recovery_barrier_op;
     operations.push_back(operation);
 
