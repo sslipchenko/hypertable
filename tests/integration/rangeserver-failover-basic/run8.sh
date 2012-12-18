@@ -11,38 +11,15 @@ RUN_DIR=`pwd`
 
 . $HT_HOME/bin/ht-env.sh
 
+. $SCRIPT_DIR/utilities.sh
+
 # get rid of all old logfiles
 \rm -rf $HT_HOME/log/*
+\rm metadata.* dbdump-* rs*dump.* 
+\rm -rf fs fs_pre
 
-wait_for_recovery() {
-  n=0
-  grep "Leaving RecoverServer rs1 state=COMPLETE" \
-      $HT_HOME/log/Hypertable.Master.log
-  while [ $? -ne "0" ]
-  do
-    (( n += 1 ))
-    if [ "$n" -gt "300" ]; then
-      echo "wait_for_recovery: time exceeded"
-      exit 1
-    fi
-    sleep 2
-    grep "Leaving RecoverServer rs1 state=COMPLETE" \
-        $HT_HOME/log/Hypertable.Master.log
-  done
-}
-
-pause_rs1() {
-  kill -STOP `cat $HT_HOME/run/Hypertable.RangeServer.rs1.pid`
-}
-
-stop_rs1() {
-  kill -CONT `cat $HT_HOME/run/Hypertable.RangeServer.rs1.pid`
-  kill -9 `cat $HT_HOME/run/Hypertable.RangeServer.rs1.pid`
-}
-
-stop_rs2() {
-  kill -9 `cat $HT_HOME/run/Hypertable.RangeServer.rs2.pid`
-}
+# generate golden output file
+gen_test_data
 
 # stop and start servers
 $HT_HOME/bin/start-test-servers.sh --no-rangeserver --no-thriftbroker \
@@ -66,28 +43,22 @@ then
 fi
 
 # write data 
-$HT_HOME/bin/ht ht_load_generator update \
-    --rowkey.component.0.order=random \
-    --rowkey.component.0.type=integer \
-    --rowkey.component.0.format="%020lld" \
-    --rowkey.component.0.min=0 \
-    --rowkey.component.0.max=10000000000 \
-    --row-seed=1 \
-    --Field.value.size=200 \
-    --max-keys=$MAX_KEYS \
+$HT_HOME/bin/ht load_generator --spec-file=$SCRIPT_DIR/data.spec \
+    --max-keys=$MAX_KEYS --row-seed=$ROW_SEED --table=LoadTest \
     --Hypertable.Mutator.ScatterBuffer.FlushLimit.PerServer=2M \
-    --Hypertable.Mutator.FlushDelay=250
+    --Hypertable.Mutator.FlushDelay=250 update
+if [ $? != 0 ] ; then
+    echo "Problem loading table 'LoadTest', exiting ..."
+    exit 1
+fi
 
 sleep 4
 
-# dump keys
-${HT_HOME}/bin/ht shell --config=${SCRIPT_DIR}/test.cfg --no-prompt --exec "use '/'; select * from LoadTest KEYS_ONLY into file '${RUN_DIR}/keys.pre';"
-
 # suspend rs1 with sigstop
-pause_rs1
+kill -STOP `cat $HT_HOME/run/Hypertable.RangeServer.rs1.pid`
 
 # wait for recovery to complete 
-wait_for_recovery
+wait_for_recovery rs1
 
 # restart servers
 $HT_HOME/bin/stop-servers.sh
@@ -102,21 +73,12 @@ $HT_HOME/bin/ht Hypertable.RangeServer --verbose --pidfile=$RS2_PIDFILE \
 sleep 10
 
 # dump keys
-${HT_HOME}/bin/ht shell --config=${SCRIPT_DIR}/test.cfg --no-prompt --exec "use '/'; select * from LoadTest KEYS_ONLY into file '${RUN_DIR}/keys.post';"
+dump_keys dbdump-a.8
 
 $HT_HOME/bin/stop-servers.sh
-stop_rs1
-stop_rs2
-
-# check output
-TOTAL_KEYS=`cat keys.post|wc -l`
-EXPECTED_KEYS=`cat keys.pre|wc -l`
-
-if [ "$TOTAL_KEYS" -ne "$EXPECTED_KEYS" ]
-then
-  echo "Test failed, expected ${EXPECTED_KEYS}, retrieved ${TOTAL_KEYS}"
-  exit 1
-fi
+kill -CONT `cat $HT_HOME/run/Hypertable.RangeServer.rs1.pid`
+kill_rs 1
+kill_rs 2
 
 echo "Test passed"
 

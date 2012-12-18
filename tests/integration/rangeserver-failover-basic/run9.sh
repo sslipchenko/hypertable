@@ -12,29 +12,16 @@ RUN_DIR=`pwd`
 
 . $HT_HOME/bin/ht-env.sh
 
+. $SCRIPT_DIR/utilities.sh
+
 # get rid of all old logfiles
 \rm -rf $HT_HOME/log/*
-
-wait_for_recovery() {
-  grep "Leaving RecoverServer rs1 state=COMPLETE" $MASTER_LOG
-  while [ $? -ne "0" ]
-  do
-    sleep 2
-    grep "Leaving RecoverServer rs1 state=COMPLETE" $MASTER_LOG
-  done
-}
-
-stop_rs1() {
-  echo "shutdown; quit;" | $HT_HOME/bin/ht rsclient localhost:38060
-  sleep 5
-  kill -9 `cat $HT_HOME/run/Hypertable.RangeServer.rs1.pid`
-}
-
-stop_rs2() {
-  kill -9 `cat $HT_HOME/run/Hypertable.RangeServer.rs2.pid`
-}
-
 \rm /tmp/failover-run9-output
+\rm metadata.* dbdump-* rs*dump.* 
+\rm -rf fs fs_pre
+
+# generate golden output file
+gen_test_data
 
 # install the sample hook
 cp ${HYPERTABLE_HOME}/conf/notification-hook.sh notification-hook.bak
@@ -57,30 +44,27 @@ $HT_HOME/bin/ht Hypertable.RangeServer --verbose --pidfile=$RS2_PIDFILE \
 $HT_HOME/bin/ht shell --no-prompt < $SCRIPT_DIR/create-table.hql
 
 # write data 
-$HT_HOME/bin/ht ht_load_generator update \
-    --rowkey.component.0.order=random \
-    --rowkey.component.0.type=integer \
-    --rowkey.component.0.format="%020lld" \
-    --rowkey.component.0.min=0 \
-    --rowkey.component.0.max=10000000000 \
-    --row-seed=1 \
-    --Field.value.size=200 \
-    --max-keys=$MAX_KEYS \
+$HT_HOME/bin/ht load_generator --spec-file=$SCRIPT_DIR/data.spec \
+    --max-keys=$MAX_KEYS --row-seed=$ROW_SEED --table=LoadTest \
     --Hypertable.Mutator.ScatterBuffer.FlushLimit.PerServer=2M \
-    --Hypertable.Mutator.FlushDelay=250
+    --Hypertable.Mutator.FlushDelay=250 update
+if [ $? != 0 ] ; then
+    echo "Problem loading table 'LoadTest', exiting ..."
+    exit 1
+fi
 
 sleep 5
 
 # kill rs1
-stop_rs1
+stop_rs 1
 
 # wait for failure recovery
-wait_for_recovery
+wait_for_recovery rs1
 
 # stop servers
 killall Hypertable.Master
 killall Hyperspace.Master
-stop_rs2
+kill_rs 2
 $HT_HOME/bin/stop-servers.sh
 
 # check if the hook was executed

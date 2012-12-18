@@ -8,37 +8,26 @@ MAX_KEYS=${MAX_KEYS:-"500000"}
 RS1_PIDFILE=$HT_HOME/run/Hypertable.RangeServer.rs1.pid
 RS2_PIDFILE=$HT_HOME/run/Hypertable.RangeServer.rs2.pid
 RS3_PIDFILE=$HT_HOME/run/Hypertable.RangeServer.rs3.pid
-MASTER_PIDFILE=$HT_HOME/run/Hypertable.Master.pid
-MASTER_LOG=$HT_HOME/log/Hypertable.Master.log
 RUN_DIR=`pwd`
 
 . $HT_HOME/bin/ht-env.sh
 
+. $SCRIPT_DIR/utilities.sh
+
 # get rid of all old logfiles
 \rm -rf $HT_HOME/log/*
+\rm /tmp/failover-run9-output
+\rm metadata.* dbdump-* rs*dump.* 
+\rm -rf fs fs_pre
+
+# generate golden output file
+gen_test_data
 
 INDUCER_ARG=
 let j=1
 [ $TEST == $j ] && INDUCER_ARG="--induce-failure=user-load-range-4:exit:0"
 let j+=1
 [ $TEST == $j ] && INDUCER_ARG="--induce-failure=add-staged-range-2:exit:0"
-
-wait_for_recovery() {
-  grep "Leaving RecoverServer $1 state=COMPLETE" $MASTER_LOG
-  while [ $? -ne "0" ]
-  do
-    sleep 2
-    grep "Leaving RecoverServer $1 state=COMPLETE" $MASTER_LOG
-  done
-}
-
-stop_rs2() {
-  kill -9 `cat $HT_HOME/run/Hypertable.RangeServer.rs2.pid`
-}
-
-stop_rs3() {
-  kill -9 `cat $HT_HOME/run/Hypertable.RangeServer.rs3.pid`
-}
 
 # stop and start servers
 rm metadata.* keys.* rs*dump.* 
@@ -67,31 +56,20 @@ $HT_HOME/bin/ht shell --no-prompt < $SCRIPT_DIR/create-table.hql
 wait_for_recovery rs2
 
 # write data 
-$HT_HOME/bin/ht ht_load_generator update \
-    --rowkey.component.0.order=ascending \
-    --rowkey.component.0.type=integer \
-    --rowkey.component.0.format="%020lld" \
-    --row-seed=1 \
-    --Field.value.size=20 \
-    --max-keys=$MAX_KEYS
+$HT_HOME/bin/ht load_generator --spec-file=$SCRIPT_DIR/data.spec \
+    --max-keys=$MAX_KEYS --row-seed=$ROW_SEED --table=LoadTest update
+if [ $? != 0 ] ; then
+    echo "Problem loading table 'LoadTest', exiting ..."
+    exit 1
+fi
 
 # dump keys
-${HT_HOME}/bin/ht shell --config=${SCRIPT_DIR}/test.cfg --no-prompt --exec "use '/'; select * from LoadTest KEYS_ONLY into file '${RUN_DIR}/keys';"
+dump_keys dbdump-a.create-table
 
 # stop servers
 $HT_HOME/bin/stop-servers.sh
-stop_rs2
-#stop_rs3
-
-# check output
-TOTAL_KEYS=`cat keys|tail -n +2|wc -l`
-echo "Total keys returned=${TOTAL_KEYS}, expected keys=${MAX_KEYS}"
-
-if [ "$TOTAL_KEYS" -ne "$MAX_KEYS" ]
-then
-  echo "Test failed, expected ${MAX_KEYS}, retrieved ${TOTAL_KEYS}"
-  exit 1
-fi
+kill_rs 2
+kill_rs 3
 
 echo "Test passed"
 

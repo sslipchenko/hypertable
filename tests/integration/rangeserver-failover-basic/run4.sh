@@ -15,48 +15,15 @@ RUN_DIR=`pwd`
 
 . $HT_HOME/bin/ht-env.sh
 
-ulimit -c 0
+. $SCRIPT_DIR/utilities.sh
 
 # get rid of all old logfiles
 \rm -rf $HT_HOME/log/*
+rm metadata.* dbdump-.* rs*dump.* 
+rm -rf fs fs_pre
 
-wait_for_recovery() {
-  grep "Leaving RecoverServer rs1 state=COMPLETE" \
-      $HT_HOME/log/Hypertable.Master.log
-  while [ $? -ne "0" ]
-  do
-    sleep 2
-    grep "Leaving RecoverServer rs1 state=COMPLETE" \
-        $HT_HOME/log/Hypertable.Master.log
-  done
-
-  grep "Leaving RecoverServer rs2 state=COMPLETE" \
-      $HT_HOME/log/Hypertable.Master.log
-  while [ $? -ne "0" ]
-  do
-    sleep 2
-    grep "Leaving RecoverServer rs2 state=COMPLETE" \
-        $HT_HOME/log/Hypertable.Master.log
-  done
-
-  grep "Leaving RecoverServer rs3 state=COMPLETE" \
-      $HT_HOME/log/Hypertable.Master.log
-  while [ $? -ne "0" ]
-  do
-    sleep 2
-    grep "Leaving RecoverServer rs3 state=COMPLETE" \
-        $HT_HOME/log/Hypertable.Master.log
-  done
-
-  grep "Leaving RecoverServer rs4 state=COMPLETE" \
-      $HT_HOME/log/Hypertable.Master.log
-  while [ $? -ne "0" ]
-  do
-    sleep 2
-    grep "Leaving RecoverServer rs4 state=COMPLETE" \
-        $HT_HOME/log/Hypertable.Master.log
-  done
-}
+# generate golden output file
+gen_test_data
 
 wait_for_quorum() {
   grep "Only 1 servers ready, total servers=5 quorum=2, wait for servers" \
@@ -69,38 +36,11 @@ wait_for_quorum() {
   done
 }
 
-stop_rs1() {
-  echo "shutdown; quit;" | $HT_HOME/bin/ht rsclient localhost:38060
-  sleep 5
-  kill -9 `cat $HT_HOME/run/Hypertable.RangeServer.rs1.pid`
-}
-
-stop_rs2() {
-  kill -9 `cat $HT_HOME/run/Hypertable.RangeServer.rs2.pid`
-}
-
-stop_rs3() {
-  kill -9 `cat $HT_HOME/run/Hypertable.RangeServer.rs3.pid`
-}
-
-stop_rs4() {
-  kill -9 `cat $HT_HOME/run/Hypertable.RangeServer.rs4.pid`
-}
-
-stop_rs5() {
-  kill -9 `cat $HT_HOME/run/Hypertable.RangeServer.rs5.pid`
-}
-
-stop_rs6() {
-  kill -9 `cat $HT_HOME/run/Hypertable.RangeServer.rs6.pid`
-}
-
 # stop and start servers
-rm metadata.* keys.* rs*dump.* 
-rm -rf fs fs_pre
 $HT_HOME/bin/start-test-servers.sh --no-rangeserver --no-thriftbroker \
     --clear --config=${SCRIPT_DIR}/test.cfg \
     --Hypertable.Failover.Quorum.Percentage=40
+
 # start the rangeservers
 $HT_HOME/bin/ht Hypertable.RangeServer --verbose --pidfile=$RS1_PIDFILE \
    --Hypertable.RangeServer.ProxyName=rs1 \
@@ -123,26 +63,19 @@ $HT_HOME/bin/ht Hypertable.RangeServer --verbose --pidfile=$RS5_PIDFILE \
 $HT_HOME/bin/ht shell --no-prompt < $SCRIPT_DIR/create-table.hql
 
 # write data 
-$HT_HOME/bin/ht ht_load_generator update \
-    --Hypertable.Mutator.FlushDelay=50 \
-    --rowkey.component.0.order=random \
-    --rowkey.component.0.type=integer \
-    --rowkey.component.0.format="%020lld" \
-    --rowkey.component.0.min=0 \
-    --rowkey.component.0.max=10000000000 \
-    --row-seed=1 \
-    --Field.value.size=200 \
-    --max-keys=$MAX_KEYS
-
-# dump keys
-${HT_HOME}/bin/ht shell --config=${SCRIPT_DIR}/test.cfg --no-prompt --exec \
-    "use '/'; select * from LoadTest KEYS_ONLY into file '${RUN_DIR}/keys.pre';"
+$HT_HOME/bin/ht load_generator --spec-file=$SCRIPT_DIR/data.spec \
+    --max-keys=$MAX_KEYS --row-seed=$ROW_SEED --table=LoadTest \
+    --Hypertable.Mutator.FlushDelay=50 update
+if [ $? != 0 ] ; then
+    echo "Problem loading table 'LoadTest', exiting ..."
+    exit 1
+fi
 
 # kill 4 range-servers
-stop_rs1
-stop_rs2
-stop_rs3
-stop_rs4
+stop_rs 1
+kill_rs 2
+kill_rs 3
+kill_rs 4
 
 # now there should be error messages that the quorum can not be reached
 wait_for_quorum
@@ -153,17 +86,20 @@ $HT_HOME/bin/ht Hypertable.RangeServer --verbose --pidfile=$RS6_PIDFILE \
    --Hypertable.RangeServer.Port=38065 --config=${SCRIPT_DIR}/test.cfg 2>&1 > rangeserver.rs6.output&
 
 # wait for recovery to complete 
-wait_for_recovery
+wait_for_recovery rs1
+wait_for_recovery rs2
+wait_for_recovery rs3
+wait_for_recovery rs4
 
 sleep 10
 
 # dump keys again
-${HT_HOME}/bin/ht shell --config=${SCRIPT_DIR}/test.cfg --no-prompt --exec "use '/'; select * from LoadTest KEYS_ONLY into file '${RUN_DIR}/keys.post';"
+dump_keys dbdump-a.4
 
 # bounce servers
 $HT_HOME/bin/stop-servers.sh
-stop_rs5
-stop_rs6
+kill_rs 5
+kill_rs 6
 
 # start master and rs5, rs6
 $HT_HOME/bin/start-test-servers.sh --no-rangeserver --no-thriftbroker \
@@ -178,34 +114,13 @@ $HT_HOME/bin/ht Hypertable.RangeServer --verbose --pidfile=$RS6_PIDFILE \
 sleep 10
 
 # dump keys
-${HT_HOME}/bin/ht shell --config=${SCRIPT_DIR}/test.cfg --no-prompt --exec "use '/'; select * from LoadTest KEYS_ONLY into file '${RUN_DIR}/keys.post2';"
+dump_keys dbdump-b.4
 
 # stop servers
 $HT_HOME/bin/stop-servers.sh
-stop_rs5
-stop_rs6
-
-# check output
-TOTAL_KEYS=`cat keys.post|wc -l`
-TOTAL_KEYS2=`cat keys.post2|wc -l`
-EXPECTED_KEYS=`cat keys.pre|wc -l`
-echo "Total keys returned=${TOTAL_KEYS}, ${TOTAL_KEYS2}, expected keys=${EXPECTED_KEYS}"
-
-if [ "$TOTAL_KEYS" -ne "$EXPECTED_KEYS" ]
-then
-  echo "Test failed, expected ${EXPECTED_KEYS}, retrieved ${TOTAL_KEYS}"
-  exit 1
-fi
-
-if [ "$TOTAL_KEYS_2" -ne "$EXPECTED_KEYS" ]
-then
-  echo "(2) Test failed, expected ${EXPECTED_KEYS}, retrieved ${TOTAL_KEYS2}"
-  exit 1
-fi
+kill_rs 5
+kill_rs 6
 
 echo "Test passed"
-$HT_HOME/bin/stop-servers.sh
-stop_rs5
-stop_rs6
 
 exit 0

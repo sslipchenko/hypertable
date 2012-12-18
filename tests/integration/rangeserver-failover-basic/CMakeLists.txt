@@ -46,7 +46,7 @@ add_test(RangeServer-failover-bad-fragments env INSTALL_DIR=${INSTALL_DIR}
 # 2 RangeServers, cluster is filled and then shutdown. Cluster is
 # restarted, but one RangeServer is missing.
 add_test(RangeServer-failover-restart env INSTALL_DIR=${INSTALL_DIR}
-         bash -x ${CMAKE_CURRENT_SOURCE_DIR}/run14.sh)
+         bash -x ${CMAKE_CURRENT_SOURCE_DIR}/run10.sh)
 
 # Fail during load of initial range during create table
 add_test(RangeServer-failover-create-table env TEST=1 INSTALL_DIR=${INSTALL_DIR}

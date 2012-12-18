@@ -1,5 +1,5 @@
 use '/';
 drop table if exists LoadTest;
 create table LoadTest(
-  Field
+  column
 ) COMPRESSOR="none";

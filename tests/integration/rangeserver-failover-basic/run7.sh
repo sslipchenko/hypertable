@@ -8,62 +8,22 @@ MAX_KEYS=${MAX_KEYS:-"500000"}
 RS1_PIDFILE=$HT_HOME/run/Hypertable.RangeServer.rs1.pid
 RS2_PIDFILE=$HT_HOME/run/Hypertable.RangeServer.rs2.pid
 RS3_PIDFILE=$HT_HOME/run/Hypertable.RangeServer.rs3.pid
-MASTER_PIDFILE=$HT_HOME/run/Hypertable.Master.pid
 MASTER_LOG=master.output
 RUN_DIR=`pwd`
 
 . $HT_HOME/bin/ht-env.sh
 
+. $SCRIPT_DIR/utilities.sh
+
 # get rid of all old logfiles
 \rm -rf $HT_HOME/log/*
+\rm metadata.* dbdump-* rs*dump.* 
+\rm -rf fs fs_pre
 
-start_master() {
-  set_start_vars Hypertable.Master
-  check_pidfile $pidfile && return 0
-
-  check_server --config=${SCRIPT_DIR}/test.cfg master
-  if [ $? != 0 ] ; then
-      $HT_HOME/bin/ht Hypertable.Master --verbose --pidfile=$MASTER_PIDFILE \
-          --config=${SCRIPT_DIR}/test.cfg 2>&1 > $MASTER_LOG&
-    wait_for_server_up master "$pidname" --config=${SCRIPT_DIR}/test.cfg
-  else
-    echo "WARNING: $pidname already running."
-  fi
-}
-
-wait_for_recovery() {
-  grep "Leaving RecoverServer rs1 state=COMPLETE" $MASTER_LOG
-  while [ $? -ne "0" ]
-  do
-    sleep 2
-    grep "Leaving RecoverServer rs1 state=COMPLETE" $MASTER_LOG
-  done
-
-  grep "Leaving RecoverServer rs2 state=COMPLETE" $MASTER_LOG
-  while [ $? -ne "0" ]
-  do
-    sleep 2
-    grep "Leaving RecoverServer rs2 state=COMPLETE" $MASTER_LOG
-  done
-}
-
-stop_rs1() {
-  echo "shutdown; quit;" | $HT_HOME/bin/ht rsclient localhost:38060
-  sleep 5
-  kill -9 `cat $HT_HOME/run/Hypertable.RangeServer.rs1.pid`
-}
-
-stop_rs2() {
-  kill -9 `cat $HT_HOME/run/Hypertable.RangeServer.rs2.pid`
-}
-
-stop_rs3() {
-  kill -9 `cat $HT_HOME/run/Hypertable.RangeServer.rs3.pid`
-}
+# generate golden output file
+gen_test_data
 
 # stop and start servers
-rm metadata.* keys.* rs*dump.* 
-rm -rf fs fs_pre
 $HT_HOME/bin/start-test-servers.sh --no-rangeserver --no-thriftbroker \
     --no-master --clear --config=${SCRIPT_DIR}/test.cfg
 
@@ -86,47 +46,31 @@ $HT_HOME/bin/ht Hypertable.RangeServer --verbose --pidfile=$RS3_PIDFILE \
 $HT_HOME/bin/ht shell --no-prompt < $SCRIPT_DIR/create-table.hql
 
 # write data 
-$HT_HOME/bin/ht ht_load_generator update \
-    --Hypertable.Mutator.FlushDelay=50 \
-    --rowkey.component.0.order=random \
-    --rowkey.component.0.type=integer \
-    --rowkey.component.0.format="%020lld" \
-    --rowkey.component.0.min=0 \
-    --rowkey.component.0.max=10000000000 \
-    --row-seed=1 \
-    --Field.value.size=200 \
-    --max-keys=$MAX_KEYS
-
-# dump keys
-${HT_HOME}/bin/ht shell --config=${SCRIPT_DIR}/test.cfg --no-prompt --exec "use '/'; select * from LoadTest KEYS_ONLY into file '${RUN_DIR}/keys.pre';"
+$HT_HOME/bin/ht load_generator --spec-file=$SCRIPT_DIR/data.spec \
+    --max-keys=$MAX_KEYS --row-seed=$ROW_SEED --table=LoadTest \
+    --Hypertable.Mutator.FlushDelay=50 update
+if [ $? != 0 ] ; then
+    echo "Problem loading table 'LoadTest', exiting ..."
+    exit 1
+fi
 
 # kill rs1
-stop_rs1
+stop_rs 1
 
 # after 10 seconds: stop the second RangeServer
-stop_rs2
+kill_rs 2
 
 # wait for recovery to complete 
-wait_for_recovery
+wait_for_recovery rs1
+wait_for_recovery rs2
 
-# dump keys again
-${HT_HOME}/bin/ht shell --config=${SCRIPT_DIR}/test.cfg --no-prompt --exec "use '/'; select * from LoadTest KEYS_ONLY into file '${RUN_DIR}/keys.post';"
+# dump keys
+dump_keys dbdump-a.7
 
 # stop servers
 $HT_HOME/bin/stop-servers.sh
-stop_rs2
-stop_rs3
-
-# check output
-TOTAL_KEYS=`cat keys.post|wc -l`
-EXPECTED_KEYS=`cat keys.pre|wc -l`
-echo "Total keys returned=${TOTAL_KEYS}, expected keys=${EXPECTED_KEYS}"
-
-if [ "$TOTAL_KEYS" -ne "$EXPECTED_KEYS" ]
-then
-  echo "Test failed, expected ${EXPECTED_KEYS}, retrieved ${TOTAL_KEYS}"
-  exit 1
-fi
+kill_rs 2
+kill_rs 3
 
 # The "Barrier for RECOVERY will be up" will be printed twice:
 #   1. When rs1 is stopped

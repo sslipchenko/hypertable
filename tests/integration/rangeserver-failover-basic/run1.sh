@@ -11,35 +11,19 @@ RUN_DIR=`pwd`
 
 . $HT_HOME/bin/ht-env.sh
 
-# get rid of all old logfiles
+. $SCRIPT_DIR/utilities.sh
+
+# clear state
 \rm -rf $HT_HOME/log/*
+\rm metadata.* dbdump-* rs*dump.* 
+\rm -rf fs fs_pre
 
-wait_for_recovery() {
-  grep "Leaving RecoverServer rs1 state=COMPLETE" \
-      $HT_HOME/log/Hypertable.Master.log
-  while [ $? -ne "0" ]
-  do
-    sleep 2
-    grep "Leaving RecoverServer rs1 state=COMPLETE" \
-        $HT_HOME/log/Hypertable.Master.log
-  done
-}
-
-stop_rs1() {
-  echo "shutdown; quit;" | $HT_HOME/bin/ht rsclient localhost:38060
-  sleep 5
-  kill -9 `cat $HT_HOME/run/Hypertable.RangeServer.rs1.pid`
-}
-
-stop_rs2() {
-  kill -9 `cat $HT_HOME/run/Hypertable.RangeServer.rs2.pid`
-}
+gen_test_data
 
 # stop and start servers
-rm metadata.* keys.* rs*dump.* 
-rm -rf fs fs_pre
 $HT_HOME/bin/start-test-servers.sh --no-rangeserver --no-thriftbroker \
     --clear --config=${SCRIPT_DIR}/test.cfg
+
 # start both rangeservers
 $HT_HOME/bin/ht Hypertable.RangeServer --verbose --pidfile=$RS1_PIDFILE \
    --Hypertable.RangeServer.ProxyName=rs1 \
@@ -52,24 +36,21 @@ $HT_HOME/bin/ht Hypertable.RangeServer --verbose --pidfile=$RS2_PIDFILE \
 # create table
 $HT_HOME/bin/ht shell --no-prompt < $SCRIPT_DIR/create-table.hql
 
-# write data 
-$HT_HOME/bin/ht ht_load_generator update \
-    --rowkey.component.0.order=random \
-    --rowkey.component.0.type=integer \
-    --rowkey.component.0.format="%020lld" \
-    --rowkey.component.0.min=0 \
-    --rowkey.component.0.max=10000000000 \
-    --row-seed=1 \
-    --Field.value.size=200 \
-    --max-keys=$MAX_KEYS \
+# write data
+$HT_HOME/bin/ht load_generator --spec-file=$SCRIPT_DIR/data.spec \
+    --max-keys=$MAX_KEYS --row-seed=$ROW_SEED --table=LoadTest \
     --Hypertable.Mutator.ScatterBuffer.FlushLimit.PerServer=2M \
-    --Hypertable.Mutator.FlushDelay=250
+    --Hypertable.Mutator.FlushDelay=250 update
+if [ $? != 0 ] ; then
+    echo "Problem loading table 'LoadTest', exiting ..."
+    exit 1
+fi
 
 sleep 2
 
 # dump METADATA location
 ${HT_HOME}/bin/ht shell --config=${SCRIPT_DIR}/test.cfg --no-prompt --exec "use sys; select Location from METADATA MAX_VERSIONS=1 into file '${RUN_DIR}/metadata.pre';"
-${HT_HOME}/bin/ht shell --config=${SCRIPT_DIR}/test.cfg --no-prompt --exec "use '/'; select * from LoadTest KEYS_ONLY into file '${RUN_DIR}/keys.pre';"
+
 # dump ranges
 echo "dump nokeys '${RUN_DIR}/rs1_dump.pre'; quit;" | $HT_HOME/bin/ht rsclient localhost:38060
 echo "dump nokeys '${RUN_DIR}/rs2_dump.pre'; quit;" | $HT_HOME/bin/ht rsclient localhost:38061
@@ -77,16 +58,16 @@ echo "dump nokeys '${RUN_DIR}/rs2_dump.pre'; quit;" | $HT_HOME/bin/ht rsclient l
 cp -R ${HT_HOME}/fs ${RUN_DIR}/fs_pre
 
 # kill rs1
-stop_rs1
+stop_rs 1
 
 # wait for recovery to complete 
-wait_for_recovery
+wait_for_recovery rs1
 
 # dump rs2 ranges
 echo "dump nokeys '${RUN_DIR}/rs2_dump.post'; quit;" | $HT_HOME/bin/ht rsclient localhost:38061
 
-# dump keys
-${HT_HOME}/bin/ht shell --config=${SCRIPT_DIR}/test.cfg --no-prompt --exec "use '/'; select * from LoadTest KEYS_ONLY into file '${RUN_DIR}/keys.post';"
+dump_keys dbdump-a.1
+
 # dump METADATA location
 ${HT_HOME}/bin/ht shell --config=${SCRIPT_DIR}/test.cfg --no-prompt --exec "use sys; select Files,Location from METADATA MAX_VERSIONS=1 into file '${RUN_DIR}/metadata.post';"
 
@@ -96,7 +77,7 @@ cp -R ${HT_HOME}/log/Hypertable.Master.log ${RUN_DIR}
 
 # bounce servers
 $HT_HOME/bin/stop-servers.sh
-stop_rs2
+kill_rs 2
 
 # start master and rs2
 $HT_HOME/bin/start-test-servers.sh --no-rangeserver --no-thriftbroker \
@@ -107,33 +88,18 @@ $HT_HOME/bin/ht Hypertable.RangeServer --verbose --pidfile=$RS2_PIDFILE \
 
 # dump METADATA location
 ${HT_HOME}/bin/ht shell --config=${SCRIPT_DIR}/test.cfg --no-prompt --exec "use sys; select Files,Location from METADATA MAX_VERSIONS=1 into file '${RUN_DIR}/metadata.post2';"
-# dump keys
-${HT_HOME}/bin/ht shell --config=${SCRIPT_DIR}/test.cfg --no-prompt --exec "use '/'; select * from LoadTest KEYS_ONLY into file '${RUN_DIR}/keys.post2';"
+
+dump_keys dbdump-b.1
 
 # stop servers
 $HT_HOME/bin/stop-servers.sh
-stop_rs2
+kill_rs 2
 
 # check output
-TOTAL_KEYS=`cat keys.post|wc -l`
-TOTAL_KEYS2=`cat keys.post2|wc -l`
-EXPECTED_KEYS=`cat keys.pre|wc -l`
 ORIGINAL_RANGES=`cat metadata.pre|wc -l`
 RS1_RANGES=`grep "rs1" metadata.post|wc -l`
 RS2_RANGES=`grep "rs2" metadata.post|wc -l`
 echo "Total keys returned=${TOTAL_KEYS}, ${TOTAL_KEYS2}, expected keys=${EXPECTED_KEYS}, original ranges=${ORIGINAL_RANGES}, rs1_ranges=${RS1_RANGES}, rs2_ranges=${RS2_RANGES}"
-
-if [ "$TOTAL_KEYS" -ne "$EXPECTED_KEYS" ]
-then
-  echo "Test failed, expected ${EXPECTED_KEYS}, retrieved ${TOTAL_KEYS}"
-  exit 1
-fi
-
-if [ "$TOTAL_KEYS_2" -ne "$EXPECTED_KEYS" ]
-then
-  echo "(2) Test failed, expected ${EXPECTED_KEYS}, retrieved ${TOTAL_KEYS2}"
-  exit 1
-fi
 
 if [ "$RS2_RANGES" -lt "$ORIGINAL_RANGES" ] 
 then
@@ -149,6 +115,6 @@ fi
 
 echo "Test passed"
 $HT_HOME/bin/stop-servers.sh
-stop_rs2
+kill_rs 2
 
 exit 0

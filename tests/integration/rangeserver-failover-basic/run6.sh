@@ -7,41 +7,24 @@ SCRIPT_DIR=`dirname $0`
 MAX_KEYS=${MAX_KEYS:-"200000"}
 RS1_PIDFILE=$HT_HOME/run/Hypertable.RangeServer.rs1.pid
 RS2_PIDFILE=$HT_HOME/run/Hypertable.RangeServer.rs2.pid
-MS2_PIDFILE=$HT_HOME/run/Hypertable.Master.2.pid
 RUN_DIR=`pwd`
 
 . $HT_HOME/bin/ht-env.sh
 
+. $SCRIPT_DIR/utilities.sh
+
 # get rid of all old logfiles
 \rm -rf $HT_HOME/log/*
+rm metadata.* dbdump-.* rs*dump.* 
+rm -rf fs fs_pre
 
-wait_for_recovery() {
-  grep "Leaving RecoverServer rs1 state=COMPLETE" master.2.output
-  while [ $? -ne "0" ]
-  do
-    sleep 2
-    grep "Leaving RecoverServer rs1 state=COMPLETE" master.2.output
-  done
-}
-
-stop_rs1() {
-  echo "shutdown; quit;" | $HT_HOME/bin/ht rsclient localhost:38060
-  sleep 5
-  kill -9 `cat $HT_HOME/run/Hypertable.RangeServer.rs1.pid`
-}
-
-stop_rs2() {
-  kill -9 `cat $HT_HOME/run/Hypertable.RangeServer.rs2.pid`
-}
-
-stop_master() {
-  kill -9 `cat $HT_HOME/run/Hypertable.Master.pid`
-}
+# generate golden output file
+gen_test_data
 
 # stop and start servers
-rm keys.* 
 $HT_HOME/bin/start-test-servers.sh --no-rangeserver --no-thriftbroker \
     --clear --config=${SCRIPT_DIR}/test.cfg
+
 # start both rangeservers
 $HT_HOME/bin/ht Hypertable.RangeServer --verbose --pidfile=$RS1_PIDFILE \
    --Hypertable.RangeServer.ProxyName=rs1 \
@@ -50,44 +33,39 @@ sleep 10
 $HT_HOME/bin/ht Hypertable.RangeServer --verbose --pidfile=$RS2_PIDFILE \
    --Hypertable.RangeServer.ProxyName=rs2 \
    --Hypertable.RangeServer.Port=38061 --config=${SCRIPT_DIR}/test.cfg 2>&1 > rangeserver.rs2.output&
+
 # start a standby-master
-$HT_HOME/bin/ht Hypertable.Master --verbose --pidfile=$MS2_PIDFILE \
-   --port=37011 --config=${SCRIPT_DIR}/test.cfg 2>&1 > master.2.output&
+$HT_HOME/bin/ht Hypertable.Master --verbose --pidfile=$HT_HOME/run/Hypertable.Master.pid \
+   --port=37011 --config=${SCRIPT_DIR}/test.cfg 2>&1 > $HT_HOME/log/Hypertable.Master.log&
 
 # create table
 $HT_HOME/bin/ht shell --no-prompt < $SCRIPT_DIR/create-table.hql
 
 # write data 
-$HT_HOME/bin/ht ht_load_generator update \
-    --rowkey.component.0.order=random \
-    --rowkey.component.0.type=integer \
-    --rowkey.component.0.format="%020lld" \
-    --rowkey.component.0.min=0 \
-    --rowkey.component.0.max=10000000000 \
-    --row-seed=1 \
-    --Field.value.size=200 \
-    --max-keys=$MAX_KEYS \
+$HT_HOME/bin/ht load_generator --spec-file=$SCRIPT_DIR/data.spec \
+    --max-keys=$MAX_KEYS --row-seed=$ROW_SEED --table=LoadTest \
     --Hypertable.Mutator.ScatterBuffer.FlushLimit.PerServer=2M \
-    --Hypertable.Mutator.FlushDelay=250
+    --Hypertable.Mutator.FlushDelay=250 update
+if [ $? != 0 ] ; then
+    echo "Problem loading table 'LoadTest', exiting ..."
+    exit 1
+fi
 
 sleep 2
 
-# dump keys
-${HT_HOME}/bin/ht shell --config=${SCRIPT_DIR}/test.cfg --no-prompt --exec "use '/'; select * from LoadTest KEYS_ONLY into file '${RUN_DIR}/keys.pre';"
-
 # kill rs1 and the master
-stop_rs1
-stop_master
+stop_rs 1
+kill -9 `cat $HT_HOME/run/Hypertable.Master.pid`
 
 # wait for recovery to complete 
-wait_for_recovery
+wait_for_recovery rs1
 
 # dump keys
-${HT_HOME}/bin/ht shell --config=${SCRIPT_DIR}/test.cfg --no-prompt --exec "use '/'; select * from LoadTest KEYS_ONLY into file '${RUN_DIR}/keys.post';"
+dump_keys dbdump-a.6
 
 # bounce servers
 $HT_HOME/bin/stop-servers.sh
-stop_rs2
+kill_rs 2
 killall Hypertable.Master
 
 # start master and rs2
@@ -98,29 +76,11 @@ $HT_HOME/bin/ht Hypertable.RangeServer --verbose --pidfile=$RS2_PIDFILE \
    --Hypertable.RangeServer.Port=38061 --config=${SCRIPT_DIR}/test.cfg 2>&1 >> rangeserver.rs2.output&
 
 # dump keys
-${HT_HOME}/bin/ht shell --config=${SCRIPT_DIR}/test.cfg --no-prompt --exec "use '/'; select * from LoadTest KEYS_ONLY into file '${RUN_DIR}/keys.post2';"
+dump_keys dbdump-b.6
 
 # stop servers
 $HT_HOME/bin/stop-servers.sh
-stop_rs2
-
-# check output
-TOTAL_KEYS=`cat keys.post|wc -l`
-TOTAL_KEYS2=`cat keys.post2|wc -l`
-EXPECTED_KEYS=`cat keys.pre|wc -l`
-echo "Total keys returned=${TOTAL_KEYS}, ${TOTAL_KEYS2}, expected keys=${EXPECTED_KEYS}"
-
-if [ "$TOTAL_KEYS" -ne "$EXPECTED_KEYS" ]
-then
-  echo "Test failed, expected ${EXPECTED_KEYS}, retrieved ${TOTAL_KEYS}"
-  exit 1
-fi
-
-if [ "$TOTAL_KEYS_2" -ne "$EXPECTED_KEYS" ]
-then
-  echo "(2) Test failed, expected ${EXPECTED_KEYS}, retrieved ${TOTAL_KEYS2}"
-  exit 1
-fi
+kill_rs 2
 
 echo "Test passed"
 
