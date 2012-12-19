@@ -322,6 +322,13 @@ bool IntervalScannerAsync::retry_or_abort(bool refresh, bool hard, bool is_creat
   uint32_t wait_time = 3000;
   reset_outstanding_status(is_create, false);
 
+  if (m_eos) {
+    *move_to_next = !has_outstanding_requests() && m_current;
+    if (*move_to_next)
+      m_current = false;
+    return true;
+  }
+
   // RangeServer has already destroyed scanner so we can't refresh
   if (!is_create && refresh) {
     HT_ERROR_OUT << "Table schema can't be refreshed when schema changes after scanner creation"
@@ -416,7 +423,7 @@ bool IntervalScannerAsync::handle_result(bool *show_results, ScanCellsPtr &cells
     set_result(event, cells, is_create);
     do_readahead();
     load_result(cells);
-    if (m_eos)
+    if (m_eos && !has_outstanding_requests())
       m_current = false;
   }
   // else this event is from a create scanner result
@@ -437,7 +444,7 @@ bool IntervalScannerAsync::handle_result(bool *show_results, ScanCellsPtr &cells
         set_result(event, cells, is_create);
         do_readahead();
         load_result(cells);
-        if (m_eos)
+        if (m_eos && !has_outstanding_requests())
           m_current = false;
       }
     }
@@ -538,7 +545,7 @@ bool IntervalScannerAsync::set_current(bool *show_results, ScanCellsPtr &cells, 
   set_result(m_create_event, cells);
   do_readahead();
   load_result(cells);
-  if (m_eos)
+  if (m_eos && !has_outstanding_requests())
     m_current = false;
 
   HT_ASSERT (!m_current ||  m_eos || has_outstanding_requests());
