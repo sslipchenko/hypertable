@@ -1302,6 +1302,7 @@ RangeServer::create_scanner(ResponseCallbackCreateScanner *cb,
     DynamicBuffer rbuf;
 
     HT_MAYBE_FAIL("create-scanner-1");
+    HT_MAYBE_FAIL_X("create-scanner-user-1", !table->is_system());
     if (scan_spec->row_intervals.size() > 0) {
       if (scan_spec->row_intervals.size() > 1 && !scan_spec->scan_and_filter_rows)
         HT_THROW(Error::RANGESERVER_BAD_SCAN_SPEC,
@@ -1471,6 +1472,8 @@ RangeServer::fetch_scanblock(ResponseCallbackFetchScanblock *cb,
     if (!Global::scanner_map.get(scanner_id, scanner, range, scanner_table))
       HT_THROW(Error::RANGESERVER_INVALID_SCANNER_ID,
                format("scanner ID %d", scanner_id));
+
+    HT_MAYBE_FAIL_X("fetch-scanblock-user-1", !scanner_table.is_system());
 
     if (!m_live_map->get(scanner_table.id, table_info))
       HT_THROWF(Error::TABLE_NOT_FOUND, "%s", scanner_table.id);
