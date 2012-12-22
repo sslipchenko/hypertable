@@ -164,6 +164,7 @@ namespace Hypertable {
     int process_metadata_scanblock(ScanBlock &scan_block, Timer &timer);
     int read_root_location(Timer &timer);
     void initialize();
+    int connect(CommAddress &addr, Timer &timer);
 
     Mutex                  m_mutex;
     ConnectionManagerPtr   m_conn_manager;

@@ -302,7 +302,7 @@ RangeLocator::find(const TableIdentifier *table, const char *row_key,
   }
 
   if (!hard && m_cache->lookup(table->id, row_key, rane_loc_infop))
-    return Error::OK;
+    return connect(rane_loc_infop->addr, timer);
 
   /**
    * If key is on ROOT metadata range, return root range information
@@ -311,7 +311,7 @@ RangeLocator::find(const TableIdentifier *table, const char *row_key,
     rane_loc_infop->start_row = "";
     rane_loc_infop->end_row = Key::END_ROOT_ROW;
     rane_loc_infop->addr = addr;
-    return Error::OK;
+    return connect(rane_loc_infop->addr, timer);
   }
 
   /** at this point, we didn't find it so we need to do a METADATA lookup **/
@@ -398,7 +398,7 @@ RangeLocator::find(const TableIdentifier *table, const char *row_key,
   }
 
   if (table->is_metadata())
-    return Error::OK;
+    return connect(rane_loc_infop->addr, timer);
 
   /**
    * Find actual range from second-level METADATA range
@@ -424,11 +424,8 @@ RangeLocator::find(const TableIdentifier *table, const char *row_key,
 
   // meta_scan_spec.interval = ????;
 
-  if (m_conn_manager &&
-      !m_conn_manager->wait_for_connection(addr, 10000)) {
-    invalidate_host(addr.proxy);
-    return Error::COMM_NOT_CONNECTED;
-  }
+  if ((error = connect(addr, timer)) != Error::OK)
+    return error;
 
   try {
     m_range_server.create_scanner(addr, m_metadata_table, range,
@@ -470,7 +467,7 @@ RangeLocator::find(const TableIdentifier *table, const char *row_key,
     return Error::METADATA_NOT_FOUND;
   }
 
-  return Error::OK;
+  return connect(rane_loc_infop->addr, timer);
 }
 
 
@@ -521,22 +518,6 @@ int RangeLocator::process_metadata_scanblock(ScanBlock &scan_block, Timer &timer
     if (got_end_row) {
       if (strcmp(stripped_key, range_loc_info.end_row.c_str())) {
         if (got_start_row && got_location) {
-
-          /**
-           * Add this location (address) to the connection manager
-           */
-          if (m_conn_manager) {
-            m_conn_manager->add(range_loc_info.addr, m_metadata_retry_interval, "RangeServer");
-            //HT_DEBUG_OUT << "Trying to connect to " << range_loc_info.addr.to_str()
-            //    << " for range [" << range_loc_info.start_row << ".." << range_loc_info.end_row
-            //    << "]" << HT_END;
-	    if (!m_conn_manager->wait_for_connection(range_loc_info.addr, 10000)) {
-              if (timer.expired())
-                return Error::REQUEST_TIMEOUT;
-              invalidate_host(range_loc_info.addr.proxy);
-              return Error::COMM_NOT_CONNECTED;
-	    }
-	  }
 
           m_cache->insert(table_name.c_str(), range_loc_info);
 
@@ -593,22 +574,6 @@ int RangeLocator::process_metadata_scanblock(ScanBlock &scan_block, Timer &timer
   }
 
   if (got_start_row && got_end_row && got_location) {
-
-    /**
-     * Add this location (address) to the connection manager
-     */
-    if (m_conn_manager) {
-      m_conn_manager->add(range_loc_info.addr, m_metadata_retry_interval, "RangeServer");
-      //HT_DEBUG_OUT << "Trying to connect to " << range_loc_info.addr.to_str()
-      //    << " for range [" << range_loc_info.start_row << ".." << range_loc_info.end_row
-      //    << "]" << HT_END;
-      if (!m_conn_manager->wait_for_connection(range_loc_info.addr, 10000)) {
-        if (timer.expired())
-          return Error::REQUEST_TIMEOUT;
-        invalidate_host(range_loc_info.addr.proxy);
-        return Error::COMM_NOT_CONNECTED;
-      }
-    }
 
     m_cache->insert(table_name.c_str(), range_loc_info);
 
@@ -686,6 +651,20 @@ int RangeLocator::read_root_location(Timer &timer) {
 
   m_root_stale = false;
 
+  return Error::OK;
+}
+
+int RangeLocator::connect(CommAddress &addr, Timer &timer) {
+
+  if (m_conn_manager) {
+    m_conn_manager->add(addr, m_metadata_retry_interval, "RangeServer");
+    if (!m_conn_manager->wait_for_connection(addr, 10000)) {
+      if (timer.expired())
+        return Error::REQUEST_TIMEOUT;
+      invalidate_host(addr.proxy);
+      return Error::COMM_NOT_CONNECTED;
+    }
+  }
   return Error::OK;
 }
 

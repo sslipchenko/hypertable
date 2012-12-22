@@ -202,7 +202,7 @@ run_test() {
     done
 
     # shut down remaining servers
-    $HT_HOME/bin/stop-servers.sh
+    $HT_HOME/bin/stop-servers.sh --no-master --no-rangeserver
 
 }
 

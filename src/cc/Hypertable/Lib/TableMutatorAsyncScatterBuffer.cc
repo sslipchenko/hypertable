@@ -50,8 +50,6 @@ TableMutatorAsyncScatterBuffer::TableMutatorAsyncScatterBuffer(Comm *comm,
     m_counter_value(9), m_timer(timeout_ms), m_id(id), m_memory_used(0), m_outstanding(false),
     m_send_flags(0), m_wait_time(ms_init_redo_wait_time), dead(false) {
 
-  m_loc_cache = m_range_locator->location_cache();
-
   HT_ASSERT(Config::properties);
 
   m_server_flush_limit = Config::properties->get_i32(
@@ -72,7 +70,7 @@ TableMutatorAsyncScatterBuffer::set(const Key &key, const void *value, uint32_t 
   TableMutatorAsyncSendBufferMap::const_iterator iter;
   bool counter_reset = false;
 
-  if (!m_loc_cache->lookup(m_table_identifier.id, key.row, &range_info)) {
+  {
     Timer timer(m_timeout_ms, true);
     m_range_locator->find_loop(&m_table_identifier, key.row, &range_info,
         timer, false);
@@ -143,7 +141,7 @@ void TableMutatorAsyncScatterBuffer::set_delete(const Key &key, size_t incr_mem)
   if (key.flag == FLAG_INSERT)
     HT_THROW(Error::BAD_KEY, "Key flag is FLAG_INSERT, expected delete");
 
-  if (!m_loc_cache->lookup(m_table_identifier.id, key.row, &range_info)) {
+  {
     Timer timer(m_timeout_ms, true);
     m_range_locator->find_loop(&m_table_identifier, key.row, &range_info,
         timer, false);
@@ -189,8 +187,7 @@ TableMutatorAsyncScatterBuffer::set(SerializedKey key, ByteString value, size_t 
   const uint8_t *ptr = key.ptr;
   size_t len = Serialization::decode_vi32(&ptr);
 
-  if (!m_loc_cache->lookup(m_table_identifier.id, (const char *)ptr+1,
-        &range_info)) {
+  {
     Timer timer(m_timeout_ms, true);
     m_range_locator->find_loop(&m_table_identifier, (const char *)ptr+1,
         &range_info, timer, false);

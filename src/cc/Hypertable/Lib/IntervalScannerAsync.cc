@@ -230,13 +230,8 @@ void IntervalScannerAsync::find_range_and_start_scan(const char *row_key, bool h
  try_again:
 
   try {
-    if (hard) {
-      m_range_locator->find_loop(&m_table_identifier, row_key,
-          &m_next_range_info, m_create_timer, true);
-    }
-    else if (!m_loc_cache->lookup(m_table_identifier.id, row_key, &m_next_range_info))
-      m_range_locator->find_loop(&m_table_identifier, row_key,
-                                 &m_next_range_info, m_create_timer, false);
+    m_range_locator->find_loop(&m_table_identifier, row_key,
+                               &m_next_range_info, m_create_timer, hard);
   }
   catch (Exception &e) {
     if (e.code() == Error::REQUEST_TIMEOUT)
