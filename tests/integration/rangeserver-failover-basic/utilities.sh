@@ -38,9 +38,9 @@ gen_test_data() {
     if [ ! -s golden_dump.$MAX_KEYS.md5 ] ; then
         $HT_HOME/bin/ht load_generator --spec-file=$SCRIPT_DIR/data.spec \
             --max-keys=$MAX_KEYS --row-seed=$ROW_SEED --table=LoadTest \
-            --stdout update | cut -f1 | tail -n +2 | sort -u > golden_dump.txt
-        $DIGEST < golden_dump.txt > golden_dump.$MAX_KEYS.md5
-        \rm -f golden_dump.txt
+            --stdout update | cut -f1 | tail -n +2 | sort -u > golden_dump.$MAX_KEYS.txt
+        $DIGEST < golden_dump.$MAX_KEYS.txt > golden_dump.$MAX_KEYS.md5
+        #\rm -f golden_dump.$MAX_KEYS.txt
     fi
 }
 

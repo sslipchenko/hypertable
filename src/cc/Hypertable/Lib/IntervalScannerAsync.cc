@@ -463,11 +463,16 @@ bool IntervalScannerAsync::handle_result(bool *show_results, ScanCellsPtr &cells
       // got results from create_scanner and theres no outstanding fetch request
       else {
         // set the range_info and load cells
-        m_range_info = m_next_range_info;
-        set_result(event, cells, is_create);
-        if (m_state != RESTART)
+        if (m_state != RESTART) {
+          m_range_info = m_next_range_info;
+          set_result(event, cells, is_create);
           do_readahead();
-        load_result(cells);
+          load_result(cells);
+        }
+        else {
+          // Send back an empty ScanCells object
+          cells = new ScanCells;
+        }
         if (!has_outstanding_requests()) {
           if (m_state == RESTART)
             restart_scan();
