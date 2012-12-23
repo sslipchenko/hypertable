@@ -621,7 +621,14 @@ void Range::relinquish_install_log() {
     }
     while (Global::log_dfs->exists(m_metalog_entity->state.transfer_log));
 
-    Global::log_dfs->mkdirs(m_metalog_entity->state.transfer_log);
+    try {
+      Global::log_dfs->mkdirs(m_metalog_entity->state.transfer_log);
+    }
+    catch (Exception &e) {
+      poll(0, 0, 1200);
+      m_metalog_entity->state.set_transfer_log(m_metalog_entity->original_transfer_log);
+      throw;
+    }
 
     /**
      * Persist RELINQUISH_LOG_INSTALLED Metalog state
@@ -920,7 +927,14 @@ void Range::split_install_log() {
     while (Global::log_dfs->exists(m_metalog_entity->state.transfer_log));
 
     // Create transfer log dir
-    Global::log_dfs->mkdirs(m_metalog_entity->state.transfer_log);
+    try {
+      Global::log_dfs->mkdirs(m_metalog_entity->state.transfer_log);
+    }
+    catch (Exception &e) {
+      poll(0, 0, 1200);
+      m_metalog_entity->state.set_transfer_log(m_metalog_entity->original_transfer_log);
+      throw;
+    }
 
     if (m_split_off_high)
       m_metalog_entity->state.set_old_boundary_row(m_metalog_entity->spec.end_row);
