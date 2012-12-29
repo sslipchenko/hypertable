@@ -31,6 +31,11 @@
 #include "TableMutatorAsyncScatterBuffer.h"
 #include "RangeServerProtocol.h"
 
+#include <poll.h>
+
+#include <boost/random.hpp>
+#include <boost/random/uniform_01.hpp>
+
 using namespace Hypertable;
 
 
@@ -44,8 +49,6 @@ TableMutatorAsyncScatterBuffer::TableMutatorAsyncScatterBuffer(Comm *comm,
     m_full(false), m_resends(0), m_auto_refresh(auto_refresh), m_timeout_ms(timeout_ms),
     m_counter_value(9), m_timer(timeout_ms), m_id(id), m_memory_used(0), m_outstanding(false),
     m_send_flags(0), m_wait_time(ms_init_redo_wait_time), dead(false) {
-
-  m_loc_cache = m_range_locator->location_cache();
 
   HT_ASSERT(Config::properties);
 
@@ -67,7 +70,7 @@ TableMutatorAsyncScatterBuffer::set(const Key &key, const void *value, uint32_t 
   TableMutatorAsyncSendBufferMap::const_iterator iter;
   bool counter_reset = false;
 
-  if (!m_loc_cache->lookup(m_table_identifier.id, key.row, &range_info)) {
+  {
     Timer timer(m_timeout_ms, true);
     m_range_locator->find_loop(&m_table_identifier, key.row, &range_info,
         timer, false);
@@ -138,7 +141,7 @@ void TableMutatorAsyncScatterBuffer::set_delete(const Key &key, size_t incr_mem)
   if (key.flag == FLAG_INSERT)
     HT_THROW(Error::BAD_KEY, "Key flag is FLAG_INSERT, expected delete");
 
-  if (!m_loc_cache->lookup(m_table_identifier.id, key.row, &range_info)) {
+  {
     Timer timer(m_timeout_ms, true);
     m_range_locator->find_loop(&m_table_identifier, key.row, &range_info,
         timer, false);
@@ -184,8 +187,7 @@ TableMutatorAsyncScatterBuffer::set(SerializedKey key, ByteString value, size_t 
   const uint8_t *ptr = key.ptr;
   size_t len = Serialization::decode_vi32(&ptr);
 
-  if (!m_loc_cache->lookup(m_table_identifier.id, (const char *)ptr+1,
-        &range_info)) {
+  {
     Timer timer(m_timeout_ms, true);
     m_range_locator->find_loop(&m_table_identifier, (const char *)ptr+1,
         &range_info, timer, false);
@@ -306,10 +308,21 @@ void TableMutatorAsyncScatterBuffer::send(uint32_t flags) {
 
     }
     catch (Exception &e) {
-      if (e.code() == Error::COMM_NOT_CONNECTED) {
+      if (e.code() == Error::COMM_NOT_CONNECTED ||
+          e.code() == Error::COMM_BROKEN_CONNECTION) {
+        if (send_buffer->addr.is_proxy())
+          m_range_locator->invalidate_host(send_buffer->addr.proxy);
         send_buffer->add_retries(send_buffer->send_count, 0,
             send_buffer->pending_updates.size);
         m_completion_counter.decrement();
+        // Random wait betwee 0 and 5 seconds
+        boost::mt19937 rng;
+        poll(0, 0, rng()%5000);
+      }
+      else {
+        HT_FATALF("Problem sending updates to %s - %s (%s)",
+                  send_buffer->addr.to_str().c_str(), Error::get_text(e.code()),
+                  e.what());
       }
     }
     send_buffer->pending_updates.own = true;

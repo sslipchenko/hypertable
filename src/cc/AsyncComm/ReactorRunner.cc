@@ -322,7 +322,6 @@ ReactorRunner::cleanup_and_remove_handlers(std::set<IOHandler *> &handlers) {
 #endif
     }
     close(handler->get_sd());
-    m_reactor_ptr->cancel_requests(handler);
     handler_map->purge_handler(handler);
   }
 }

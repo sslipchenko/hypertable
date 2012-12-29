@@ -44,3 +44,5 @@ echo "Range states:"
 $DUMP_METALOG -s $METALOG
 
 $HT_HOME/bin/Hypertable.RangeServer --pidfile=$PIDFILE --Hypertable.RangeServer.Workers=330 --verbose
+
+\rm -f $LAUNCHER_PIDFILE

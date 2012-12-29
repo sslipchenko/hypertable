@@ -35,9 +35,11 @@ $HT_HOME/bin/ht ht_load_generator update \
     --Field.value.size=1000 \
     --max-bytes=$WRITE_SIZE
 
+echo "" > metadata.a
 echo "use sys; select * from METADATA MAX_VERSIONS 1;" | $HT_HOME/bin/ht shell --batch > metadata.b
+diff metadata.a metadata.b > /dev/null
 while [ $? != 0 ]; do
-  sleep 7
+  sleep 5
   cp metadata.b metadata.a
   echo "use sys; select * from METADATA MAX_VERSIONS 1;" | $HT_HOME/bin/ht shell --batch > metadata.b
   diff metadata.a metadata.b > /dev/null

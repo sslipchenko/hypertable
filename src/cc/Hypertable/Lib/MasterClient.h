@@ -131,12 +131,23 @@ namespace Hypertable {
 
     void set_verbose_flag(bool verbose) { m_verbose = verbose; }
 
+    void replay_complete(int64_t op_id, const String &location,
+                         int plan_generation, int32_t error, const String message);
+
+    void phantom_prepare_complete(int64_t op_id, const String &location,
+                                  int plan_generation, int32_t error, const String message);
+
+    void phantom_commit_complete(int64_t op_id, const String &location,
+                                 int plan_generation, int32_t error, const String message);
+
+
   private:
     friend class MasterClientHyperspaceSessionCallback;
 
     void hyperspace_disconnected();
     void hyperspace_reconnected();
-    void send_message_async(CommBufPtr &cbp, DispatchHandler *handler, Timer *timer, const String &label);
+    void send_message_async(CommBufPtr &cbp, DispatchHandler *handler, Timer *timer,
+        const String &label);
     bool send_message(CommBufPtr &cbp, Timer *timer, EventPtr &event, const String &label);
     void fetch_result(int64_t id, Timer *timer, EventPtr &event, const String &label);
     void initialize_hyperspace();

@@ -188,7 +188,7 @@ namespace Hypertable {
      *   from=127.0.0.1:38040 ...
      * </pre>
      */
-    String to_str();
+    String to_str() const;
 
     /** Displays a one-line string representation of the event to stdout.
      * @see to_str

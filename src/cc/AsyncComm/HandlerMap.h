@@ -158,6 +158,25 @@ namespace Hypertable {
       return true;
     }
 
+    int lookup_handler(const CommAddress &addr, IOHandlerPtr &handler) {
+      SockAddrMap<IOHandlerPtr>::iterator iter;
+      InetAddr inet_addr;
+      int error;
+
+      if ((error = translate_address(addr, &inet_addr)) != Error::OK)
+	return error;
+
+      if ((iter = m_handler_map.find(inet_addr)) != m_handler_map.end())
+        handler = (*iter).second;
+      else if ((iter = m_datagram_handler_map.find(inet_addr))
+               != m_datagram_handler_map.end())
+        handler = (*iter).second;
+      else
+	return Error::COMM_NOT_CONNECTED;
+
+      return Error::OK;
+    }
+
     int contains_data_handler(const CommAddress &addr) {
       IOHandlerDataPtr data_handler;
       return lookup_data_handler(addr, data_handler);
@@ -204,6 +223,9 @@ namespace Hypertable {
 
       if (iter == m_datagram_handler_map.end())
 	return Error::COMM_NOT_CONNECTED;
+
+      if (m_decomissioned_handlers.count((*iter).second) > 0)
+        return 0;
 
       io_handler_dg = (IOHandlerDatagram *)(*iter).second.get();
 
@@ -271,10 +293,17 @@ namespace Hypertable {
     }
 
     void purge_handler(IOHandler *handler) {
-      ScopedLock lock(m_mutex);
-      m_decomissioned_handlers.erase(handler);
-      if (m_decomissioned_handlers.empty())
-        m_cond.notify_all();
+      IOHandlerPtr hp(handler);
+      {
+        ScopedLock lock(m_mutex);
+        m_decomissioned_handlers.erase(handler);
+      }
+      hp = 0;
+      {
+        ScopedLock lock(m_mutex);
+        if (m_decomissioned_handlers.empty())
+          m_cond.notify_all();
+      }
     }
 
     void decomission_all(std::set<IOHandler *> &handlers) {
@@ -360,6 +389,8 @@ namespace Hypertable {
     IOHandler *lookup_handler(const InetAddr &addr) {
       SockAddrMap<IOHandlerPtr>::iterator iter = m_handler_map.find(addr);
       if (iter == m_handler_map.end())
+        return 0;
+      if (m_decomissioned_handlers.count((*iter).second) > 0)
         return 0;
       return (*iter).second.get();
     }

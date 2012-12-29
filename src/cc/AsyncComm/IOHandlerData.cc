@@ -125,7 +125,7 @@ IOHandlerData::handle_event(struct pollfd *event, time_t arrival_time) {
                                  m_message_header_remaining, &error, &eof);
           if (nread == (size_t)-1) {
             if (errno != ECONNREFUSED) {
-              HT_ERRORF("socket read(%d, len=%d) failure : %s", m_sd,
+              HT_INFOF("socket read(%d, len=%d) failure : %s", m_sd,
                         (int)m_message_header_remaining, strerror(errno));
               error = Error::OK;
             }
@@ -154,7 +154,7 @@ IOHandlerData::handle_event(struct pollfd *event, time_t arrival_time) {
           nread = et_socket_read(m_sd, m_message_ptr, m_message_remaining,
                                  &error, &eof);
           if (nread == (size_t)-1) {
-            HT_ERRORF("socket read(%d, len=%d) failure : %s", m_sd,
+            HT_INFOF("socket read(%d, len=%d) failure : %s", m_sd,
                       (int)m_message_header_remaining, strerror(errno));
             handle_disconnect();
             return true;
@@ -183,7 +183,7 @@ IOHandlerData::handle_event(struct pollfd *event, time_t arrival_time) {
     }
 
     if (event->revents & POLLERR) {
-      HT_ERRORF("Received POLLERR on descriptor %d (%s:%d)", m_sd,
+      HT_INFOF("Received POLLERR on descriptor %d (%s:%d)", m_sd,
                 inet_ntoa(m_addr.sin_addr), ntohs(m_addr.sin_port));
       handle_disconnect();
       return true;
@@ -233,8 +233,8 @@ IOHandlerData::handle_event(struct epoll_event *event, time_t arrival_time) {
                                  m_message_header_remaining, &error, &eof);
           if (nread == (size_t)-1) {
             if (errno != ECONNREFUSED) {
-              HT_ERRORF("socket read(%d, len=%d) failure : %s", m_sd,
-                        (int)m_message_header_remaining, strerror(errno));
+              HT_INFOF("socket read(%d, len=%d) failure : %s", m_sd,
+                       (int)m_message_header_remaining, strerror(errno));
               error = Error::OK;
             }
             else
@@ -262,8 +262,8 @@ IOHandlerData::handle_event(struct epoll_event *event, time_t arrival_time) {
           nread = et_socket_read(m_sd, m_message_ptr, m_message_remaining,
                                  &error, &eof);
           if (nread == (size_t)-1) {
-            HT_ERRORF("socket read(%d, len=%d) failure : %s", m_sd,
-                      (int)m_message_header_remaining, strerror(errno));
+            HT_INFOF("socket read(%d, len=%d) failure : %s", m_sd,
+                     (int)m_message_header_remaining, strerror(errno));
             handle_disconnect();
             return true;
           }
@@ -301,8 +301,8 @@ IOHandlerData::handle_event(struct epoll_event *event, time_t arrival_time) {
     }
 
     if (event->events & EPOLLERR) {
-      HT_ERRORF("Received EPOLLERR on descriptor %d (%s:%d)", m_sd,
-                inet_ntoa(m_addr.sin_addr), ntohs(m_addr.sin_port));
+      HT_INFOF("Received EPOLLERR on descriptor %d (%s:%d)", m_sd,
+               inet_ntoa(m_addr.sin_addr), ntohs(m_addr.sin_port));
       handle_disconnect();
       return true;
     }
@@ -349,7 +349,7 @@ bool IOHandlerData::handle_event(port_event_t *event, time_t arrival_time) {
                                  m_message_header_remaining, &error, &eof);
           if (nread == (size_t)-1) {
             if (errno != ECONNREFUSED) {
-              HT_ERRORF("socket read(%d, len=%d) failure : %s", m_sd,
+              HT_INFOF("socket read(%d, len=%d) failure : %s", m_sd,
                         (int)m_message_header_remaining, strerror(errno));
               error = Error::OK;
             }
@@ -378,7 +378,7 @@ bool IOHandlerData::handle_event(port_event_t *event, time_t arrival_time) {
           nread = et_socket_read(m_sd, m_message_ptr, m_message_remaining,
                                  &error, &eof);
           if (nread == (size_t)-1) {
-            HT_ERRORF("socket read(%d, len=%d) failure : %s", m_sd,
+            HT_INFOF("socket read(%d, len=%d) failure : %s", m_sd,
                       (int)m_message_header_remaining, strerror(errno));
             handle_disconnect();
             return true;
@@ -408,7 +408,7 @@ bool IOHandlerData::handle_event(port_event_t *event, time_t arrival_time) {
 
 
     if (event->portev_events & POLLERR) {
-      HT_ERRORF("Received POLLERR on descriptor %d (%s:%d)", m_sd,
+      HT_INFOF("Received POLLERR on descriptor %d (%s:%d)", m_sd,
                 inet_ntoa(m_addr.sin_addr), ntohs(m_addr.sin_port));
       handle_disconnect();
       return true;
@@ -471,7 +471,7 @@ bool IOHandlerData::handle_event(struct kevent *event, time_t arrival_time) {
             nread = FileUtils::read(m_sd, m_message_header_ptr,
                                     m_message_header_remaining);
             if (nread == (size_t)-1) {
-              HT_ERRORF("FileUtils::read(%d, len=%d) failure : %s", m_sd,
+              HT_INFOF("FileUtils::read(%d, len=%d) failure : %s", m_sd,
                         (int)m_message_header_remaining, strerror(errno));
               handle_disconnect();
               return true;
@@ -484,7 +484,7 @@ bool IOHandlerData::handle_event(struct kevent *event, time_t arrival_time) {
           else {
             nread = FileUtils::read(m_sd, m_message_header_ptr, available);
             if (nread == (size_t)-1) {
-              HT_ERRORF("FileUtils::read(%d, len=%d) failure : %s", m_sd,
+              HT_INFOF("FileUtils::read(%d, len=%d) failure : %s", m_sd,
                         (int)available, strerror(errno));
               handle_disconnect();
               return true;
@@ -499,7 +499,7 @@ bool IOHandlerData::handle_event(struct kevent *event, time_t arrival_time) {
           if (m_message_remaining <= available) {
             nread = FileUtils::read(m_sd, m_message_ptr, m_message_remaining);
             if (nread == (size_t)-1) {
-              HT_ERRORF("FileUtils::read(%d, len=%d) failure : %s", m_sd,
+              HT_INFOF("FileUtils::read(%d, len=%d) failure : %s", m_sd,
                         (int)m_message_remaining, strerror(errno));
               handle_disconnect();
               return true;
@@ -511,7 +511,7 @@ bool IOHandlerData::handle_event(struct kevent *event, time_t arrival_time) {
           else {
             nread = FileUtils::read(m_sd, m_message_ptr, available);
             if (nread == (size_t)-1) {
-              HT_ERRORF("FileUtils::read(%d, len=%d) failure : %s", m_sd,
+              HT_INFOF("FileUtils::read(%d, len=%d) failure : %s", m_sd,
                         (int)available, strerror(errno));
               handle_disconnect();
               return true;
@@ -607,7 +607,6 @@ void IOHandlerData::handle_message_body() {
 
 
 void IOHandlerData::handle_disconnect(int error) {
-  m_reactor_ptr->cancel_requests(this);
   deliver_event(new Event(Event::DISCONNECT, m_addr, m_proxy, error));
 }
 
@@ -625,26 +624,26 @@ bool IOHandlerData::handle_write_readiness() {
       socklen_t sockerr_len = sizeof(sockerr);
 
       if (getsockopt(m_sd, SOL_SOCKET, SO_ERROR, &sockerr, &sockerr_len) < 0) {
-	HT_ERRORF("getsockopt(SO_ERROR) failed - %s", strerror(errno));
+	HT_INFOF("getsockopt(SO_ERROR) failed - %s", strerror(errno));
       }
 
       if (sockerr) {
-	HT_ERRORF("connect() completion error - %s", strerror(sockerr));
+	HT_INFOF("connect() completion error - %s", strerror(sockerr));
 	break;
       }
 
       int bufsize = 4*32768;
       if (setsockopt(m_sd, SOL_SOCKET, SO_SNDBUF, (char *)&bufsize,
 		     sizeof(bufsize)) < 0) {
-	HT_ERRORF("setsockopt(SO_SNDBUF) failed - %s", strerror(errno));
+	HT_INFOF("setsockopt(SO_SNDBUF) failed - %s", strerror(errno));
       }
       if (setsockopt(m_sd, SOL_SOCKET, SO_RCVBUF, (char *)&bufsize,
 		     sizeof(bufsize)) < 0) {
-	HT_ERRORF("setsockopt(SO_RCVBUF) failed - %s", strerror(errno));
+	HT_INFOF("setsockopt(SO_RCVBUF) failed - %s", strerror(errno));
       }
 
       if (getsockname(m_sd, (struct sockaddr *)&m_local_addr, &name_len) < 0) {
-	HT_ERRORF("getsockname(%d) failed - %s", m_sd, strerror(errno));
+	HT_INFOF("getsockname(%d) failed - %s", m_sd, strerror(errno));
 	break;
       }
       //HT_INFO("Connection established.");
@@ -677,7 +676,7 @@ int
 IOHandlerData::send_message(CommBufPtr &cbp, uint32_t timeout_ms,
                             DispatchHandler *disp_handler) {
   ScopedLock lock(m_mutex);
-  int error;
+  int error = Error::OK;
   bool initially_empty = m_send_queue.empty() ? true : false;
 
   /**
@@ -712,7 +711,7 @@ IOHandlerData::send_message(CommBufPtr &cbp, uint32_t timeout_ms,
     //HT_INFO("Removing Write interest");
   }
 
-  return Error::OK;
+  return error;
 }
 
 

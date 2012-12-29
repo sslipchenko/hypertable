@@ -102,9 +102,13 @@ namespace Hypertable {
         m_timer_heap.push(t);
     }
 
-    void schedule_removal(IOHandler *handler) {
+    void schedule_removal(IOHandler *handler, int error=Error::OK) {
       ScopedLock lock(m_mutex);
       m_removed_handlers.insert(handler);
+      if (error == Error::OK)
+        m_request_cache.purge_requests(handler);
+      else
+        m_request_cache.purge_requests(handler, error);
     }
 
     void get_removed_handlers(std::set<IOHandler *> &dst) {

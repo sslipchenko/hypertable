@@ -304,6 +304,8 @@ namespace Hypertable {
 
     void send_connect_request(ConnectionState *conn_state);
 
+    void set_retry_state(ConnectionState *conn_state, EventPtr &event);
+
     SharedImplPtr m_impl;
 
   };
