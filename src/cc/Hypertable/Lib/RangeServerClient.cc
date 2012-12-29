@@ -543,7 +543,7 @@ RangeServerClient::get_statistics(const CommAddress &addr, DispatchHandler *hand
 }
 
 void
-RangeServerClient::decode_response_get_statistics(EventPtr &event, StatsRangeServer &stats) {
+RangeServerClient::decode_response_get_statistics(const EventPtr &event, StatsRangeServer &stats) {
   int32_t error = Protocol::response_code(event);
 
   if (error != 0)

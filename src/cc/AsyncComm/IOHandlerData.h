@@ -51,6 +51,7 @@ namespace Hypertable {
     }
 
     virtual ~IOHandlerData() {
+      m_reactor_ptr->cancel_requests(this);
       delete m_event;
     }
 

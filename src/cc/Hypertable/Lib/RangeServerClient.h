@@ -475,7 +475,7 @@ namespace Hypertable {
      * @param event reference to event object
      * @param stats reference to stats object to be filled in
      */
-    static void decode_response_get_statistics(EventPtr &event,
+    static void decode_response_get_statistics(const EventPtr &event,
                                                StatsRangeServer &stats);
 
     /** Issues an asynchronous "replay load range" request.

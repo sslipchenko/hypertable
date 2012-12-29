@@ -17,6 +17,23 @@ RUN_DIR=`pwd`
 # Dumping cores slows things down unnecessarily for normal test runs
 #ulimit -c 0
 
+save_failure_state() {
+  tar czvf fs-backup.tgz $HT_HOME/fs/local
+  ARCHIVE_DIR="archive-"`date | sed 's/ /-/g'`
+  mkdir $ARCHIVE_DIR
+  mv fs-backup.tgz dbdump.* rangeserver.rs?.output.$TEST master.output.$TEST $ARCHIVE_DIR
+  cp $HT_HOME/run/monitoring/mop.dot $ARCHIVE_DIR
+  cp -r $HT_HOME/log $ARCHIVE_DIR
+  if [ -e Testing/Temporary/LastTest.log.tmp ] ; then
+    ln Testing/Temporary/LastTest.log.tmp $ARCHIVE_DIR/LastTest.log.tmp
+  elif [ -e ../../../Testing/Temporary/LastTest.log.tmp ] ; then
+    ln ../../../Testing/Temporary/LastTest.log.tmp $ARCHIVE_DIR/LastTest.log.tmp
+  fi
+  echo "Failure state saved to directory $ARCHIVE_DIR"
+  #exec 1>&-
+  #sleep 86400
+}
+
 start_master() {
   set_start_vars Hypertable.Master
   check_pidfile $pidfile && return 0
@@ -182,7 +199,7 @@ run_test() {
         echo "Test $TEST PASSED." >> report.txt
     fi
 
-    sleep 5
+    sleep 10
 
     # shut down master and range servers
     kill -9 `cat $HT_HOME/run/Hypertable.Master.pid`
@@ -195,6 +212,7 @@ run_test() {
             $HT_HOME/bin/metalog_dump /hypertable/servers/rs$j/log/rsml | fgrep "load_acknowledged=false"
             if [ $? == 0 ] ; then
                 echo "ERROR: Unacknowledged ranges"
+                save_failure_state
                 exit 1
             fi
         fi

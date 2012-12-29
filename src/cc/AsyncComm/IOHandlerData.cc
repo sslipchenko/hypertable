@@ -607,7 +607,6 @@ void IOHandlerData::handle_message_body() {
 
 
 void IOHandlerData::handle_disconnect(int error) {
-  m_reactor_ptr->cancel_requests(this);
   deliver_event(new Event(Event::DISCONNECT, m_addr, m_proxy, error));
 }
 
@@ -677,7 +676,7 @@ int
 IOHandlerData::send_message(CommBufPtr &cbp, uint32_t timeout_ms,
                             DispatchHandler *disp_handler) {
   ScopedLock lock(m_mutex);
-  int error;
+  int error = Error::OK;
   bool initially_empty = m_send_queue.empty() ? true : false;
 
   /**
@@ -712,7 +711,7 @@ IOHandlerData::send_message(CommBufPtr &cbp, uint32_t timeout_ms,
     //HT_INFO("Removing Write interest");
   }
 
-  return Error::OK;
+  return error;
 }
 
 

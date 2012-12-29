@@ -86,6 +86,7 @@ namespace Hypertable {
     virtual ~IOHandler() {
       HT_EXPECT(m_free_flag != 0xdeadbeef, Error::FAILED_EXPECTATION);
       m_free_flag = 0xdeadbeef;
+      m_reactor_ptr->cancel_requests(this);
       return;
     }
 

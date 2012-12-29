@@ -158,6 +158,25 @@ namespace Hypertable {
       return true;
     }
 
+    int lookup_handler(const CommAddress &addr, IOHandlerPtr &handler) {
+      SockAddrMap<IOHandlerPtr>::iterator iter;
+      InetAddr inet_addr;
+      int error;
+
+      if ((error = translate_address(addr, &inet_addr)) != Error::OK)
+	return error;
+
+      if ((iter = m_handler_map.find(inet_addr)) != m_handler_map.end())
+        handler = (*iter).second;
+      else if ((iter = m_datagram_handler_map.find(inet_addr))
+               != m_datagram_handler_map.end())
+        handler = (*iter).second;
+      else
+	return Error::COMM_NOT_CONNECTED;
+
+      return Error::OK;
+    }
+
     int contains_data_handler(const CommAddress &addr) {
       IOHandlerDataPtr data_handler;
       return lookup_data_handler(addr, data_handler);
