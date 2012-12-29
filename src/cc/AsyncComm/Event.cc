@@ -39,7 +39,7 @@ extern "C" {
 
 using namespace Hypertable;
 
-String Event::to_str() {
+String Event::to_str() const {
   string dstr;
 
   dstr = "Event: type=";

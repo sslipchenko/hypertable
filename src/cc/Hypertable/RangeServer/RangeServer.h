@@ -43,22 +43,26 @@
 #include "Hypertable/Lib/Types.h"
 #include "Hypertable/Lib/NameIdMapper.h"
 #include "Hypertable/Lib/StatsRangeServer.h"
+#include "Hypertable/Lib/MetaLogEntityRange.h"
 
 #include "Global.h"
 #include "GroupCommitInterface.h"
 #include "GroupCommitTimerHandler.h"
 #include "MaintenanceScheduler.h"
-#include "MetaLogEntityRange.h"
 #include "QueryCache.h"
 #include "RSStats.h"
 #include "ResponseCallbackCreateScanner.h"
 #include "ResponseCallbackFetchScanblock.h"
 #include "ResponseCallbackGetStatistics.h"
 #include "ResponseCallbackUpdate.h"
+#include "ResponseCallbackPhantomUpdate.h"
+#include "ResponseCallbackAcknowledgeLoad.h"
+
 #include "TableIdCache.h"
 #include "TableInfo.h"
 #include "TableInfoMap.h"
 #include "TimerInterface.h"
+#include "PhantomRangeMap.h"
 
 namespace Hypertable {
   using namespace Hyperspace;
@@ -83,9 +87,11 @@ namespace Hypertable {
     void fetch_scanblock(ResponseCallbackFetchScanblock *, uint32_t scanner_id);
     void load_range(ResponseCallback *, const TableIdentifier *,
                     const RangeSpec *, const RangeState *,
-		    bool needs_compaction);
+                    bool needs_compaction);
     void acknowledge_load(ResponseCallback *, const TableIdentifier *,
                           const RangeSpec *);
+    void acknowledge_load(ResponseCallbackAcknowledgeLoad *cb,
+                          const vector<QualifiedRangeSpec> &ranges);
     void update_schema(ResponseCallback *, const TableIdentifier *,
                        const char *);
     void update(ResponseCallbackUpdate *, const TableIdentifier *,
@@ -97,11 +103,10 @@ namespace Hypertable {
     void dump(ResponseCallback *, const char *, bool);
     void get_statistics(ResponseCallbackGetStatistics *);
 
-    void replay_begin(ResponseCallback *, uint16_t group);
     void replay_load_range(ResponseCallback *, MetaLog::EntityRange *,
                            bool write_rsml=true);
     void replay_update(ResponseCallback *, const uint8_t *data, size_t len);
-    void replay_commit(ResponseCallback *);
+    void replay_commit(ResponseCallback *cb);
 
     void drop_range(ResponseCallback *, const TableIdentifier *,
                     const RangeSpec *);
@@ -111,6 +116,29 @@ namespace Hypertable {
     void heapcheck(ResponseCallback *, const char *);
 
     void metadata_sync(ResponseCallback *, const char *, uint32_t flags, std::vector<const char *> columns);
+
+    void replay_fragments(ResponseCallback *, int64_t op_id,
+        const String &location, int plan_generation, int type,
+        const vector<uint32_t> &fragments,
+        RangeRecoveryReceiverPlan &receiver_plan, uint32_t replay_timeout);
+
+    void phantom_load(ResponseCallback *, const String &location,
+                      int plan_generation,
+                      const vector<uint32_t> &fragments, 
+                      const vector<QualifiedRangeSpec> &specs,
+                      const vector<RangeState> &states);
+
+    void phantom_update(ResponseCallbackPhantomUpdate *, const String &location,
+                        int plan_generation, QualifiedRangeSpec &range,
+                        uint32_t fragment, EventPtr &event);
+
+    void phantom_prepare_ranges(ResponseCallback *, int64_t op_id,
+        const String &location, int plan_generation, 
+        const vector<QualifiedRangeSpec> &ranges);
+
+    void phantom_commit_ranges(ResponseCallback *, int64_t op_id,
+        const String &location, int plan_generation, 
+        const vector<QualifiedRangeSpec> &ranges);
 
     /**
      * Blocks while the maintenance queue is non-empty
@@ -178,6 +206,9 @@ namespace Hypertable {
                        int64_t revision, int64_t *revisionp,
                        bool timeorder_desc);
 
+    bool live(const vector<QualifiedRangeSpec> &ranges);
+    bool live(const QualifiedRangeSpec &spec);
+
     class UpdateContext {
     public:
       UpdateContext(std::vector<TableUpdate *> &tu, boost::xtime xt) : updates(tu), expire_time(xt),
@@ -231,6 +262,10 @@ namespace Hypertable {
     Comm                  *m_comm;
     TableInfoMapPtr        m_live_map;
     TableInfoMapPtr        m_replay_map;
+    typedef map<String, PhantomRangeMapPtr> FailoverPhantomRangeMap;
+    FailoverPhantomRangeMap m_failover_map;
+    Mutex                  m_failover_mutex;
+
     CommitLogPtr           m_replay_log;
     ConnectionManagerPtr   m_conn_manager;
     ApplicationQueuePtr    m_app_queue;

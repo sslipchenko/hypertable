@@ -76,6 +76,7 @@ save_failure_state() {
   ARCHIVE_DIR="archive-"`date | sed 's/ /-/g'`
   mkdir $ARCHIVE_DIR
   mv metadata.dump fs-backup.tgz core.* select* dump.tsv rangeserver.output* error* failed* running* $ARCHIVE_DIR
+  mv Hypertable.Master.*.log $ARCHIVE_DIR
   cp $HT_HOME/log/Hypertable.Master.log $ARCHIVE_DIR
   if [ -e Testing/Temporary/LastTest.log.tmp ] ; then
     mv Testing/Temporary/LastTest.log.tmp $ARCHIVE_DIR
@@ -97,7 +98,7 @@ run_test() {
   stop_range_server
   kill -9 `cat $HT_HOME/run/Hypertable.Master*.pid`
 
-  if [ $TEST_ID == 10 ] || [ $TEST_ID == 11 ] || [ $TEST_ID == 12 ] || [ $TEST_ID == 13 ] ; then
+  if [ $TEST_ID == 9 ] || [ $TEST_ID == 10 ] || [ $TEST_ID == 11 ] || [ $TEST_ID == 12 ] ; then
       $HT_HOME/bin/start-test-servers.sh --clear --no-rangeserver --no-master \
           --no-thriftbroker
       start_masters $@
@@ -146,7 +147,7 @@ run_test() {
 
   # Verify that the falure was induced
   if [ $@ ]; then
-    if [ $TEST_ID == 10 ] || [ $TEST_ID == 11 ] || [ $TEST_ID == 12 ] || [ $TEST_ID == 13 ] ; then
+    if [ $TEST_ID == 9 ] || [ $TEST_ID == 10 ] || [ $TEST_ID == 11 ] || [ $TEST_ID == 12 ] ; then
       fgrep "induced failure" Hypertable.Master.38050.log
     else
       fgrep "induced failure" rangeserver.output.$TEST_ID
@@ -184,10 +185,14 @@ run_test() {
     echo "Test $TEST_ID PASSED." >> report.txt
   fi
 
+  if [ $TEST_ID == 9 ] || [ $TEST_ID == 10 ] || [ $TEST_ID == 11 ] || [ $TEST_ID == 12 ] ; then
+      kill -9 `cat $HT_HOME/run/Hypertable.Master*.pid`
+  fi
+
   /bin/rm -f running.$TEST_ID
 }
 
-env | grep '^TEST_[0-9]' || set_tests 0 1 2 3 4 5 6 7 8 9 10 11 12 13
+env | grep '^TEST_[0-9]' || set_tests 0 1 2 3 4 5 6 7 8 9 10 11 12
 
 [ "$TEST_0" ] && run_test 0
 [ "$TEST_1" ] && run_test 1 "--induce-failure=metadata-split-1:exit:0"
@@ -198,19 +203,10 @@ env | grep '^TEST_[0-9]' || set_tests 0 1 2 3 4 5 6 7 8 9 10 11 12 13
 [ "$TEST_6" ] && run_test 6 "--induce-failure=metadata-load-range-2:exit:2"
 [ "$TEST_7" ] && run_test 7 "--induce-failure=metadata-load-range-3:exit:2"
 [ "$TEST_8" ] && run_test 8 "--induce-failure=metadata-load-range-4:exit:2"
-[ "$TEST_9" ] && run_test 9 "--induce-failure=metadata-load-range-5:exit:2"
-[ "$TEST_10" ] && run_test 10 "--induce-failure=connection-handler-move-range:exit:0"
-[ "$TEST_11" ] && run_test 11 "--induce-failure=move-range-INITIAL-a:exit:0"
-[ "$TEST_12" ] && run_test 12 "--induce-failure=move-range-STARTED:exit:0"
-[ "$TEST_13" ] && run_test 13 "--induce-failure=move-range-LOAD_RANGE:exit:0"
-
-if [ "$TEST_9" ] ; then
-  if [ -e running* ] || [ -e failed* ]; then
-    save_failure_state
-  fi
-  /bin/rm -f core.* select* dump.tsv rangeserver.output.* error* running* failed*
-fi
-
+[ "$TEST_9" ] && run_test 9 "--induce-failure=connection-handler-move-range:exit:0"
+[ "$TEST_10" ] && run_test 10 "--induce-failure=move-range-INITIAL-a:exit:0"
+[ "$TEST_11" ] && run_test 11 "--induce-failure=move-range-STARTED:exit:0"
+[ "$TEST_12" ] && run_test 12 "--induce-failure=move-range-LOAD_RANGE:exit:0"
 
 kill %1
 if [ -f $PIDFILE ]; then

@@ -440,11 +440,12 @@ Comm::get_local_address(const CommAddress &addr,
 
 int Comm::close_socket(const CommAddress &addr) {
   IOHandlerPtr handler;
+  int error;
 
-  if (!m_handler_map->decomission_handler(addr, handler))
-    return Error::COMM_NOT_CONNECTED;
+  if ((error = m_handler_map->lookup_handler(addr, handler)) != Error::OK)
+    return error;
 
-  handler->shutdown();
+  handler->shutdown_with_callback(Error::COMM_BROKEN_CONNECTION);
 
   return Error::OK;
 }

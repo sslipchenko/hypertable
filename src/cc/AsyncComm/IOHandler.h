@@ -86,6 +86,7 @@ namespace Hypertable {
     virtual ~IOHandler() {
       HT_EXPECT(m_free_flag != 0xdeadbeef, Error::FAILED_EXPECTATION);
       m_free_flag = 0xdeadbeef;
+      m_reactor_ptr->cancel_requests(this);
       return;
     }
 
@@ -187,6 +188,15 @@ namespace Hypertable {
     void shutdown() {
       ExpireTimer timer;
       m_reactor_ptr->schedule_removal(this);
+      boost::xtime_get(&timer.expire_time, boost::TIME_UTC_);
+      timer.expire_time.nsec += 200000000LL;
+      timer.handler = 0;
+      m_reactor_ptr->add_timer(timer);
+    }
+
+    void shutdown_with_callback(int error) {
+      ExpireTimer timer;
+      m_reactor_ptr->schedule_removal(this, error);
       boost::xtime_get(&timer.expire_time, boost::TIME_UTC_);
       timer.expire_time.nsec += 200000000LL;
       timer.handler = 0;

@@ -37,3 +37,5 @@ echo ""
 $HT_HOME/bin/ht Hypertable.RangeServer --pidfile=$PIDFILE --verbose \
     --Hypertable.RangeServer.CellStore.DefaultBlockSize=1K \
     --Hypertable.RangeServer.Maintenance.Interval=100
+
+\rm -f $LAUNCHER_PIDFILE

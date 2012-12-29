@@ -47,14 +47,15 @@ run_test() {
   shift;
 
   if [ -z "$SKIP_START_SERVERS" ]; then
-    $HT_HOME/bin/start-test-servers.sh --no-rangeserver --no-thriftbroker \
-                                       --clear
+      $HT_HOME/bin/start-test-servers.sh --no-rangeserver --no-thriftbroker --clear
   fi
 
   stop_range_server
   $SCRIPT_DIR/rangeserver-launcher.sh $@ > rangeserver.output.$TEST_ID 2>&1 &
-  # give rangeserver time to get registered etc 
-  sleep 3;
+
+  set_start_vars Hypertable.RangeServer
+  wait_for_server_up rangeserver "$pidname" "Range Server"
+
   $HT_SHELL --batch < $SCRIPT_DIR/create-test-table.hql
   if [ $? != 0 ] ; then
     echo "Unable to create table 'split-test', exiting ..."

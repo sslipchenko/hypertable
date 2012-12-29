@@ -52,5 +52,6 @@ void TableScannerHandler::run() {
   }
   catch (Exception &e) {
     HT_ERROR_OUT << e << HT_END;
+    m_scanner->cancel();
   }
 }
