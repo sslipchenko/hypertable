@@ -187,10 +187,10 @@ namespace Hypertable {
     }
     bool has_outstanding() {
       ScopedRecLock lock(m_mutex);
-      return m_outstanding_buffers.size();
+      return m_outstanding_buffers.size() > 0;
     }
     bool has_outstanding_unlocked() {
-      return m_outstanding_buffers.size();
+      return m_outstanding_buffers.size() > 0;
     }
     bool needs_flush();
 
@@ -246,7 +246,7 @@ namespace Hypertable {
 
     void update_unsynced_rangeservers(const CommAddressSet &unsynced);
 
-    void handle_send_exceptions();
+    void handle_send_exceptions(const String& info);
 
     bool mutated() {
       ScopedLock lock(m_member_mutex);
