@@ -218,7 +218,7 @@ namespace Hypertable {
     void retry_flush();
 
     Mutex                m_mutex;
-    Mutex                m_queue_mutex;
+    RecMutex             m_queue_mutex;
     boost::condition     m_cond;
     PropertiesPtr        m_props;
     Comm                *m_comm;

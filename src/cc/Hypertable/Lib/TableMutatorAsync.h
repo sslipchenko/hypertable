@@ -80,7 +80,7 @@ namespace Hypertable {
 		      RangeLocatorPtr &range_locator, uint32_t timeout_ms, ResultCallback *cb,
 		      uint32_t flags = 0, bool explicit_block_only = false);
 
-    TableMutatorAsync(Mutex &mutex, boost::condition &cond, PropertiesPtr &props, Comm *comm,
+    TableMutatorAsync(RecMutex &mutex, boost::condition &cond, PropertiesPtr &props, Comm *comm,
 		      ApplicationQueuePtr &app_queue, Table *table,
 		      RangeLocatorPtr &range_locator, uint32_t timeout_ms, ResultCallback *cb,
 		      uint32_t flags = 0, bool explicit_block_only = false,
@@ -186,7 +186,7 @@ namespace Hypertable {
       failed_mutations = m_failed_mutations;
     }
     bool has_outstanding() {
-      ScopedLock lock(m_mutex);
+      ScopedRecLock lock(m_mutex);
       return m_outstanding_buffers.size();
     }
     bool has_outstanding_unlocked() {
@@ -194,7 +194,7 @@ namespace Hypertable {
     }
     bool needs_flush();
 
-    SchemaPtr schema() { ScopedLock lock(m_mutex); return m_schema; }
+    SchemaPtr schema() { ScopedRecLock lock(m_mutex); return m_schema; }
 
   protected:
     void wait_for_completion();
@@ -279,8 +279,8 @@ namespace Hypertable {
 
     const static uint32_t ms_max_sync_retries = 5;
 
-    Mutex      m_buffer_mutex;
-    Mutex      &m_mutex;
+    RecMutex   m_buffer_mutex;
+    RecMutex   &m_mutex;
     Mutex      m_member_mutex;
     boost::condition m_buffer_cond;
     boost::condition &m_cond;
