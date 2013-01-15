@@ -70,6 +70,7 @@ run_test() {
   fi
 
   $HT_HOME/bin/ht ht_load_generator update --no-log-sync --parallel=300 --spec-file=$SCRIPT_DIR/data.spec --max-bytes=$GEN_SIZE
+#  $HT_HOME/bin/ht valgrind --log-file=vg.%p -v $HT_HOME/bin/ht_load_generator update --no-log-sync --parallel=300 --spec-file=$SCRIPT_DIR/data.spec --max-bytes=$GEN_SIZE
   if [ $? != 0 ] ; then
     echo "Problem loading table 'LoadTest', exiting ..."
     save_failure_state

@@ -26,7 +26,7 @@ if [ -f $PIDFILE ]; then
 fi
 
 # Dumping cores slows things down unnecessarily for normal test runs
-ulimit -c 0
+#ulimit -c 0
 
 $HT_HOME/bin/Hypertable.RangeServer --verbose --pidfile=$PIDFILE \
     --Hypertable.RangeServer.Workers=330 \
