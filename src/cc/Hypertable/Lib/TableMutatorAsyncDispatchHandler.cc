@@ -51,6 +51,8 @@ void TableMutatorAsyncDispatchHandler::handle(EventPtr &event_ptr) {
   HT_ASSERT(!m_handled);
   m_handled = true;
 
+  m_handle_event = event_ptr;
+
   if (event_ptr->type == Event::MESSAGE) {
     error = Protocol::response_code(event_ptr);
     if (error != Error::OK) {

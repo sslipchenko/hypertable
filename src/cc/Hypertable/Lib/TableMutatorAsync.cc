@@ -75,7 +75,7 @@ TableMutatorAsync::TableMutatorAsync(PropertiesPtr &props, Comm *comm,
 }
 
 
-TableMutatorAsync::TableMutatorAsync(RecMutex &mutex, boost::condition &cond,
+TableMutatorAsync::TableMutatorAsync(Mutex &mutex, boost::condition &cond,
         PropertiesPtr &props, Comm *comm, ApplicationQueuePtr &app_queue, 
         Table *table, RangeLocatorPtr &range_locator, uint32_t timeout_ms, 
         ResultCallback *cb, uint32_t flags, bool explicit_block_only,
@@ -154,7 +154,7 @@ void TableMutatorAsync::initialize_indices(PropertiesPtr &props)
 }
 
 void TableMutatorAsync::wait_for_completion() {
-  ScopedRecLock lock(m_mutex);
+  ScopedLock lock(m_mutex);
   while (m_outstanding_buffers.size() > 0)
     m_cond.wait(lock);
 }
@@ -548,7 +548,7 @@ void TableMutatorAsync::flush_with_tablequeue(TableMutator *mutator, bool sync) 
 
   try {
     {
-      ScopedRecLock lock(m_mutex);
+      ScopedLock lock(m_mutex);
       ScopedLock member_lock(m_member_mutex);
       if (m_current_buffer->memory_used() > 0) {
         m_current_buffer->send(flags);
@@ -656,7 +656,7 @@ void TableMutatorAsync::do_sync() {
 }
 
 TableMutatorAsyncScatterBufferPtr TableMutatorAsync::get_outstanding_buffer(size_t id) {
-  ScopedRecLock lock(m_mutex);
+  ScopedLock lock(m_mutex);
   TableMutatorAsyncScatterBufferPtr buffer;
   ScatterBufferAsyncMap::iterator it = m_outstanding_buffers.find(id);
   if (it != m_outstanding_buffers.end())
@@ -688,7 +688,7 @@ void TableMutatorAsync::buffer_finish(uint32_t id, int error, bool retry) {
   ScatterBufferAsyncMap::iterator it;
 
   {
-    ScopedRecLock lock(m_mutex);
+    ScopedLock lock(m_mutex);
     it = m_outstanding_buffers.find(id);
     HT_ASSERT(it != m_outstanding_buffers.end());
 
@@ -745,7 +745,7 @@ void TableMutatorAsync::buffer_finish(uint32_t id, int error, bool retry) {
     }
   }
 
-  ScopedRecLock lock(m_mutex);
+  ScopedLock lock(m_mutex);
   if (retry) {
     if (!redo) {
       {

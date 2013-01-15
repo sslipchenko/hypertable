@@ -60,6 +60,7 @@ namespace Hypertable {
     TableMutatorAsync *m_mutator;
     uint32_t m_scatter_buffer;
     TableMutatorAsyncSendBuffer *m_send_buffer;
+    EventPtr m_handle_event;
     bool m_auto_refresh;
     bool m_handled;
   };

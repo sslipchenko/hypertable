@@ -35,6 +35,9 @@ $HT_HOME/bin/ht ht_load_generator update \
     --Field.value.size=1000 \
     --max-bytes=$WRITE_SIZE
 
+echo "wait for maintenance; quit;" | $HT_HOME/bin/ht rsclient localhost:38061
+echo "wait for maintenance; quit;" | $HT_HOME/bin/ht rsclient localhost:38060
+
 echo "" > metadata.a
 echo "use sys; select * from METADATA MAX_VERSIONS 1;" | $HT_HOME/bin/ht shell --batch > metadata.b
 diff metadata.a metadata.b > /dev/null
@@ -44,6 +47,9 @@ while [ $? != 0 ]; do
   echo "use sys; select * from METADATA MAX_VERSIONS 1;" | $HT_HOME/bin/ht shell --batch > metadata.b
   diff metadata.a metadata.b > /dev/null
 done
+
+echo "wait for maintenance; quit;" | $HT_HOME/bin/ht rsclient localhost:38061
+echo "wait for maintenance; quit;" | $HT_HOME/bin/ht rsclient localhost:38060
 
 echo "shutdown; quit;" | $HT_HOME/bin/ht rsclient localhost:38061
 echo "shutdown; quit;" | $HT_HOME/bin/ht rsclient localhost:38060
@@ -73,8 +79,14 @@ sleep 5
 
 $HT_HOME/bin/ht serverup master
 if [ $? == 0 ]; then
-  echo "Master did not die as it should have.  Exitting..."
+  echo "Master did not die as it should have.  Exiting..."
+  touch $HT_HOME/run/debug-op
+  sleep 60
+  cp $HT_HOME/run/op.output .
   kill -9 `cat $HT_HOME/run/Hypertable.RangeServer.rs?.pid`
+  pstack `cat $HT_HOME/run/Hypertable.Master.pid` > master.stack
+  cp $HT_HOME/log/Hypertable.Master.log .
+  cp $HT_HOME/run/monitoring/mop.dot .
   $HT_HOME/bin/stop-servers.sh
   exit 1
 fi

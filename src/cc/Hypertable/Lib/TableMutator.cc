@@ -196,7 +196,7 @@ void TableMutator::wait_for_flush_completion(TableMutatorAsync *mutator) {
   ApplicationHandler *app_handler = 0;
   while (true) {
     {
-      ScopedRecLock lock(m_queue_mutex);
+      ScopedLock lock(m_queue_mutex);
       if (mutator->has_outstanding_unlocked()) {
         m_queue->wait_for_buffer(lock, &app_handler);
         {
