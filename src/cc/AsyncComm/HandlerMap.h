@@ -68,9 +68,6 @@ namespace Hypertable {
 
     void decrement_reference_count(IOHandler *handler);
 
-    size_t reference_count(IOHandler *handler);
-
-
     int set_alias(const InetAddr &addr, const InetAddr &alias);
 
     int remove_handler(IOHandler *handler);

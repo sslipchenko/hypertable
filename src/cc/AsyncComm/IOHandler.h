@@ -96,7 +96,7 @@ namespace Hypertable {
 #endif
 
     virtual ~IOHandler() {
-      HT_EXPECT(m_free_flag != 0xdeadbeef, Error::FAILED_EXPECTATION);
+      HT_ASSERT(m_free_flag != 0xdeadbeef);
       m_free_flag = 0xdeadbeef;
       ::close(m_sd);
       return;
@@ -212,14 +212,6 @@ namespace Hypertable {
     void display_event(port_event_t *event);
 #endif
 
-    void lock() {
-      m_mutex.lock();
-    }
-
-    void unlock() {
-      m_mutex.unlock();
-    }
-
     friend class HandlerMap;
 
   protected:
@@ -241,7 +233,7 @@ namespace Hypertable {
       }
     }
 
-    size_t reference_count() const {
+    size_t reference_count() {
       return m_reference_count;
     }
 
