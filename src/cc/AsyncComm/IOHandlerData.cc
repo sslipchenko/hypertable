@@ -127,12 +127,12 @@ IOHandlerData::handle_event(struct pollfd *event, time_t arrival_time) {
             if (errno != ECONNREFUSED) {
               HT_INFOF("socket read(%d, len=%d) failure : %s", m_sd,
                         (int)m_message_header_remaining, strerror(errno));
-              error = Error::OK;
+              m_error = Error::OK;
             }
             else
-              error = Error::COMM_CONNECT_ERROR;
+              m_error = Error::COMM_CONNECT_ERROR;
 
-            handle_disconnect(error);
+            handle_disconnect();
             return true;
           }
           else if (nread < m_message_header_remaining) {
@@ -235,12 +235,12 @@ IOHandlerData::handle_event(struct epoll_event *event, time_t arrival_time) {
             if (errno != ECONNREFUSED) {
               HT_INFOF("socket read(%d, len=%d) failure : %s", m_sd,
                        (int)m_message_header_remaining, strerror(errno));
-              error = Error::OK;
+              m_error = Error::OK;
             }
             else
-              error = Error::COMM_CONNECT_ERROR;
+              m_error = Error::COMM_CONNECT_ERROR;
 
-            handle_disconnect(error);
+            handle_disconnect();
             return true;
           }
           else if (nread < m_message_header_remaining) {
@@ -351,12 +351,12 @@ bool IOHandlerData::handle_event(port_event_t *event, time_t arrival_time) {
             if (errno != ECONNREFUSED) {
               HT_INFOF("socket read(%d, len=%d) failure : %s", m_sd,
                         (int)m_message_header_remaining, strerror(errno));
-              error = Error::OK;
+              m_error = Error::OK;
             }
             else
-              error = Error::COMM_CONNECT_ERROR;
+              m_error = Error::COMM_CONNECT_ERROR;
 
-            handle_disconnect(error);
+            handle_disconnect();
             return true;
           }
           else if (nread < m_message_header_remaining) {
@@ -431,6 +431,7 @@ bool IOHandlerData::handle_event(port_event_t *event, time_t arrival_time) {
   }
   catch (Hypertable::Exception &e) {
     HT_ERROR_OUT << e << HT_END;
+    m_error = e.code();
     handle_disconnect();
     return true;
   }
@@ -527,6 +528,7 @@ bool IOHandlerData::handle_event(struct kevent *event, time_t arrival_time) {
   }
   catch (Hypertable::Exception &e) {
     HT_ERROR_OUT << e << HT_END;
+    m_error = e.code();
     handle_disconnect();
     return true;
   }
@@ -576,7 +578,7 @@ void IOHandlerData::handle_message_body() {
   DispatchHandler *dh = 0;
 
   if (m_event->header.flags & CommHeader::FLAGS_BIT_PROXY_MAP_UPDATE) {
-    ReactorRunner::handler_map->update_proxies((const char *)m_message,
+    ReactorRunner::handler_map->update_proxy_map((const char *)m_message,
                   m_event->header.total_len - m_event->header.header_len);
     delete [] m_message;
     delete m_event;
@@ -584,7 +586,7 @@ void IOHandlerData::handle_message_body() {
   }
   else if ((m_event->header.flags & CommHeader::FLAGS_BIT_REQUEST) == 0 &&
       (m_event->header.id == 0
-      || (dh = m_reactor_ptr->remove_request(m_event->header.id)) == 0)) {
+      || (dh = m_reactor->remove_request(m_event->header.id)) == 0)) {
     if ((m_event->header.flags & CommHeader::FLAGS_BIT_IGNORE_RESPONSE) == 0) {
       HT_WARNF("Received response for non-pending event (id=%d,version"
                "=%d,total_len=%d)", m_event->header.id, m_event->header.version,
@@ -605,11 +607,9 @@ void IOHandlerData::handle_message_body() {
   reset_incoming_message_state();
 }
 
-
-void IOHandlerData::handle_disconnect(int error) {
-  deliver_event(new Event(Event::DISCONNECT, m_addr, m_proxy, error));
+void IOHandlerData::handle_disconnect() {
+  ReactorRunner::handler_map->decomission_handler(this);
 }
-
 
 bool IOHandlerData::handle_write_readiness() {
   bool deliver_conn_estab_event = false;
@@ -654,7 +654,7 @@ bool IOHandlerData::handle_write_readiness() {
     //HT_INFO("about to flush send queue");
     if (flush_send_queue() != Error::OK) {
       HT_DEBUG("error flushing send queue");
-      break;
+      return true;
     }
     //HT_INFO("about to remove poll interest");
     if (m_send_queue.empty())
@@ -673,16 +673,12 @@ bool IOHandlerData::handle_write_readiness() {
 
 
 int
-IOHandlerData::send_message(CommBufPtr &cbp, uint32_t timeout_ms,
+IOHandlerData::send_message_unlocked(CommBufPtr &cbp, uint32_t timeout_ms,
                             DispatchHandler *disp_handler) {
-  ScopedLock lock(m_mutex);
-  int error = Error::OK;
   bool initially_empty = m_send_queue.empty() ? true : false;
 
-  /**
-  if (!m_connected)
+  if (m_decomissioned)
     return Error::COMM_NOT_CONNECTED;
-  **/
 
   // If request, Add message ID to request cache
   if (cbp->header.id != 0 && disp_handler != 0
@@ -690,7 +686,7 @@ IOHandlerData::send_message(CommBufPtr &cbp, uint32_t timeout_ms,
     boost::xtime expire_time;
     boost::xtime_get(&expire_time, boost::TIME_UTC_);
     xtime_add_millis(expire_time, timeout_ms);
-    m_reactor_ptr->add_request(cbp->header.id, this, disp_handler, expire_time);
+    m_reactor->add_request(cbp->header.id, this, disp_handler, expire_time);
   }
 
   //HT_INFOF("About to send message of size %d", cbp->header.total_len);
@@ -698,8 +694,10 @@ IOHandlerData::send_message(CommBufPtr &cbp, uint32_t timeout_ms,
   m_send_queue.push_back(cbp);
 
   if (m_connected) {
-    if ((error = flush_send_queue()) != Error::OK)
-      HT_WARNF("Problem flushing send queue - %s", Error::get_text(error));
+    if ((m_error = flush_send_queue()) != Error::OK) {
+      HT_WARNF("Problem flushing send queue - %s", Error::get_text(m_error));
+      ReactorRunner::handler_map->decomission_handler(this);
+    }
   }
 
   if (initially_empty && !m_send_queue.empty()) {
@@ -711,9 +709,15 @@ IOHandlerData::send_message(CommBufPtr &cbp, uint32_t timeout_ms,
     //HT_INFO("Removing Write interest");
   }
 
-  return error;
+  return m_error;
 }
 
+int
+IOHandlerData::send_message(CommBufPtr &cbp, uint32_t timeout_ms,
+                            DispatchHandler *disp_handler) {
+  ScopedLock lock(m_mutex);
+  return send_message_unlocked(cbp, timeout_ms, disp_handler);
+}
 
 
 #if defined(__linux__)

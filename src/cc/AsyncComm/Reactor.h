@@ -64,30 +64,29 @@ namespace Hypertable {
 
     void add_request(uint32_t id, IOHandler *handler, DispatchHandler *dh,
                      boost::xtime &expire) {
-      ScopedLock lock(m_mutex);
       m_request_cache.insert(id, handler, dh, expire);
       if (m_next_wakeup.sec == 0 || xtime_cmp(expire, m_next_wakeup) < 0)
         poll_loop_interrupt();
     }
 
     DispatchHandler *remove_request(uint32_t id) {
-      ScopedLock lock(m_mutex);
+      ScopedLock lock(mutex);
       return m_request_cache.remove(id);
     }
 
     void cancel_requests(IOHandler *handler, int32_t error=Error::COMM_BROKEN_CONNECTION) {
-      ScopedLock lock(m_mutex);
+      ScopedLock lock(mutex);
       m_request_cache.purge_requests(handler, error);
     }
 
     void add_timer(ExpireTimer &timer) {
-      ScopedLock lock(m_mutex);
+      ScopedLock lock(mutex);
       m_timer_heap.push(timer);
       poll_loop_interrupt();
     }
 
     void cancel_timer(DispatchHandler *handler) {
-      ScopedLock lock(m_mutex);
+      ScopedLock lock(mutex);
       typedef TimerHeap::container_type container_t;
       container_t container;
       container.reserve(m_timer_heap.size());
@@ -102,17 +101,13 @@ namespace Hypertable {
         m_timer_heap.push(t);
     }
 
-    void schedule_removal(IOHandler *handler, int error=Error::OK) {
-      ScopedLock lock(m_mutex);
+    void schedule_removal(IOHandler *handler) {
+      ScopedLock lock(mutex);
       m_removed_handlers.insert(handler);
-      if (error == Error::OK)
-        m_request_cache.purge_requests(handler);
-      else
-        m_request_cache.purge_requests(handler, error);
     }
 
     void get_removed_handlers(std::set<IOHandler *> &dst) {
-      ScopedLock lock(m_mutex);
+      ScopedLock lock(mutex);
       dst = m_removed_handlers;
       m_removed_handlers.clear();
     }
@@ -139,11 +134,12 @@ namespace Hypertable {
 
     int interrupt_sd() { return m_interrupt_sd; }
 
+    Mutex           mutex;
+
   protected:
     typedef std::priority_queue<ExpireTimer, std::vector<ExpireTimer>, LtTimer>
             TimerHeap;
 
-    Mutex           m_mutex;
     RequestCache    m_request_cache;
     TimerHeap       m_timer_heap;
     int             m_interrupt_sd;

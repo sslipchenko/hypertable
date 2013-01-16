@@ -343,6 +343,7 @@ ConnectionManager::handle(EventPtr &event) {
         CommBufPtr cbuf(conn_state->initializer->create_initialization_request());
         int error = m_impl->comm->send_request(event->addr, 60000, cbuf, this);
         if (error == Error::COMM_BROKEN_CONNECTION ||
+            error == Error::COMM_NOT_CONNECTED ||
             error == Error::COMM_INVALID_PROXY)
           set_retry_state(conn_state, event);
         else if (error != Error::OK)

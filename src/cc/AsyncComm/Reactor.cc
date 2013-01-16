@@ -59,7 +59,7 @@ const int Reactor::WRITE_READY  = 0x02;
 /**
  *
  */
-Reactor::Reactor() : m_mutex(), m_interrupt_in_progress(false) {
+Reactor::Reactor() : mutex(), m_interrupt_in_progress(false) {
   struct sockaddr_in addr;
 
   if (!ReactorFactory::use_poll) {
@@ -167,7 +167,7 @@ void Reactor::handle_timeouts(PollTimeout &next_timeout) {
 
   while(true) {
     {
-      ScopedLock lock(m_mutex);
+      ScopedLock lock(mutex);
       IOHandler       *handler;
       DispatchHandler *dh;
 
@@ -219,7 +219,7 @@ void Reactor::handle_timeouts(PollTimeout &next_timeout) {
     }
 
     {
-      ScopedLock lock(m_mutex);
+      ScopedLock lock(mutex);
 
       if (!m_timer_heap.empty()) {
         timer = m_timer_heap.top();

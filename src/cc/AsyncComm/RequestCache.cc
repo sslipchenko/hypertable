@@ -131,12 +131,6 @@ RequestCache::get_next_timeout(boost::xtime &now, IOHandler *&handlerp,
   return 0;
 }
 
-void RequestCache::purge_requests(IOHandler *handler) {
-  for (CacheNode *node = m_tail; node != 0; node = node->next) {
-    if (node->handler == handler)
-      node->handler = 0;  // mark for deletion
-  }
-}
 
 
 void RequestCache::purge_requests(IOHandler *handler, int32_t error) {

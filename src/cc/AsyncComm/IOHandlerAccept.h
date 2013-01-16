@@ -38,14 +38,12 @@ namespace Hypertable {
 
     IOHandlerAccept(int sd, const InetAddr &addr, DispatchHandlerPtr &dhp,
                     HandlerMapPtr &hmap, ConnectionHandlerFactoryPtr &chfp)
-      : IOHandler(sd, addr, dhp), m_handler_map_ptr(hmap),
-        m_handler_factory_ptr(chfp) {
+      : IOHandler(sd, addr, dhp), m_handler_map(hmap),
+        m_handler_factory(chfp) {
       return;
     }
 
-    virtual ~IOHandlerAccept() {
-      return;
-    }
+    virtual ~IOHandlerAccept() { }
 
     // define default poll() interface for everyone since it is chosen at runtime
     virtual bool handle_event(struct pollfd *event, time_t arival_time=0);
@@ -60,11 +58,12 @@ namespace Hypertable {
     ImplementMe;
 #endif
 
+  private:
+
     bool handle_incoming_connection();
 
-  private:
-    HandlerMapPtr m_handler_map_ptr;
-    ConnectionHandlerFactoryPtr m_handler_factory_ptr;
+    HandlerMapPtr m_handler_map;
+    ConnectionHandlerFactoryPtr m_handler_factory;
   };
 
   typedef intrusive_ptr<IOHandlerAccept> IOHandlerAcceptPtr;
