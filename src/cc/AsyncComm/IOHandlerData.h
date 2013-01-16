@@ -51,8 +51,11 @@ namespace Hypertable {
     }
 
     virtual ~IOHandlerData() {
-      m_reactor_ptr->cancel_requests(this);
       delete m_event;
+    }
+
+    virtual void disconnect() { 
+      deliver_event(new Event(Event::DISCONNECT, m_addr, m_proxy, m_error));
     }
 
     void reset_incoming_message_state() {
@@ -65,6 +68,8 @@ namespace Hypertable {
       m_message_remaining = 0;
     }
 
+    int send_message_unlocked(CommBufPtr &, uint32_t timeout_ms = 0,
+                              DispatchHandler * = 0);
     int send_message(CommBufPtr &, uint32_t timeout_ms = 0,
                      DispatchHandler * = 0);
 
@@ -88,7 +93,10 @@ namespace Hypertable {
   private:
     void handle_message_header(time_t arrival_time);
     void handle_message_body();
-    void handle_disconnect(int error = Error::OK);
+
+    /** 
+     */
+    void handle_disconnect();
 
     bool                m_connected;
     Mutex               m_mutex;

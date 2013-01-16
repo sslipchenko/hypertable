@@ -112,9 +112,9 @@ void ReactorRunner::operator()() {
 	  }
 	  if (handlers[i]) {
 	    if (handlers[i]->handle_event(&pollfds[i], arrival_time)) {
-	      handler_map->decomission_handler(handlers[i]->get_address());
-	      removed_handlers.insert(handlers[i]);
-	    }
+              if (handler_map->reference_count(handlers[i]) == 0)
+                removed_handlers.insert(handlers[i]);
+            }
 	  }
 	}
       }
@@ -146,6 +146,7 @@ void ReactorRunner::operator()() {
       did_delay = false;
 
     m_reactor_ptr->get_removed_handlers(removed_handlers);
+
     if (!shutdown)
       HT_DEBUGF("epoll_wait returned %d events", n);
     for (int i=0; i<n; i++) {
@@ -161,10 +162,9 @@ void ReactorRunner::operator()() {
 	  arrival_time = time(0);
           got_arrival_time = true;
         }
-        if (handler && handler->handle_event(&events[i], arrival_time)) {
-          handler_map->decomission_handler(handler->get_address());
-          removed_handlers.insert(handler);
-        }
+        if (handler && handler->handle_event(&events[i], arrival_time))
+          if (handler_map->reference_count(handler) == 0)
+            removed_handlers.insert(handler);
       }
     }
     if (!removed_handlers.empty())
@@ -220,8 +220,8 @@ void ReactorRunner::operator()() {
           got_arrival_time = true;
         }
         if (handler && handler->handle_event(&events[i], arrival_time)) {
-          handler_map->decomission_handler(handler->get_address());
-          removed_handlers.insert(handler);
+          if (handler_map->reference_count(handler) == 0)          
+            removed_handlers.insert(handler);
         }
 	else if (handler && removed_handlers.count(handler) == 0)
 	  handler->reset_poll_interest();
@@ -269,8 +269,8 @@ void ReactorRunner::operator()() {
           got_arrival_time = true;
         }
         if (handler && handler->handle_event(&events[i], arrival_time)) {
-          handler_map->decomission_handler(handler->get_address());
-          removed_handlers.insert(handler);
+          if (handler_map->reference_count(handler) == 0)
+            removed_handlers.insert(handler);
         }
       }
     }
@@ -293,9 +293,15 @@ void ReactorRunner::operator()() {
 
 void
 ReactorRunner::cleanup_and_remove_handlers(std::set<IOHandler *> &handlers) {
+
   foreach_ht(IOHandler *handler, handlers) {
 
     HT_ASSERT(handler);
+
+    if (!handler_map->is_decomissioned(handler))
+      continue;
+
+    m_reactor_ptr->cancel_requests(handler);
 
     if (ReactorFactory::use_poll)
       m_reactor_ptr->remove_poll_interest(handler->get_sd());
@@ -321,7 +327,6 @@ ReactorRunner::cleanup_and_remove_handlers(std::set<IOHandler *> &handlers) {
       ImplementMe;
 #endif
     }
-    close(handler->get_sd());
     handler_map->purge_handler(handler);
   }
 }

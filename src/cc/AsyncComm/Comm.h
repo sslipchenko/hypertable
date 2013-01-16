@@ -204,17 +204,6 @@ namespace Hypertable {
     int send_response(const CommAddress &addr, CommBufPtr &cbuf);
 
     /**
-     * Obtains the local address of a socket connection.  The connection is
-     * identified by the remote address in the addr argument.
-     *
-     * @param addr connection identifier (remote address)
-     * @param local_addr pointer to address structure to hold the returned
-     *        local address
-     * @return Error::OK on success or error code on failure
-     */
-    int get_local_address(const CommAddress &addr, CommAddress &local_addr);
-
-    /**
      * Creates a local socket for receiving datagrams and assigns a default
      * dispatch handler to handle events on this socket.  This socket can also
      * be used for sending datagrams.  The events delivered for this socket
@@ -293,7 +282,7 @@ namespace Hypertable {
 
     static Comm *ms_instance;
 
-    int send_request(IOHandlerDataPtr &data_handler, uint32_t timeout_ms,
+    int send_request(IOHandlerData *data_handler, uint32_t timeout_ms,
                      CommBufPtr &cbuf, DispatchHandler *response_handler);
 
     int connect_socket(int sd, const CommAddress &addr,

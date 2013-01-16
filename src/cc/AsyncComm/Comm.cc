@@ -46,6 +46,7 @@ extern "C" {
 #include "Common/Error.h"
 #include "Common/InetAddr.h"
 #include "Common/FileUtils.h"
+#include "Common/ScopeGuard.h"
 #include "Common/SystemInfo.h"
 #include "Common/Time.h"
 
@@ -78,11 +79,7 @@ Comm::Comm() {
 
 
 Comm::~Comm() {
-  set<IOHandler *> handlers;
-  m_handler_map->decomission_all(handlers);
-
-  foreach_ht(IOHandler *handler, handlers)
-    handler->shutdown();
+  m_handler_map->decomission_all();
 
   // wait for all decomissioned handlers to get purged by Reactor
   m_handler_map->wait_for_empty();
@@ -176,15 +173,14 @@ void Comm::get_proxy_map(ProxyMapT &proxy_map) {
 }
 
 bool Comm::wait_for_proxy_load(Timer &timer) {
-  return m_handler_map->wait_for_proxy_load(timer);
+  return m_handler_map->wait_for_proxy_map(timer);
 }
 
 
 void
 Comm::listen(const CommAddress &addr, ConnectionHandlerFactoryPtr &chf,
              DispatchHandlerPtr &default_handler) {
-  IOHandlerPtr handler;
-  IOHandlerAccept *accept_handler;
+  IOHandlerAccept *handler;
   int one = 1;
   int sd;
 
@@ -224,13 +220,13 @@ Comm::listen(const CommAddress &addr, ConnectionHandlerFactoryPtr &chf,
   if (::listen(sd, 1000) < 0)
     HT_THROWF(Error::COMM_LISTEN_ERROR, "listening: %s", strerror(errno));
 
-  handler = accept_handler = new IOHandlerAccept(sd, addr.inet, default_handler,
+  handler = new IOHandlerAccept(sd, addr.inet, default_handler,
                                                  m_handler_map, chf);
-  int32_t error = m_handler_map->insert_handler(accept_handler);
+  int32_t error = m_handler_map->insert_handler(handler);
   if (error != Error::OK)
     HT_THROWF(error, "Error inserting accept handler for %s into handler map",
               addr.to_str().c_str());
-  accept_handler->start_polling();
+  handler->start_polling();
 }
 
 
@@ -239,22 +235,23 @@ int
 Comm::send_request(const CommAddress &addr, uint32_t timeout_ms,
                    CommBufPtr &cbuf, DispatchHandler *resp_handler) {
   ScopedLock lock(ms_mutex);
-  IOHandlerDataPtr data_handler;
+  IOHandlerData *data_handler;
   int error;
 
-  if ((error = m_handler_map->lookup_data_handler(addr, data_handler)) != Error::OK) {
+  if ((error = m_handler_map->checkout_handler(addr, &data_handler)) != Error::OK) {
     HT_WARNF("No connection for %s - %s", addr.to_str().c_str(), Error::get_text(error));
     return error;
   }
+
+  HT_ON_OBJ_SCOPE_EXIT(*m_handler_map.get(), &HandlerMap::decrement_reference_count, data_handler);
 
   return send_request(data_handler, timeout_ms, cbuf, resp_handler);
 }
 
 
 
-int Comm::send_request(IOHandlerDataPtr &data_handler, uint32_t timeout_ms,
+int Comm::send_request(IOHandlerData *data_handler, uint32_t timeout_ms,
 		       CommBufPtr &cbuf, DispatchHandler *resp_handler) {
-  int error;
 
   if (timeout_ms == 0)
     HT_THROW(Error::REQUEST_TIMEOUT, "Request with timeout of 0");
@@ -273,41 +270,35 @@ int Comm::send_request(IOHandlerDataPtr &data_handler, uint32_t timeout_ms,
   cbuf->header.timeout_ms = timeout_ms;
   cbuf->write_header_and_reset();
 
-  if ((error = data_handler->send_message(cbuf, timeout_ms, resp_handler))
-      != Error::OK)
-    data_handler->shutdown();
-
-  return error;
+  return data_handler->send_message(cbuf, timeout_ms, resp_handler);
 }
 
 
 
 int Comm::send_response(const CommAddress &addr, CommBufPtr &cbuf) {
   ScopedLock lock(ms_mutex);
-  IOHandlerDataPtr data_handler;
+  IOHandlerData *data_handler;
   int error;
 
-  if ((error = m_handler_map->lookup_data_handler(addr, data_handler)) != Error::OK) {
+  if ((error = m_handler_map->checkout_handler(addr, &data_handler)) != Error::OK) {
     HT_ERRORF("No connection for %s - %s", addr.to_str().c_str(), Error::get_text(error));
     return error;
   }
+
+  HT_ON_OBJ_SCOPE_EXIT(*m_handler_map.get(), &HandlerMap::decrement_reference_count, data_handler);
 
   cbuf->header.flags &= CommHeader::FLAGS_MASK_REQUEST;
 
   cbuf->write_header_and_reset();
 
-  if ((error = data_handler->send_message(cbuf)) != Error::OK)
-    data_handler->shutdown();
-
-  return error;
+  return data_handler->send_message(cbuf);
 }
 
 
 void
 Comm::create_datagram_receive_socket(CommAddress &addr, int tos,
                                      DispatchHandlerPtr &dhp) {
-  IOHandlerPtr handler;
-  IOHandlerDatagram *dg_handler;
+  IOHandlerDatagram *handler;
   int one = 1;
   int sd;
 
@@ -358,15 +349,15 @@ Comm::create_datagram_receive_socket(CommAddress &addr, int tos,
     bind_attempts++;
   }
 
-  handler = dg_handler = new IOHandlerDatagram(sd, addr.inet, dhp);
+  handler = new IOHandlerDatagram(sd, addr.inet, dhp);
 
   addr.set_inet( handler->get_local_address() );
 
-  int32_t error = m_handler_map->insert_datagram_handler(dg_handler);
+  int32_t error = m_handler_map->insert_handler(handler);
   if (error != Error::OK)
     HT_THROWF(error, "Error inserting datagram handler for %s into handler map",
               addr.to_str().c_str());
-  dg_handler->start_polling();
+  handler->start_polling();
 }
 
 
@@ -374,26 +365,25 @@ int
 Comm::send_datagram(const CommAddress &addr, const CommAddress &send_addr,
                     CommBufPtr &cbuf) {
   ScopedLock lock(ms_mutex);
-  IOHandlerDatagramPtr dg_handler;
+  IOHandlerDatagram *handler;
   int error;
 
   HT_ASSERT(addr.is_inet());
 
-  if ((error = m_handler_map->lookup_datagram_handler(send_addr, dg_handler)) != Error::OK) {
+  if ((error = m_handler_map->checkout_handler(send_addr, &handler)) != Error::OK) {
     HT_ERRORF("Datagram send/local address %s not registered",
               send_addr.to_str().c_str());
     return error;
   }
+
+  HT_ON_OBJ_SCOPE_EXIT(*m_handler_map.get(), &HandlerMap::decrement_reference_count, handler);
 
   cbuf->header.flags |= (CommHeader::FLAGS_BIT_REQUEST |
 			 CommHeader::FLAGS_BIT_IGNORE_RESPONSE);
 
   cbuf->write_header_and_reset();
 
-  if ((error = dg_handler->send_message(addr.inet, cbuf)) != Error::OK)
-    dg_handler->shutdown();
-
-  return error;
+  return handler->send_message(addr.inet, cbuf);
 }
 
 
@@ -420,32 +410,19 @@ void Comm::cancel_timer(DispatchHandler *handler) {
   m_timer_reactor->cancel_timer(handler);
 }
 
-int
-Comm::get_local_address(const CommAddress &addr,
-                        CommAddress &local_addr) {
-  ScopedLock lock(ms_mutex);
-  IOHandlerDataPtr data_handler;
-  int error;
-
-  if ((error = m_handler_map->lookup_data_handler(addr, data_handler)) != Error::OK) {
-    HT_ERRORF("No connection for %s - %s", addr.to_str().c_str(), Error::get_text(error));
-    return error;
-  }
-
-  local_addr.set_inet( data_handler->get_local_address() );
-
-  return Error::OK;
-}
-
 
 int Comm::close_socket(const CommAddress &addr) {
-  IOHandlerPtr handler;
+  IOHandler *handler;
   int error;
 
-  if ((error = m_handler_map->lookup_handler(addr, handler)) != Error::OK)
-    return error;
+  if (m_handler_map->checkout_handler(addr, (IOHandlerData **)&handler) != Error::OK ||
+      m_handler_map->checkout_handler(addr, (IOHandlerDatagram **)&handler) != Error::OK ||
+      m_handler_map->checkout_handler(addr, (IOHandlerAccept **)&handler) != Error::OK)
+    return Error::OK;
 
-  handler->shutdown_with_callback(Error::COMM_BROKEN_CONNECTION);
+  HT_ON_OBJ_SCOPE_EXIT(*m_handler_map.get(), &HandlerMap::decrement_reference_count, handler);
+
+  m_handler_map->decomission_handler(handler);
 
   return Error::OK;
 }
@@ -458,8 +435,7 @@ int Comm::close_socket(const CommAddress &addr) {
 int
 Comm::connect_socket(int sd, const CommAddress &addr,
                      DispatchHandlerPtr &default_handler) {
-  IOHandlerPtr handler;
-  IOHandlerData *data_handler;
+  IOHandlerData *handler;
   int32_t error;
   int one = 1;
   CommAddress connectable_addr;
@@ -485,10 +461,10 @@ Comm::connect_socket(int sd, const CommAddress &addr,
     HT_WARNF("setsockopt(SO_NOSIGPIPE) failure: %s", strerror(errno));
 #endif
 
-  handler = data_handler = new IOHandlerData(sd, connectable_addr.inet, default_handler);
+  handler = new IOHandlerData(sd, connectable_addr.inet, default_handler);
   if (addr.is_proxy())
     handler->set_proxy(addr.proxy);
-  if ((error = m_handler_map->insert_handler(data_handler)) != Error::OK)
+  if ((error = m_handler_map->insert_handler(handler)) != Error::OK)
     return error;
 
   while (::connect(sd, (struct sockaddr *)&connectable_addr.inet, sizeof(struct sockaddr_in))
@@ -499,13 +475,13 @@ Comm::connect_socket(int sd, const CommAddress &addr,
     }
     else if (errno == EINPROGRESS) {
       //HT_INFO("connect() in progress starting to poll");
-      return data_handler->start_polling(Reactor::READ_READY|Reactor::WRITE_READY);
+      return handler->start_polling(Reactor::READ_READY|Reactor::WRITE_READY);
     }
-    m_handler_map->remove_handler(connectable_addr, handler);
+    m_handler_map->remove_handler(handler);
     HT_ERRORF("connecting to %s: %s", connectable_addr.to_str().c_str(),
               strerror(errno));
     return Error::COMM_CONNECT_ERROR;
   }
 
-  return data_handler->start_polling(Reactor::READ_READY|Reactor::WRITE_READY);
+  return handler->start_polling(Reactor::READ_READY|Reactor::WRITE_READY);
 }

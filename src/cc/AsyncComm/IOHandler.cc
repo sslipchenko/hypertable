@@ -43,11 +43,11 @@ using namespace Hypertable;
 
 #define HANDLE_POLL_INTERFACE_MODIFY \
   if (ReactorFactory::use_poll) \
-    return m_reactor_ptr->modify_poll_interest(m_sd, poll_events(m_poll_interest));
+    return m_reactor->modify_poll_interest(m_sd, poll_events(m_poll_interest));
 
 #define HANDLE_POLL_INTERFACE_ADD \
   if (ReactorFactory::use_poll) \
-    return m_reactor_ptr->add_poll_interest(m_sd, poll_events(m_poll_interest), this);
+    return m_reactor->add_poll_interest(m_sd, poll_events(m_poll_interest), this);
 
 void IOHandler::display_event(struct pollfd *event) {
   char buf[128];
@@ -99,10 +99,10 @@ int IOHandler::add_poll_interest(int mode) {
     if (m_poll_interest & Reactor::WRITE_READY)
       event.events |= EPOLLOUT;
 
-    if (epoll_ctl(m_reactor_ptr->poll_fd, EPOLL_CTL_MOD, m_sd, &event) < 0) {
+    if (epoll_ctl(m_reactor->poll_fd, EPOLL_CTL_MOD, m_sd, &event) < 0) {
       /**
          HT_ERRORF("epoll_ctl(%d, EPOLL_CTL_MOD, sd=%d) (mode=%x) : %s",
-         m_reactor_ptr->poll_fd, m_sd, mode, strerror(errno));
+         m_reactor->poll_fd, m_sd, mode, strerror(errno));
          *((int *)0) = 1;
          **/
       return Error::COMM_POLL_ERROR;      
@@ -129,7 +129,7 @@ int IOHandler::remove_poll_interest(int mode) {
     if (m_poll_interest & Reactor::WRITE_READY)
       event.events |= EPOLLOUT;
 
-    if (epoll_ctl(m_reactor_ptr->poll_fd, EPOLL_CTL_MOD, m_sd, &event) < 0) {
+    if (epoll_ctl(m_reactor->poll_fd, EPOLL_CTL_MOD, m_sd, &event) < 0) {
       HT_ERRORF("epoll_ctl(EPOLL_CTL_MOD, sd=%d) (mode=%x) : %s",
                 m_sd, mode, strerror(errno));
       return Error::COMM_POLL_ERROR;
@@ -187,9 +187,9 @@ int IOHandler::add_poll_interest(int mode) {
     events |= POLLIN;
 
   if (events) {
-    if (port_associate(m_reactor_ptr->poll_fd, PORT_SOURCE_FD,
+    if (port_associate(m_reactor->poll_fd, PORT_SOURCE_FD,
 		       m_sd, events, this) < 0)
-      HT_ERRORF("port_associate(%d, POLLIN, %d) - %s", m_reactor_ptr->poll_fd, m_sd,
+      HT_ERRORF("port_associate(%d, POLLIN, %d) - %s", m_reactor->poll_fd, m_sd,
 		strerror(errno));
     return Error::COMM_POLL_ERROR;
   }
@@ -208,9 +208,9 @@ int IOHandler::remove_poll_interest(int mode) {
   if (m_poll_interest)
     reset_poll_interest();
   else {
-    if (port_dissociate(m_reactor_ptr->poll_fd, PORT_SOURCE_FD, m_sd) < 0) {
+    if (port_dissociate(m_reactor->poll_fd, PORT_SOURCE_FD, m_sd) < 0) {
       HT_ERRORF("port_dissociate(%d, PORT_SOURCE_FD, %d) - %s",
-		m_reactor_ptr->poll_fd, m_sd, strerror(errno));
+		m_reactor->poll_fd, m_sd, strerror(errno));
       return Error::COMM_POLL_ERROR;
     }
   }
@@ -270,7 +270,7 @@ int IOHandler::add_poll_interest(int mode) {
   }
   assert(count > 0);
 
-  if (kevent(m_reactor_ptr->kqd, events, count, 0, 0, 0) == -1) {
+  if (kevent(m_reactor->kqd, events, count, 0, 0, 0) == -1) {
     HT_ERRORF("kevent(sd=%d) (mode=%x) : %s", m_sd, mode, strerror(errno));
     return Error::COMM_POLL_ERROR;
   }
@@ -296,7 +296,7 @@ int IOHandler::remove_poll_interest(int mode) {
     count++;
   }
 
-  if (kevent(m_reactor_ptr->kqd, devents, count, 0, 0, 0) == -1
+  if (kevent(m_reactor->kqd, devents, count, 0, 0, 0) == -1
       && errno != ENOENT) {
     HT_ERRORF("kevent(sd=%d) (mode=%x) : %s", m_sd, mode, strerror(errno));
     return Error::COMM_POLL_ERROR;

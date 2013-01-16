@@ -40,6 +40,7 @@ extern "C" {
 #elif defined(__sun__)
 #include <port.h>
 #include <sys/port_impl.h>
+#include <unistd.h>
 #endif
 }
 
@@ -62,8 +63,9 @@ namespace Hypertable {
   public:
 
     IOHandler(int sd, const InetAddr &addr, DispatchHandlerPtr &dhp)
-      : m_free_flag(0), m_addr(addr), m_sd(sd), m_dispatch_handler_ptr(dhp) {
-      ReactorFactory::get_reactor(m_reactor_ptr);
+      : m_reference_count(0), m_free_flag(0), m_error(Error::OK), m_addr(addr),
+        m_sd(sd), m_dispatch_handler(dhp), m_decomissioned(false) {
+      ReactorFactory::get_reactor(m_reactor);
       m_poll_interest = 0;
       socklen_t namelen = sizeof(m_local_addr);
       getsockname(m_sd, (sockaddr *)&m_local_addr, &namelen);
@@ -86,32 +88,32 @@ namespace Hypertable {
     virtual ~IOHandler() {
       HT_EXPECT(m_free_flag != 0xdeadbeef, Error::FAILED_EXPECTATION);
       m_free_flag = 0xdeadbeef;
-      m_reactor_ptr->cancel_requests(this);
+      ::close(m_sd);
       return;
     }
 
     void deliver_event(Event *event) {
       memcpy(&event->local_addr, &m_local_addr, sizeof(m_local_addr));
-      if (!m_dispatch_handler_ptr) {
+      if (!m_dispatch_handler) {
         HT_INFOF("%s", event->to_str().c_str());
         delete event;
       }
       else {
         EventPtr event_ptr(event);
-        m_dispatch_handler_ptr->handle(event_ptr);
+        m_dispatch_handler->handle(event_ptr);
       }
     }
 
     void deliver_event(Event *event, DispatchHandler *dh) {
       memcpy(&event->local_addr, &m_local_addr, sizeof(m_local_addr));
       if (!dh) {
-        if (!m_dispatch_handler_ptr) {
+        if (!m_dispatch_handler) {
           HT_INFOF("%s", event->to_str().c_str());
           delete event;
         }
         else {
           EventPtr event_ptr(event);
-          m_dispatch_handler_ptr->handle(event_ptr);
+          m_dispatch_handler->handle(event_ptr);
         }
       }
       else {
@@ -123,7 +125,7 @@ namespace Hypertable {
     int start_polling(int mode=Reactor::READ_READY) {
       if (ReactorFactory::use_poll) {
 	m_poll_interest = mode;
-	return m_reactor_ptr->add_poll_interest(m_sd, poll_events(mode), this);
+	return m_reactor->add_poll_interest(m_sd, poll_events(mode), this);
       }
 #if defined(__APPLE__) || defined(__sun__) || defined(__FreeBSD__)
       return add_poll_interest(mode);
@@ -138,9 +140,9 @@ namespace Hypertable {
       if (ReactorFactory::ms_epollet)
         event.events |= POLLRDHUP | EPOLLET;
       m_poll_interest = mode;
-      if (epoll_ctl(m_reactor_ptr->poll_fd, EPOLL_CTL_ADD, m_sd, &event) < 0) {
+      if (epoll_ctl(m_reactor->poll_fd, EPOLL_CTL_ADD, m_sd, &event) < 0) {
         HT_ERRORF("epoll_ctl(%d, EPOLL_CTL_ADD, %d, %x) failed : %s",
-                  m_reactor_ptr->poll_fd, m_sd, event.events, strerror(errno));
+                  m_reactor->poll_fd, m_sd, event.events, strerror(errno));
         return Error::COMM_POLL_ERROR;
       }
 #endif
@@ -181,27 +183,14 @@ namespace Hypertable {
       return m_proxy;
     }
 
+    void set_dispatch_handler(DispatchHandler *dh) {
+      ScopedLock lock(m_mutex);
+      m_dispatch_handler = dh;
+    }
+
     int get_sd() { return m_sd; }
 
-    void get_reactor(ReactorPtr &reactor_ptr) { reactor_ptr = m_reactor_ptr; }
-
-    void shutdown() {
-      ExpireTimer timer;
-      m_reactor_ptr->schedule_removal(this);
-      boost::xtime_get(&timer.expire_time, boost::TIME_UTC_);
-      timer.expire_time.nsec += 200000000LL;
-      timer.handler = 0;
-      m_reactor_ptr->add_timer(timer);
-    }
-
-    void shutdown_with_callback(int error) {
-      ExpireTimer timer;
-      m_reactor_ptr->schedule_removal(this, error);
-      boost::xtime_get(&timer.expire_time, boost::TIME_UTC_);
-      timer.expire_time.nsec += 200000000LL;
-      timer.handler = 0;
-      m_reactor_ptr->add_timer(timer);
-    }
+    void get_reactor(ReactorPtr &reactor) { reactor = m_reactor; }
 
     void display_event(struct pollfd *event);
 
@@ -213,7 +202,58 @@ namespace Hypertable {
     void display_event(port_event_t *event);
 #endif
 
+    void lock() {
+      m_mutex.lock();
+    }
+
+    void unlock() {
+      m_mutex.unlock();
+    }
+
+    friend class HandlerMap;
+
   protected:
+
+    void increment_reference_count() {
+      m_reference_count++;
+    }
+
+    void decrement_reference_count() {
+      HT_ASSERT(m_reference_count > 0);
+      m_reference_count--;
+      if (m_reference_count == 0 && m_decomissioned) {
+        ExpireTimer timer;
+        m_reactor->schedule_removal(this);
+        boost::xtime_get(&timer.expire_time, boost::TIME_UTC_);
+        timer.expire_time.nsec += 200000000LL;
+        timer.handler = 0;
+        m_reactor->add_timer(timer);
+      }
+    }
+
+    size_t reference_count() const {
+      return m_reference_count;
+    }
+
+    void decomission() {
+      if (!m_decomissioned) {
+        m_decomissioned = true;
+        if (m_reference_count == 0) {
+          ExpireTimer timer;
+          m_reactor->schedule_removal(this);
+          boost::xtime_get(&timer.expire_time, boost::TIME_UTC_);
+          timer.expire_time.nsec += 200000000LL;
+          timer.handler = 0;
+          m_reactor->add_timer(timer);
+        }
+      }
+    }
+
+    bool is_decomissioned() {
+      return m_decomissioned;
+    }
+
+    virtual void disconnect() { }
 
     short poll_events(int mode) {
       short events = 0;
@@ -227,16 +267,16 @@ namespace Hypertable {
     void stop_polling() {
       if (ReactorFactory::use_poll) {
 	m_poll_interest = 0;
-	m_reactor_ptr->modify_poll_interest(m_sd, 0);
+	m_reactor->modify_poll_interest(m_sd, 0);
 	return;
       }
 #if defined(__APPLE__) || defined(__sun__) || defined(__FreeBSD__)
       remove_poll_interest(Reactor::READ_READY|Reactor::WRITE_READY);
 #elif defined(__linux__)
       struct epoll_event event;  // this is necessary for < Linux 2.6.9
-      if (epoll_ctl(m_reactor_ptr->poll_fd, EPOLL_CTL_DEL, m_sd, &event) < 0) {
+      if (epoll_ctl(m_reactor->poll_fd, EPOLL_CTL_DEL, m_sd, &event) < 0) {
         HT_ERRORF("epoll_ctl(%d, EPOLL_CTL_DEL, %d) failed : %s",
-                     m_reactor_ptr->poll_fd, m_sd, strerror(errno));
+                     m_reactor->poll_fd, m_sd, strerror(errno));
         exit(1);
       }
       m_poll_interest = 0;
@@ -244,15 +284,18 @@ namespace Hypertable {
     }
 
     Mutex               m_mutex;
+    size_t              m_reference_count;
     uint32_t            m_free_flag;
+    int32_t             m_error;
     String              m_proxy;
     InetAddr            m_addr;
     InetAddr            m_local_addr;
     InetAddr            m_alias;
     int                 m_sd;
-    DispatchHandlerPtr  m_dispatch_handler_ptr;
-    ReactorPtr          m_reactor_ptr;
+    DispatchHandlerPtr  m_dispatch_handler;
+    ReactorPtr          m_reactor;
     int                 m_poll_interest;
+    bool                m_decomissioned;
   };
   typedef boost::intrusive_ptr<IOHandler> IOHandlerPtr;
 

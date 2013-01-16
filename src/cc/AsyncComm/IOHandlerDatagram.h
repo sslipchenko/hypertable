@@ -50,6 +50,7 @@ namespace Hypertable {
 
     virtual ~IOHandlerDatagram() { delete [] m_message; }
 
+    int send_message_unlocked(const InetAddr &addr, CommBufPtr &cbp);
     int send_message(const InetAddr &addr, CommBufPtr &cbp);
 
     int flush_send_queue();
