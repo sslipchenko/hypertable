@@ -29,21 +29,23 @@ int32_t HandlerMap::insert_handler(IOHandlerAccept *handler) {
   ScopedLock lock(m_mutex);
   HT_ASSERT(m_accept_handler_map.find(handler->get_address()) 
             == m_accept_handler_map.end());
-  m_accept_handler_map[handler->get_address()] = handler;
+  m_accept_handler_map[handler->get_local_address()] = handler;
   return Error::OK;
 }
 
 int32_t HandlerMap::insert_handler(IOHandlerData *handler) {
   ScopedLock lock(m_mutex);
+  int error = Error::OK;
   HT_ASSERT(m_data_handler_map.find(handler->get_address()) 
             == m_data_handler_map.end());
   m_data_handler_map[handler->get_address()] = handler;
   if (ReactorFactory::proxy_master) {
     CommBufPtr comm_buf = m_proxy_map.create_update_message();
     comm_buf->write_header_and_reset();
-    return handler->send_message(comm_buf);
+    if ((error = handler->send_message(comm_buf)) != Error::OK)
+      m_data_handler_map.erase(handler->get_address());
   }
-  return Error::OK;
+  return error;
 }
 
 int32_t HandlerMap::insert_handler(IOHandlerDatagram *handler) {
@@ -58,14 +60,11 @@ int32_t HandlerMap::insert_handler(IOHandlerDatagram *handler) {
 int HandlerMap::checkout_handler(const CommAddress &addr,
                                  IOHandlerAccept **handler) {
   ScopedLock lock(m_mutex);
-  InetAddr inet_addr;
-  int error;
 
-  if ((error = translate_address(addr, &inet_addr)) != Error::OK)
-    return error;
-
-  if ((*handler = lookup_accept_handler(inet_addr)) == 0)
+  if ((*handler = lookup_accept_handler(addr.inet)) == 0)
     return Error::COMM_NOT_CONNECTED;
+
+  HT_ASSERT(!(*handler)->is_decomissioned());
 
   (*handler)->increment_reference_count();
 
@@ -85,6 +84,8 @@ int HandlerMap::checkout_handler(const CommAddress &addr,
   if ((*handler = lookup_data_handler(inet_addr)) == 0)
     return Error::COMM_NOT_CONNECTED;
 
+  HT_ASSERT(!(*handler)->is_decomissioned());
+
   (*handler)->increment_reference_count();
 
   return Error::OK;
@@ -93,14 +94,11 @@ int HandlerMap::checkout_handler(const CommAddress &addr,
 int HandlerMap::checkout_handler(const CommAddress &addr,
                                  IOHandlerDatagram **handler) {
   ScopedLock lock(m_mutex);
-  InetAddr inet_addr;
-  int error;
 
-  if ((error = translate_address(addr, &inet_addr)) != Error::OK)
-    return error;
-
-  if ((*handler = lookup_datagram_handler(inet_addr)) == 0)
+  if ((*handler = lookup_datagram_handler(addr.inet)) == 0)
     return Error::COMM_NOT_CONNECTED;
+
+  HT_ASSERT(!(*handler)->is_decomissioned());
 
   (*handler)->increment_reference_count();
 
@@ -148,28 +146,27 @@ int HandlerMap::set_alias(const InetAddr &addr, const InetAddr &alias) {
   return Error::OK;
 }
 
-
-
 int HandlerMap::remove_handler_unlocked(IOHandler *handler) {
   SockAddrMap<IOHandlerAccept *>::iterator aiter;
   SockAddrMap<IOHandlerData *>::iterator diter;
   SockAddrMap<IOHandlerDatagram *>::iterator dgiter;
-  InetAddr inet_addr;
+  InetAddr local_addr = handler->get_local_address();
+  InetAddr remote_addr;
   int error;
 
-  if ((error = translate_address(handler->get_address(), &inet_addr)) != Error::OK)
+  if ((error = translate_address(handler->get_address(), &remote_addr)) != Error::OK)
     return error;
 
-  if ((diter = m_data_handler_map.find(inet_addr)) != m_data_handler_map.end()) {
+  if ((diter = m_data_handler_map.find(remote_addr)) != m_data_handler_map.end()) {
     HT_ASSERT(handler == diter->second);
     m_data_handler_map.erase(diter);
   }
-  else if ((dgiter = m_datagram_handler_map.find(inet_addr))
+  else if ((dgiter = m_datagram_handler_map.find(local_addr))
            != m_datagram_handler_map.end()) {
     HT_ASSERT(handler == dgiter->second);
     m_datagram_handler_map.erase(dgiter);
   }
-  else if ((aiter = m_accept_handler_map.find(inet_addr))
+  else if ((aiter = m_accept_handler_map.find(local_addr))
            != m_accept_handler_map.end()) {
     HT_ASSERT(handler == aiter->second);
     m_accept_handler_map.erase(aiter);
@@ -221,9 +218,11 @@ void HandlerMap::decomission_all() {
   m_accept_handler_map.clear();
 }
 
-bool HandlerMap::is_decomissioned(IOHandler *handler) {
+bool HandlerMap::destroy_ok(IOHandler *handler) {
   ScopedLock lock(m_mutex);
-  return m_decomissioned_handlers.count(handler) > 0;
+  bool is_decomissioned = m_decomissioned_handlers.count(handler) > 0;
+  HT_ASSERT(!is_decomissioned || handler->is_decomissioned());
+  return is_decomissioned && handler->reference_count() == 0;
 }
 
 bool HandlerMap::translate_proxy_address(const CommAddress &proxy_addr, CommAddress &addr) {
@@ -245,6 +244,7 @@ void HandlerMap::wait_for_empty() {
 void HandlerMap::purge_handler(IOHandler *handler) {
   ScopedLock lock(m_mutex);
   HT_ASSERT(m_decomissioned_handlers.count(handler) > 0);
+  HT_ASSERT(handler->reference_count() == 0);
   m_decomissioned_handlers.erase(handler);
   handler->disconnect();
   delete handler;

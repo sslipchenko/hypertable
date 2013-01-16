@@ -79,7 +79,7 @@ namespace Hypertable {
 
     void decomission_all();
 
-    bool is_decomissioned(IOHandler *handler);
+    bool destroy_ok(IOHandler *handler);
 
     bool translate_proxy_address(const CommAddress &proxy_addr, CommAddress &addr);
 

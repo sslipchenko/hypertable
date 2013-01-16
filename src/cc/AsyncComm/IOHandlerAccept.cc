@@ -90,7 +90,7 @@ bool IOHandlerAccept::handle_incoming_connection() {
   struct sockaddr_in addr;
   socklen_t addr_len = sizeof(sockaddr_in);
   int one = 1;
-  IOHandlerData *data_handler;
+  IOHandlerData *handler;
 
   while (true) {
 
@@ -129,17 +129,16 @@ bool IOHandlerAccept::handle_incoming_connection() {
     DispatchHandlerPtr dhp;
     m_handler_factory->get_instance(dhp);
 
-    data_handler = new IOHandlerData(sd, addr, dhp, true);
+    handler = new IOHandlerData(sd, addr, dhp, true);
 
-    IOHandlerPtr handler(data_handler);
-    int32_t error = m_handler_map->insert_handler(data_handler);
+    int32_t error = m_handler_map->insert_handler(handler);
     if (error != Error::OK) {
       HT_ERRORF("Problem registering accepted connection in handler map - %s",
                 Error::get_text(error));
-      ::close(sd);
+      delete handler;
       return true;
     }
-    data_handler->start_polling(Reactor::READ_READY|Reactor::WRITE_READY);
+    handler->start_polling(Reactor::READ_READY|Reactor::WRITE_READY);
 
     deliver_event(new Event(Event::CONNECTION_ESTABLISHED, addr, Error::OK));
   }

@@ -72,6 +72,16 @@ namespace Hypertable {
       memset(&m_alias, 0, sizeof(m_alias));
     }
 
+    IOHandler(int sd, DispatchHandlerPtr &dhp)
+      : m_reference_count(0), m_free_flag(0), m_error(Error::OK),
+        m_sd(sd), m_dispatch_handler(dhp), m_decomissioned(false) {
+      ReactorFactory::get_reactor(m_reactor);
+      m_poll_interest = 0;
+      socklen_t namelen = sizeof(m_local_addr);
+      getsockname(m_sd, (sockaddr *)&m_local_addr, &namelen);
+      memset(&m_alias, 0, sizeof(m_alias));
+    }
+
     // define default poll() interface for everyone since it is chosen at runtime
     virtual bool handle_event(struct pollfd *event, time_t arival_time=0) = 0;
 

@@ -298,7 +298,7 @@ ReactorRunner::cleanup_and_remove_handlers(std::set<IOHandler *> &handlers) {
 
     HT_ASSERT(handler);
 
-    if (!handler_map->is_decomissioned(handler))
+    if (!handler_map->destroy_ok(handler))
       continue;
 
     m_reactor_ptr->cancel_requests(handler);

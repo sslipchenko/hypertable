@@ -220,12 +220,13 @@ Comm::listen(const CommAddress &addr, ConnectionHandlerFactoryPtr &chf,
   if (::listen(sd, 1000) < 0)
     HT_THROWF(Error::COMM_LISTEN_ERROR, "listening: %s", strerror(errno));
 
-  handler = new IOHandlerAccept(sd, addr.inet, default_handler,
-                                                 m_handler_map, chf);
+  handler = new IOHandlerAccept(sd, default_handler, m_handler_map, chf);
   int32_t error = m_handler_map->insert_handler(handler);
-  if (error != Error::OK)
+  if (error != Error::OK) {
+    delete handler;
     HT_THROWF(error, "Error inserting accept handler for %s into handler map",
               addr.to_str().c_str());
+  }
   handler->start_polling();
 }
 
@@ -349,14 +350,16 @@ Comm::create_datagram_receive_socket(CommAddress &addr, int tos,
     bind_attempts++;
   }
 
-  handler = new IOHandlerDatagram(sd, addr.inet, dhp);
+  handler = new IOHandlerDatagram(sd, dhp);
 
   addr.set_inet( handler->get_local_address() );
 
   int32_t error = m_handler_map->insert_handler(handler);
-  if (error != Error::OK)
+  if (error != Error::OK) {
+    delete handler;
     HT_THROWF(error, "Error inserting datagram handler for %s into handler map",
               addr.to_str().c_str());
+  }
   handler->start_polling();
 }
 
@@ -413,10 +416,9 @@ void Comm::cancel_timer(DispatchHandler *handler) {
 
 int Comm::close_socket(const CommAddress &addr) {
   IOHandler *handler;
-  int error;
 
-  if (m_handler_map->checkout_handler(addr, (IOHandlerData **)&handler) != Error::OK ||
-      m_handler_map->checkout_handler(addr, (IOHandlerDatagram **)&handler) != Error::OK ||
+  if (m_handler_map->checkout_handler(addr, (IOHandlerData **)&handler) != Error::OK &&
+      m_handler_map->checkout_handler(addr, (IOHandlerDatagram **)&handler) != Error::OK &&
       m_handler_map->checkout_handler(addr, (IOHandlerAccept **)&handler) != Error::OK)
     return Error::OK;
 
@@ -464,8 +466,10 @@ Comm::connect_socket(int sd, const CommAddress &addr,
   handler = new IOHandlerData(sd, connectable_addr.inet, default_handler);
   if (addr.is_proxy())
     handler->set_proxy(addr.proxy);
-  if ((error = m_handler_map->insert_handler(handler)) != Error::OK)
+  if ((error = m_handler_map->insert_handler(handler)) != Error::OK) {
+    delete handler;
     return error;
+  }
 
   while (::connect(sd, (struct sockaddr *)&connectable_addr.inet, sizeof(struct sockaddr_in))
           < 0) {
@@ -478,6 +482,7 @@ Comm::connect_socket(int sd, const CommAddress &addr,
       return handler->start_polling(Reactor::READ_READY|Reactor::WRITE_READY);
     }
     m_handler_map->remove_handler(handler);
+    delete handler;
     HT_ERRORF("connecting to %s: %s", connectable_addr.to_str().c_str(),
               strerror(errno));
     return Error::COMM_CONNECT_ERROR;
