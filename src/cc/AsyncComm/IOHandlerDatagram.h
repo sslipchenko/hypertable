@@ -43,8 +43,7 @@ namespace Hypertable {
 
   public:
 
-    IOHandlerDatagram(int sd, const InetAddr &addr, DispatchHandlerPtr &dhp)
-      : IOHandler(sd, addr, dhp), m_send_queue() {
+    IOHandlerDatagram(int sd, DispatchHandlerPtr &dhp) : IOHandler(sd, dhp) {
       m_message = new uint8_t [65536];
     }
 
