@@ -111,10 +111,8 @@ void ReactorRunner::operator()() {
 	    got_arrival_time = true;
 	  }
 	  if (handlers[i]) {
-	    if (handlers[i]->handle_event(&pollfds[i], arrival_time)) {
-              if (handler_map->reference_count(handlers[i]) == 0)
-                removed_handlers.insert(handlers[i]);
-            }
+	    if (handlers[i]->handle_event(&pollfds[i], arrival_time))
+              removed_handlers.insert(handlers[i]);
 	  }
 	}
       }
@@ -163,8 +161,7 @@ void ReactorRunner::operator()() {
           got_arrival_time = true;
         }
         if (handler && handler->handle_event(&events[i], arrival_time))
-          if (handler_map->reference_count(handler) == 0)
-            removed_handlers.insert(handler);
+          removed_handlers.insert(handler);
       }
     }
     if (!removed_handlers.empty())
@@ -219,12 +216,12 @@ void ReactorRunner::operator()() {
 	  arrival_time = time(0);
           got_arrival_time = true;
         }
-        if (handler && handler->handle_event(&events[i], arrival_time)) {
-          if (handler_map->reference_count(handler) == 0)          
+        if (handler) {
+          if (handler->handle_event(&events[i], arrival_time))
             removed_handlers.insert(handler);
+          else if (removed_handlers.count(handler) == 0)
+            handler->reset_poll_interest();
         }
-	else if (handler && removed_handlers.count(handler) == 0)
-	  handler->reset_poll_interest();
       }
     }
     if (!removed_handlers.empty())
@@ -268,10 +265,8 @@ void ReactorRunner::operator()() {
 	  arrival_time = time(0);
           got_arrival_time = true;
         }
-        if (handler && handler->handle_event(&events[i], arrival_time)) {
-          if (handler_map->reference_count(handler) == 0)
-            removed_handlers.insert(handler);
-        }
+        if (handler && handler->handle_event(&events[i], arrival_time))
+          removed_handlers.insert(handler);
       }
     }
     if (!removed_handlers.empty())

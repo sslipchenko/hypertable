@@ -110,11 +110,6 @@ void HandlerMap::decrement_reference_count(IOHandler *handler) {
   handler->decrement_reference_count();
 }
 
-size_t HandlerMap::reference_count(IOHandler *handler) {
-  ScopedLock lock(m_mutex);
-  return handler->reference_count();
-}
-
 int HandlerMap::contains_data_handler(const CommAddress &addr) {
   ScopedLock lock(m_mutex);
   IOHandlerData *handler;
