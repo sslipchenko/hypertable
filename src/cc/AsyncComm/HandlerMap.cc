@@ -22,6 +22,7 @@
 
 #include "IOHandlerAccept.h"
 #include "HandlerMap.h"
+#include "ReactorFactory.h"
 
 using namespace Hypertable;
 
@@ -36,7 +37,7 @@ int32_t HandlerMap::insert_handler(IOHandlerAccept *handler) {
 int32_t HandlerMap::insert_handler(IOHandlerData *handler) {
   ScopedLock lock(m_mutex);
   int error = Error::OK;
-  HT_ASSERT(m_data_handler_map.find(handler->get_address()) 
+  HT_ASSERT(m_data_handler_map.find(handler->get_address())
             == m_data_handler_map.end());
   m_data_handler_map[handler->get_address()] = handler;
   if (ReactorFactory::proxy_master) {
@@ -151,10 +152,15 @@ int HandlerMap::remove_handler_unlocked(IOHandler *handler) {
 
   if ((error = translate_address(handler->get_address(), &remote_addr)) != Error::OK)
     return error;
-
   if ((diter = m_data_handler_map.find(remote_addr)) != m_data_handler_map.end()) {
     HT_ASSERT(handler == diter->second);
     m_data_handler_map.erase(diter);
+    // Remove alias
+    handler->get_alias(&remote_addr);
+    if ((diter = m_data_handler_map.find(remote_addr)) != m_data_handler_map.end()) {
+      HT_ASSERT(handler == diter->second);
+      m_data_handler_map.erase(diter);
+    }
   }
   else if ((dgiter = m_datagram_handler_map.find(local_addr))
            != m_datagram_handler_map.end()) {
