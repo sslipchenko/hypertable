@@ -207,7 +207,7 @@ Comm::listen(const CommAddress &addr, ConnectionHandlerFactoryPtr &chf,
 
   int bind_attempts = 0;
   while ((bind(sd, (const sockaddr *)&addr.inet, sizeof(sockaddr_in))) < 0) {
-    if (bind_attempts == 6)
+    if (bind_attempts == 24)
       HT_THROWF(Error::COMM_BIND_ERROR, "binding to %s: %s",
                 addr.to_str().c_str(), strerror(errno));
     HT_INFOF("Unable to bind to %s: %s, will retry in 10 seconds...",
@@ -338,7 +338,7 @@ Comm::create_datagram_receive_socket(CommAddress &addr, int tos,
 
   int bind_attempts = 0;
   while ((bind(sd, (const sockaddr *)&addr.inet, sizeof(sockaddr_in))) < 0) {
-    if (bind_attempts == 6)
+    if (bind_attempts == 24)
       HT_THROWF(Error::COMM_BIND_ERROR, "binding to %s: %s",
 		addr.to_str().c_str(), strerror(errno));
     HT_INFOF("Unable to bind to %s: %s, will retry in 10 seconds...",
