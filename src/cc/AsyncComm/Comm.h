@@ -54,20 +54,47 @@ namespace Hypertable {
     static void destroy();
 
     /**
-     * Establishes a TCP connection to the address given by the addr argument
-     * and associates with it a default dispatch handler.
-     * CONNECTION_ESTABLISHED and DISCONNECT events are delivered to the
-     * default dispatch handler.  The argument addr is used to subsequently
-     * refer to the connection.
+     * Establishes a TCP connection and attaches a default event handler.
+     * This method establishes a TCP connection to <code>addr</code>
+     * and associates it with <code>default_handler</code> as the default
+     * event handler for the connection.  The two types of events that
+     * are delivered via the handler are CONNECTION_ESTABLISHED and DISCONNECT.
+     * No ERROR events will be deliverd via the handler because any errors that
+     * occur on the connection will result in the connection being closed,
+     * resulting in a DISCONNECT event only.  The returned error code can be
+     * inspected to determine if the handler was installed and may be
+     * subsequently called back.  The following return codes indicate that
+     * the handler was installed:
+     * <ul>
+     * <li><code>Error::COMM_BROKEN_CONNECTION</code></li>
+     * <li><code>Error::OK</code></li>
+     * </ul>
+     * The default event handler will be associated with the connection until
+     * either a) a DISCONNECT message has been delivered to the handler, or b)
+     * close_socket has been called with <code>addr</code>.  A return value
+     * of <code>Error::COMM_BROKEN_CONNECTION</code> indicates that the
+     * connection was broken before it was completely set up and a
+     * DISCONNECT event will be promptly delivered via the default event
+     * handler.  The following return codes indicate that the default event
+     * handler was <b>not</b> associated with a connection and the caller
+     * can assume that the call had no effect:
+     * <ul>
+     * <li><code>Error::COMM_ALREADY_CONNECTED</code></li>
+     * <li><code>Error::COMM_INVALID_PROXY</code></li>
+     * <li><code>Error::COMM_SOCKET_ERROR</code></li>
+     * <li><code>Error::COMM_BIND_ERROR</code></li>
+     * <li><code>Error::COMM_CONNECT_ERROR</code></li>
+     * <li><code>Error::COMM_POLL_ERROR</code></li>
+     * </ul>
      *
      * @param addr address to connect to
-     * @param default_handler smart pointer to default dispatch handler
-     * @return Error::OK on success or error code on failure
+     * @param default_handler smart pointer to default event handler
+     * @return Error::OK on success or error code on failure (see description)
      */
-    int connect(const CommAddress &addr,
-                DispatchHandlerPtr &default_handler);
+    int connect(const CommAddress &addr, DispatchHandlerPtr &default_handler);
 
     /**
+     * Establishes a locally bound TCP connection and attaches a default event handler.
      * Establishes a TCP connection to the address given by the addr argument,
      * binding the local side of the connection to the address given by the
      * local_addr argument.  A default dispatch handler is associated with the
@@ -271,10 +298,9 @@ namespace Hypertable {
      * demultiplexer (e.g epoll).  It also causes all outstanding requests on
      * the connection to get purged.
      *
-     * @param addr address of socket connection to close
      * @return Error::OK on success or error code on failure
      */
-    int close_socket(const CommAddress &addr);
+    void close_socket(const CommAddress &addr);
 
   private:
     Comm();     // prevent non-singleton usage

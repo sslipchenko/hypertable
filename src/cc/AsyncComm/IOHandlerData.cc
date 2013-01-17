@@ -652,7 +652,7 @@ bool IOHandlerData::handle_write_readiness() {
     }
 
     //HT_INFO("about to flush send queue");
-    if (flush_send_queue() != Error::OK) {
+    if ((m_error = flush_send_queue()) != Error::OK) {
       HT_DEBUG("error flushing send queue");
       return true;
     }

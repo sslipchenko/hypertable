@@ -210,7 +210,7 @@ ConnectionManager::send_connect_request(ConnectionState *conn_state) {
     conn_state->connected = true;
     conn_state->cond.notify_all();
   }
-  else if (error != Error::OK) {
+  else if (error != Error::OK && error != Error::COMM_BROKEN_CONNECTION) {
     if (conn_state->service_name != "") {
       HT_INFOF("Connection attempt to %s at %s failed - %s.  Will retry "
                "again in %d milliseconds...", conn_state->service_name.c_str(),
@@ -295,7 +295,7 @@ int ConnectionManager::remove(const CommAddress &addr) {
   }
 
   if (do_close)
-    error = m_impl->comm->close_socket(addr);
+    m_impl->comm->close_socket(addr);
 
   return error;
 }
@@ -357,6 +357,7 @@ ConnectionManager::handle(EventPtr &event) {
     }
     else if (event->type == Event::ERROR ||
              event->type == Event::DISCONNECT) {
+      HT_INFOF("Received event %s", event->to_str().c_str());
       set_retry_state(conn_state, event);
     }
     else if (event->type == Event::MESSAGE) {

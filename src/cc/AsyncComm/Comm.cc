@@ -414,19 +414,17 @@ void Comm::cancel_timer(DispatchHandler *handler) {
 }
 
 
-int Comm::close_socket(const CommAddress &addr) {
+void Comm::close_socket(const CommAddress &addr) {
   IOHandler *handler;
 
   if (m_handler_map->checkout_handler(addr, (IOHandlerData **)&handler) != Error::OK &&
       m_handler_map->checkout_handler(addr, (IOHandlerDatagram **)&handler) != Error::OK &&
       m_handler_map->checkout_handler(addr, (IOHandlerAccept **)&handler) != Error::OK)
-    return Error::OK;
+    return;
 
   HT_ON_OBJ_SCOPE_EXIT(*m_handler_map.get(), &HandlerMap::decrement_reference_count, handler);
 
   m_handler_map->decomission_handler(handler);
-
-  return Error::OK;
 }
 
 
@@ -466,10 +464,8 @@ Comm::connect_socket(int sd, const CommAddress &addr,
   handler = new IOHandlerData(sd, connectable_addr.inet, default_handler);
   if (addr.is_proxy())
     handler->set_proxy(addr.proxy);
-  if ((error = m_handler_map->insert_handler(handler)) != Error::OK) {
-    delete handler;
+  if ((error = m_handler_map->insert_handler(handler)) != Error::OK)
     return error;
-  }
 
   while (::connect(sd, (struct sockaddr *)&connectable_addr.inet, sizeof(struct sockaddr_in))
           < 0) {
@@ -479,7 +475,14 @@ Comm::connect_socket(int sd, const CommAddress &addr,
     }
     else if (errno == EINPROGRESS) {
       //HT_INFO("connect() in progress starting to poll");
-      return handler->start_polling(Reactor::READ_READY|Reactor::WRITE_READY);
+      error = handler->start_polling(Reactor::READ_READY|Reactor::WRITE_READY);
+      if (error == Error::COMM_POLL_ERROR) {
+        HT_ERRORF("Polling problem on connection to %s: %s",
+                  connectable_addr.to_str().c_str(), strerror(errno));
+        m_handler_map->remove_handler(handler);
+        delete handler;
+      }
+      return error;
     }
     m_handler_map->remove_handler(handler);
     delete handler;
@@ -488,5 +491,12 @@ Comm::connect_socket(int sd, const CommAddress &addr,
     return Error::COMM_CONNECT_ERROR;
   }
 
-  return handler->start_polling(Reactor::READ_READY|Reactor::WRITE_READY);
+  error = handler->start_polling(Reactor::READ_READY|Reactor::WRITE_READY);
+  if (error == Error::COMM_POLL_ERROR) {
+    HT_ERRORF("Polling problem on connection to %s: %s",
+              connectable_addr.to_str().c_str(), strerror(errno));
+    m_handler_map->remove_handler(handler);
+    delete handler;
+  }
+  return error;
 }

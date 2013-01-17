@@ -132,32 +132,7 @@ namespace Hypertable {
       }
     }
 
-    int start_polling(int mode=Reactor::READ_READY) {
-      if (ReactorFactory::use_poll) {
-	m_poll_interest = mode;
-	return m_reactor->add_poll_interest(m_sd, poll_events(mode), this);
-      }
-#if defined(__APPLE__) || defined(__sun__) || defined(__FreeBSD__)
-      return add_poll_interest(mode);
-#elif defined(__linux__)
-      struct epoll_event event;
-      memset(&event, 0, sizeof(struct epoll_event));
-      event.data.ptr = this;
-      if (mode & Reactor::READ_READY)
-        event.events |= EPOLLIN;
-      if (mode & Reactor::WRITE_READY)
-        event.events |= EPOLLOUT;
-      if (ReactorFactory::ms_epollet)
-        event.events |= POLLRDHUP | EPOLLET;
-      m_poll_interest = mode;
-      if (epoll_ctl(m_reactor->poll_fd, EPOLL_CTL_ADD, m_sd, &event) < 0) {
-        HT_ERRORF("epoll_ctl(%d, EPOLL_CTL_ADD, %d, %x) failed : %s",
-                  m_reactor->poll_fd, m_sd, event.events, strerror(errno));
-        return Error::COMM_POLL_ERROR;
-      }
-#endif
-      return Error::OK;
-    }
+    int start_polling(int mode=Reactor::READ_READY);
 
     int add_poll_interest(int mode);
 

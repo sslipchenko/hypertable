@@ -48,6 +48,7 @@ extern "C" {
 #include "IOHandlerData.h"
 #include "Reactor.h"
 #include "ReactorFactory.h"
+#include "ReactorRunner.h"
 
 using namespace Hypertable;
 using namespace std;
@@ -127,7 +128,7 @@ Reactor::Reactor() : mutex(), m_interrupt_in_progress(false) {
     }
     polldata[m_interrupt_sd].pollfd.fd = m_interrupt_sd;
     polldata[m_interrupt_sd].pollfd.events = POLLIN;
-    poll_loop_interrupt();
+    HT_ASSERT(poll_loop_interrupt() == Error::OK);
   }
   else {
 #if defined(__linux__)

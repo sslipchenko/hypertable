@@ -43,7 +43,7 @@ int32_t HandlerMap::insert_handler(IOHandlerData *handler) {
     CommBufPtr comm_buf = m_proxy_map.create_update_message();
     comm_buf->write_header_and_reset();
     if ((error = handler->send_message(comm_buf)) != Error::OK)
-      m_data_handler_map.erase(handler->get_address());
+      error = Error::COMM_BROKEN_CONNECTION;
   }
   return error;
 }
@@ -178,7 +178,10 @@ int HandlerMap::remove_handler(IOHandler *handler) {
 
 void HandlerMap::decomission_handler(IOHandler *handler) {
   ScopedLock lock(m_mutex);
-  HT_ASSERT(remove_handler_unlocked(handler) == Error::OK);
+  if (remove_handler_unlocked(handler) != Error::OK) {
+    HT_ASSERT(m_decomissioned_handlers.count(handler) > 0);
+    return;
+  }
   m_decomissioned_handlers.insert(handler);
   handler->decomission();
 }
