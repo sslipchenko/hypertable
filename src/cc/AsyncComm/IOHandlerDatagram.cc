@@ -318,7 +318,8 @@ int IOHandlerDatagram::handle_write_readiness() {
 
 
 
-int IOHandlerDatagram::send_message_unlocked(const InetAddr &addr, CommBufPtr &cbp) {
+int IOHandlerDatagram::send_message(const InetAddr &addr, CommBufPtr &cbp) {
+  ScopedLock lock(m_mutex);
   int error;
   bool initially_empty = m_send_queue.empty() ? true : false;
 
@@ -342,12 +343,6 @@ int IOHandlerDatagram::send_message_unlocked(const InetAddr &addr, CommBufPtr &c
   }
 
   return Error::OK;
-}
-
-
-int IOHandlerDatagram::send_message(const InetAddr &addr, CommBufPtr &cbp) {
-  ScopedLock lock(m_mutex);
-  return send_message_unlocked(addr, cbp);
 }
 
 

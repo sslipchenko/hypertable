@@ -152,7 +152,6 @@ Comm::connect(const CommAddress &addr, const CommAddress &local_addr,
 
 
 int Comm::set_alias(const InetAddr &addr, const InetAddr &alias) {
-  ScopedLock lock(ms_mutex);
   return m_handler_map->set_alias(addr, alias);
 }
 
@@ -235,7 +234,6 @@ Comm::listen(const CommAddress &addr, ConnectionHandlerFactoryPtr &chf,
 int
 Comm::send_request(const CommAddress &addr, uint32_t timeout_ms,
                    CommBufPtr &cbuf, DispatchHandler *resp_handler) {
-  ScopedLock lock(ms_mutex);
   IOHandlerData *data_handler;
   int error;
 
@@ -277,7 +275,6 @@ int Comm::send_request(IOHandlerData *data_handler, uint32_t timeout_ms,
 
 
 int Comm::send_response(const CommAddress &addr, CommBufPtr &cbuf) {
-  ScopedLock lock(ms_mutex);
   IOHandlerData *data_handler;
   int error;
 
@@ -367,7 +364,6 @@ Comm::create_datagram_receive_socket(CommAddress &addr, int tos,
 int
 Comm::send_datagram(const CommAddress &addr, const CommAddress &send_addr,
                     CommBufPtr &cbuf) {
-  ScopedLock lock(ms_mutex);
   IOHandlerDatagram *handler;
   int error;
 

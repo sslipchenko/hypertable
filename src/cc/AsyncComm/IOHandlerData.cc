@@ -673,8 +673,9 @@ bool IOHandlerData::handle_write_readiness() {
 
 
 int
-IOHandlerData::send_message_unlocked(CommBufPtr &cbp, uint32_t timeout_ms,
+IOHandlerData::send_message(CommBufPtr &cbp, uint32_t timeout_ms,
                             DispatchHandler *disp_handler) {
+  ScopedLock lock(m_mutex);
   bool initially_empty = m_send_queue.empty() ? true : false;
 
   if (m_decomissioned)
@@ -710,13 +711,6 @@ IOHandlerData::send_message_unlocked(CommBufPtr &cbp, uint32_t timeout_ms,
   }
 
   return m_error;
-}
-
-int
-IOHandlerData::send_message(CommBufPtr &cbp, uint32_t timeout_ms,
-                            DispatchHandler *disp_handler) {
-  ScopedLock lock(m_mutex);
-  return send_message_unlocked(cbp, timeout_ms, disp_handler);
 }
 
 

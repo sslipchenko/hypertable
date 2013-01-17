@@ -246,14 +246,16 @@ void HandlerMap::wait_for_empty() {
 }
 
 void HandlerMap::purge_handler(IOHandler *handler) {
-  ScopedLock lock(m_mutex);
-  HT_ASSERT(m_decomissioned_handlers.count(handler) > 0);
-  HT_ASSERT(handler->reference_count() == 0);
-  m_decomissioned_handlers.erase(handler);
+  {
+    ScopedLock lock(m_mutex);
+    HT_ASSERT(m_decomissioned_handlers.count(handler) > 0);
+    HT_ASSERT(handler->reference_count() == 0);
+    m_decomissioned_handlers.erase(handler);
+    if (m_decomissioned_handlers.empty())
+      m_cond.notify_all();
+  }
   handler->disconnect();
   delete handler;
-  if (m_decomissioned_handlers.empty())
-    m_cond.notify_all();
 }
 
 int HandlerMap::add_proxy(const String &proxy, const String &hostname, const InetAddr &addr) {

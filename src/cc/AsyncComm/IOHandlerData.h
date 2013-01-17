@@ -68,8 +68,6 @@ namespace Hypertable {
       m_message_remaining = 0;
     }
 
-    int send_message_unlocked(CommBufPtr &, uint32_t timeout_ms = 0,
-                              DispatchHandler * = 0);
     int send_message(CommBufPtr &, uint32_t timeout_ms = 0,
                      DispatchHandler * = 0);
 
