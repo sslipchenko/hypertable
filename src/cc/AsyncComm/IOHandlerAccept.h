@@ -66,8 +66,6 @@ namespace Hypertable {
     HandlerMapPtr m_handler_map;
     ConnectionHandlerFactoryPtr m_handler_factory;
   };
-
-  typedef intrusive_ptr<IOHandlerAccept> IOHandlerAcceptPtr;
   /** @}*/
 }
 

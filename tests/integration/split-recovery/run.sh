@@ -47,10 +47,11 @@ run_test() {
   shift;
 
   if [ -z "$SKIP_START_SERVERS" ]; then
+      stop_range_server
+      \rm -f $HT_HOME/run/Hypertable.RangeServer.pid
       $HT_HOME/bin/start-test-servers.sh --no-rangeserver --no-thriftbroker --clear
   fi
 
-  stop_range_server
   $SCRIPT_DIR/rangeserver-launcher.sh $@ > rangeserver.output.$TEST_ID 2>&1 &
 
   set_start_vars Hypertable.RangeServer

@@ -47,9 +47,9 @@ namespace Hypertable {
    */
 
   /**
-   * Application work queue with worker threads.  It maintains a queue
-   * of requests and a pool of threads that pull requests off the queue and
-   * carry them out.
+   * Application request queue.  
+   * Generic queue service that can be used to buffer and execute incoming
+   * application requests.
    */
   class ApplicationQueue : public ApplicationQueueInterface {
 

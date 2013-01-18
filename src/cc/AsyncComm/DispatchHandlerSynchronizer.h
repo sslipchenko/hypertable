@@ -32,12 +32,15 @@
 
 namespace Hypertable {
 
-  /**
-   * This class is a DispatchHandler class that can be used
-   * by a client to synchronize with response messages
-   * resulting from previously sent request messages. It
-   * contains a queue of events (response events) and a condition
-   * variable that gets signalled when an event gets put on the queue.
+  /** \addtogroup AsyncComm
+   *  @{
+   */
+
+  /** DispatchHandler class used to synchronize with response messages.
+   * This class is a specialization of DispatchHandler that is used to
+   * synchronize with responses resulting from previously sent request messages.
+   * It contains a queue of events (response events) and a condition variable
+   * that gets signalled when an event gets put on the queue.
    *
    * Example usage:
    *
@@ -70,11 +73,10 @@ namespace Hypertable {
     }
 
     /**
-     * Dispatch method.  This gets called by the AsyncComm layer
-     * when an event occurs in response to a previously sent
-     * request that was supplied with this dispatch handler.
-     * It pushes the event onto the event queue and signals
-     * (notify_one) the condition variable.
+     * Event Dispatch method.  This gets called by the AsyncComm layer when an
+     * event occurs in response to a previously sent request that was supplied
+     * with this dispatch handler.  It pushes the event onto the event queue and
+     * signals (notify_one) the condition variable.
      *
      * @param event_ptr shared pointer to event object
      */
@@ -100,7 +102,7 @@ namespace Hypertable {
     Mutex                m_mutex;
     boost::condition     m_cond;
   };
-
+  /** @}*/
 } // namespace Hypertable
 
 

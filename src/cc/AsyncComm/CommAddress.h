@@ -203,7 +203,7 @@ namespace Hypertable {
   class CommAddressMap : public hash_map<addr, TypeT, CommAddressHash> {
   };
 
-  /// Defines set of CommAddress objects
+  /// Set of CommAddress objects
   typedef std::set<CommAddress> CommAddressSet;
   /** @}*/
 } // namespace Hypertable

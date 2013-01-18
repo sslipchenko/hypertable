@@ -37,15 +37,16 @@
 
 namespace Hypertable {
 
-  /**
-   * Message buffer sent over the network
-   * by the AsyncComm subsystem.  It consists of a primary
-   * buffer and an extended buffer and also contains buffer pointers
-   * that keep track of how much data has already been written
-   * in the case of partial writes.  These pointers are managed by
-   * the AsyncComm subsytem iteslf.  The following example
-   * illustrates how to build a request message using the
-   * CommBuf.
+  /** \addtogroup AsyncComm
+   *  @{
+   */
+
+  /** Message buffer for holding data to be transmitted over network.
+   * The CommBuf class contains a primary buffer and an extended buffer along
+   * with buffer pointers to keep track of how much data has been written into
+   * the buffers. These pointers are managed by the IOHandler while the buffer
+   * is being transmitted. The following example illustrates how to build a
+   * request message using the CommBuf.  
    *
    * <pre>
    *   CommHeader header(COMMAND_FETCH_SCANBLOCK);
@@ -311,7 +312,7 @@ namespace Hypertable {
   };
 
   typedef intrusive_ptr<CommBuf> CommBufPtr;
-
+  /** @}*/
 } // namespace Hypertable
 
 

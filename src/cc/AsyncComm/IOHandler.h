@@ -55,8 +55,11 @@ extern "C" {
 
 namespace Hypertable {
 
-  /**
-   *
+  /** \addtogroup AsyncComm
+   *  @{
+   */
+
+  /** Base class for I/O handlers
    */
   class IOHandler : public ReferenceCount {
 
@@ -79,6 +82,7 @@ namespace Hypertable {
       m_poll_interest = 0;
       socklen_t namelen = sizeof(m_local_addr);
       getsockname(m_sd, (sockaddr *)&m_local_addr, &namelen);
+      memcpy(&m_addr, &m_local_addr, sizeof(m_local_addr));
       memset(&m_alias, 0, sizeof(m_alias));
     }
 
@@ -142,21 +146,9 @@ namespace Hypertable {
       return add_poll_interest(m_poll_interest);
     }
 
-    InetAddr &get_address() { return m_addr; }
+    InetAddr get_address() { return m_addr; }
 
-    InetAddr &get_local_address() { return m_local_addr; }
-
-    void get_local_address(InetAddr *addrp) {
-      *addrp = m_local_addr;
-    }
-
-    void set_alias(const InetAddr &alias) {
-      m_alias = alias;
-    }
-
-    void get_alias(InetAddr *aliasp) {
-      *aliasp = m_alias;
-    }
+    InetAddr get_local_address() { return m_local_addr; }
 
     void set_proxy(const String &proxy) {
       ScopedLock lock(m_mutex);
@@ -190,6 +182,14 @@ namespace Hypertable {
     friend class HandlerMap;
 
   protected:
+
+    InetAddr get_alias() {
+      return m_alias;
+    }
+
+    void set_alias(const InetAddr &alias) {
+      m_alias = alias;
+    }
 
     void increment_reference_count() {
       m_reference_count++;
@@ -274,14 +274,7 @@ namespace Hypertable {
     int                 m_poll_interest;
     bool                m_decomissioned;
   };
-  typedef boost::intrusive_ptr<IOHandler> IOHandlerPtr;
-
-  struct ltiohp {
-    bool operator()(const IOHandlerPtr &p1, const IOHandlerPtr &p2) const {
-      return p1.get() < p2.get();
-    }
-  };
-
+  /** @}*/
 }
 
 

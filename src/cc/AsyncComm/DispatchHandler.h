@@ -28,12 +28,13 @@
 
 namespace Hypertable {
 
-  /**
-   * Abstract base class that is the main callback class of the Comm layer.  An
-   * objects of this class gets installed for each connection that is
-   * established to handle connection related events.  An object of this class
-   * is also supplied when sending a request message and is the mechanism by
-   * which the application is notified of the response or a timeout.
+  /** \addtogroup AsyncComm
+   *  @{
+   */
+
+  /** Abstract base class for event handlers registered with AsyncComm.
+   * Event handlers are the mechanism by which an application is notified of
+   * communication events.
    */
   class DispatchHandler : public ReferenceCount {
   public:
@@ -49,8 +50,9 @@ namespace Hypertable {
     virtual ~DispatchHandler() { return; }
   };
 
+  /// Smart pointer to DispatchHandler
   typedef intrusive_ptr<DispatchHandler> DispatchHandlerPtr;
-
+  /** @}*/
 } // namespace Hypertable
 
 #endif // HYPERTABLE_DISPATCHHANDLER_H

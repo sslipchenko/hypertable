@@ -349,7 +349,7 @@ Comm::create_datagram_receive_socket(CommAddress &addr, int tos,
 
   handler = new IOHandlerDatagram(sd, dhp);
 
-  addr.set_inet( handler->get_local_address() );
+  addr.set_inet( handler->get_address() );
 
   int32_t error = m_handler_map->insert_handler(handler);
   if (error != Error::OK) {

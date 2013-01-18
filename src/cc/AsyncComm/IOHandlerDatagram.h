@@ -80,9 +80,6 @@ namespace Hypertable {
     uint8_t        *m_message;
     std::list<SendRec>  m_send_queue;
   };
-
-  /** Smart pointer to IOHandlerDatagram type */
-  typedef boost::intrusive_ptr<IOHandlerDatagram> IOHandlerDatagramPtr;
   /** @}*/
 }
 

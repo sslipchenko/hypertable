@@ -29,13 +29,22 @@
 
 namespace Hypertable {
 
+
+  /** \addtogroup AsyncComm
+   *  @{
+   */
+
+  /** Abstract class for creating default event handlers.
+   */
   class ConnectionHandlerFactory : public ReferenceCount {
   public:
     virtual ~ConnectionHandlerFactory() { }
     virtual void get_instance(DispatchHandlerPtr &dhp) = 0;
   };
 
+  /// Smart pointer to ConnectionHandlerFactory
   typedef intrusive_ptr<ConnectionHandlerFactory> ConnectionHandlerFactoryPtr;
+  /** @}*/
 }
 
 #endif // HYPERTABLE_CONNECTIONHANDLERFACTORY_H

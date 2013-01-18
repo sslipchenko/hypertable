@@ -112,11 +112,7 @@ namespace Hypertable {
     size_t              m_message_remaining;
     std::list<CommBufPtr> m_send_queue;
   };
-
-  /** Smart pointer to IOHandlerData type */
-  typedef intrusive_ptr<IOHandlerData> IOHandlerDataPtr;
   /** @}*/
 }
 
 #endif // HYPERTABLE_IOHANDLERDATA_H
-

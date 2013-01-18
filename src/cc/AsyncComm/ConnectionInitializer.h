@@ -30,14 +30,22 @@ namespace Hypertable {
 
   class Event;
 
+  /** \addtogroup AsyncComm
+   *  @{
+   */
+
+  /** Driver for connection initialization handshake in ConnectionManager.
+   */
   class ConnectionInitializer : public ReferenceCount {
   public:
     virtual CommBuf *create_initialization_request() = 0;
     virtual bool process_initialization_response(Event *event) = 0;
     virtual uint64_t initialization_command() = 0;
   };
-  typedef boost::intrusive_ptr<ConnectionInitializer> ConnectionInitializerPtr;
 
+  /// Smart pointer to ConnectionInitializer
+  typedef boost::intrusive_ptr<ConnectionInitializer> ConnectionInitializerPtr;
+  /** @}*/
 }
 
 #endif // HYPERTABLE_CONNECTIONINITIALIZER_H

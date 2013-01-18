@@ -156,7 +156,7 @@ int HandlerMap::remove_handler_unlocked(IOHandler *handler) {
     HT_ASSERT(handler == diter->second);
     m_data_handler_map.erase(diter);
     // Remove alias
-    handler->get_alias(&remote_addr);
+    remote_addr = handler->get_alias();
     if ((diter = m_data_handler_map.find(remote_addr)) != m_data_handler_map.end()) {
       HT_ASSERT(handler == diter->second);
       m_data_handler_map.erase(diter);
