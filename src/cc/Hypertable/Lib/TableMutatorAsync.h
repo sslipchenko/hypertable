@@ -76,12 +76,12 @@ namespace Hypertable {
      *     wait_for_completion unless explicitly told to do so by caller
      */
     TableMutatorAsync(PropertiesPtr &props, Comm *comm,
-		      ApplicationQueuePtr &app_queue, Table *table,
+		      ApplicationQueueInterfacePtr &app_queue, Table *table,
 		      RangeLocatorPtr &range_locator, uint32_t timeout_ms, ResultCallback *cb,
 		      uint32_t flags = 0, bool explicit_block_only = false);
 
     TableMutatorAsync(Mutex &mutex, boost::condition &cond, PropertiesPtr &props, Comm *comm,
-		      ApplicationQueuePtr &app_queue, Table *table,
+		      ApplicationQueueInterfacePtr &app_queue, Table *table,
 		      RangeLocatorPtr &range_locator, uint32_t timeout_ms, ResultCallback *cb,
 		      uint32_t flags = 0, bool explicit_block_only = false,
               TableMutator *mutator = 0);
@@ -262,7 +262,7 @@ namespace Hypertable {
 
     PropertiesPtr        m_props;
     Comm                *m_comm;
-    ApplicationQueuePtr  m_app_queue;
+    ApplicationQueueInterfacePtr  m_app_queue;
     TablePtr             m_table;
     SchemaPtr            m_schema;  // needs mutex
     RangeLocatorPtr      m_range_locator;

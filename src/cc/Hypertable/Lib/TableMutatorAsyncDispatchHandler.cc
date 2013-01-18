@@ -35,11 +35,11 @@ using namespace Serialization;
  *
  */
 TableMutatorAsyncDispatchHandler::TableMutatorAsyncDispatchHandler(
-    ApplicationQueuePtr &app_queue, TableMutatorAsync *mutator,
+    ApplicationQueueInterfacePtr &app_queue, TableMutatorAsync *mutator,
     uint32_t scatter_buffer, TableMutatorAsyncSendBuffer *send_buffer, bool auto_refresh)
   : m_app_queue(app_queue), m_mutator(mutator),
     m_scatter_buffer(scatter_buffer), m_send_buffer(send_buffer),
-    m_auto_refresh(auto_refresh), m_handled(false) {
+    m_auto_refresh(auto_refresh) {
 }
 
 /**
@@ -47,11 +47,6 @@ TableMutatorAsyncDispatchHandler::TableMutatorAsyncDispatchHandler(
  */
 void TableMutatorAsyncDispatchHandler::handle(EventPtr &event_ptr) {
   int32_t error;
-
-  HT_ASSERT(!m_handled);
-  m_handled = true;
-
-  m_handle_event = event_ptr;
 
   if (event_ptr->type == Event::MESSAGE) {
     error = Protocol::response_code(event_ptr);

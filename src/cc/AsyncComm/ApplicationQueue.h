@@ -37,43 +37,63 @@
 #include "Common/StringExt.h"
 #include "Common/Logger.h"
 
+#include "ApplicationQueueInterface.h"
 #include "ApplicationHandler.h"
 
 namespace Hypertable {
 
+  /** \addtogroup AsyncComm
+   *  @{
+   */
+
   /**
-   * Provides application work queue and worker threads.  It maintains a queue
+   * Application work queue with worker threads.  It maintains a queue
    * of requests and a pool of threads that pull requests off the queue and
    * carry them out.
    */
-  class ApplicationQueue : public ReferenceCount {
+  class ApplicationQueue : public ApplicationQueueInterface {
 
-    class UsageRec {
+    /** Tracks thread group execution state.
+     * A GroupState object is created for each unique thread group to track the
+     * queue execution state of requests in the thread group.
+     */
+    class GroupState {
     public:
-      UsageRec() : thread_group(0), running(false), outstanding(1) { return; }
-      uint64_t thread_group;
-      bool     running;
-      int      outstanding;
+      GroupState() : thread_group(0), running(false), outstanding(1) { return; }
+      uint64_t thread_group; //!< Thread group ID
+      bool     running;      //!< Sentinal indicating if a request from this
+                             //!< group is being executed
+      int      outstanding;  //!< Number of outstanding (uncompleted) requests
+                             //!< in queue for this thread group
     };
 
-    typedef hash_map<uint64_t, UsageRec *> UsageRecMap;
+    /** Hash map of thread group ID to GroupState
+     */ 
+    typedef hash_map<uint64_t, GroupState *> GroupStateMap;
 
+    /** Defines queue object with pointer to applcation handler and group state
+     */
     class WorkRec {
     public:
-      WorkRec(ApplicationHandler *ah) : handler(ah), usage(0) { return; }
+      WorkRec(ApplicationHandler *ah) : handler(ah), group_state(0) { return; }
       ~WorkRec() { delete handler; }
-      ApplicationHandler   *handler;
-      UsageRec             *usage;
+      ApplicationHandler *handler;
+      GroupState         *group_state;
     };
 
+    /** Individual work queue
+     */
     typedef std::list<WorkRec *> WorkQueue;
 
+    /** Application queue state object shared among worker threads.
+     */
     class ApplicationQueueState {
     public:
-      ApplicationQueueState() : threads_available(0), shutdown(false), paused(false) { return; }
+      ApplicationQueueState() : threads_available(0), shutdown(false),
+                                paused(false) { }
       WorkQueue           queue;
       WorkQueue           urgent_queue;
-      UsageRecMap         usage_map;
+      GroupStateMap       group_state_map;
       Mutex               mutex;
       boost::condition    cond;
       boost::condition    quiesce_cond;
@@ -83,6 +103,8 @@ namespace Hypertable {
       bool                paused;
     };
 
+    /** Application queue worker thread function (functor)
+     */
     class Worker {
 
     public:
@@ -119,9 +141,9 @@ namespace Hypertable {
             iter = m_state.urgent_queue.begin();
             while (iter != m_state.urgent_queue.end()) {
               rec = (*iter);
-              if (rec->usage == 0 || !rec->usage->running) {
-                if (rec->usage)
-                  rec->usage->running = true;
+              if (rec->group_state == 0 || !rec->group_state->running) {
+                if (rec->group_state)
+                  rec->group_state->running = true;
                 m_state.urgent_queue.erase(iter);
                 break;
               }
@@ -137,9 +159,9 @@ namespace Hypertable {
               iter = m_state.queue.begin();
               while (iter != m_state.queue.end()) {
                 rec = (*iter);
-                if (rec->usage == 0 || !rec->usage->running) {
-                  if (rec->usage)
-                    rec->usage->running = true;
+                if (rec->group_state == 0 || !rec->group_state->running) {
+                  if (rec->group_state)
+                    rec->group_state->running = true;
                   m_state.queue.erase(iter);
                   break;
                 }
@@ -184,24 +206,24 @@ namespace Hypertable {
     private:
 
       void remove(WorkRec *rec) {
-        if (rec->usage) {
+        if (rec->group_state) {
           ScopedLock ulock(m_state.mutex);
-          rec->usage->running = false;
-          rec->usage->outstanding--;
-          if (rec->usage->outstanding == 0) {
-            m_state.usage_map.erase(rec->usage->thread_group);
-            delete rec->usage;
+          rec->group_state->running = false;
+          rec->group_state->outstanding--;
+          if (rec->group_state->outstanding == 0) {
+            m_state.group_state_map.erase(rec->group_state->thread_group);
+            delete rec->group_state;
           }
         }
         delete rec;
       }
 
       void remove_expired(WorkRec *rec) {
-        if (rec->usage) {
-          rec->usage->outstanding--;
-          if (rec->usage->outstanding == 0) {
-            m_state.usage_map.erase(rec->usage->thread_group);
-            delete rec->usage;
+        if (rec->group_state) {
+          rec->group_state->outstanding--;
+          if (rec->group_state->outstanding == 0) {
+            m_state.group_state_map.erase(rec->group_state->thread_group);
+            delete rec->group_state;
           }
         }
         delete rec;
@@ -213,7 +235,7 @@ namespace Hypertable {
 
     ApplicationQueueState  m_state;
     ThreadGroup            m_threads;
-    std::vector<Thread::id>     m_thread_ids;
+    std::vector<Thread::id> m_thread_ids;
     bool joined;
     bool m_dynamic_threads;
 
@@ -252,7 +274,7 @@ namespace Hypertable {
      * Return all the thread ids for this threadgroup
      *
      */
-    virtual std::vector<Thread::id> get_thread_ids() const {
+    std::vector<Thread::id> get_thread_ids() const {
       return m_thread_ids;
     }
 
@@ -261,7 +283,7 @@ namespace Hypertable {
      * out and then all threads exit.  #join can be called to wait for
      * completion of the shutdown.
      */
-    virtual void shutdown() {
+    void shutdown() {
       m_state.shutdown = true;
       m_state.cond.notify_all();
     }
@@ -285,50 +307,55 @@ namespace Hypertable {
      * application queue threads exit.
      */
 
-    virtual void join() {
+    void join() {
       if (!joined) {
         m_threads.join_all();
         joined = true;
       }
     }
 
-    virtual void stop() {
-      ScopedLock lock(m_state.mutex);
-      m_state.paused = true;
-    }
-
-    virtual void start() {
+    /** Starts application queue.
+     */
+    void start() {
       ScopedLock lock(m_state.mutex);
       m_state.paused = false;
       m_state.cond.notify_all();
     }
 
+    /** Stops application queue allowing currently executing requests to
+     * complete.
+     */
+    void stop() {
+      ScopedLock lock(m_state.mutex);
+      m_state.paused = true;
+    }
+
     /**
-     * Adds a request (application handler) to the request queue.  The request
+     * Adds a request (application handler) to the application queue.  The request
      * queue is designed to support the serialization of related requests.
      * Requests are related by the thread group ID value in the
      * ApplicationHandler.  This thread group ID is constructed in the Event
      * object
      */
     virtual void add(ApplicationHandler *app_handler) {
-      UsageRecMap::iterator uiter;
+      GroupStateMap::iterator uiter;
       uint64_t thread_group = app_handler->get_thread_group();
       WorkRec *rec = new WorkRec(app_handler);
-      rec->usage = 0;
+      rec->group_state = 0;
 
       HT_ASSERT(app_handler);
 
       if (thread_group != 0) {
         ScopedLock ulock(m_state.mutex);
-        if ((uiter = m_state.usage_map.find(thread_group))
-            != m_state.usage_map.end()) {
-          rec->usage = (*uiter).second;
-          rec->usage->outstanding++;
+        if ((uiter = m_state.group_state_map.find(thread_group))
+            != m_state.group_state_map.end()) {
+          rec->group_state = (*uiter).second;
+          rec->group_state->outstanding++;
         }
         else {
-          rec->usage = new UsageRec();
-          rec->usage->thread_group = thread_group;
-          m_state.usage_map[thread_group] = rec->usage;
+          rec->group_state = new GroupState();
+          rec->group_state->thread_group = thread_group;
+          m_state.group_state_map[thread_group] = rec->group_state;
         }
       }
 
@@ -352,8 +379,9 @@ namespace Hypertable {
     }
   };
 
+  /// Smart pointer to ApplicationQueue object
   typedef boost::intrusive_ptr<ApplicationQueue> ApplicationQueuePtr;
-
+  /** @}*/
 } // namespace Hypertable
 
 #endif // HYPERTABLE_APPLICATIONQUEUE_H

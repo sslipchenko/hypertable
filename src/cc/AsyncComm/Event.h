@@ -34,9 +34,14 @@
 
 namespace Hypertable {
 
+  /** \addtogroup AsyncComm
+   *  @{
+   */
+
   /**
-   * Objects of the is class represent communication events.  They get passed
-   * up to the application through dispatch handlers (see DispatchHandler).
+   * Network communication event.
+   * Objects of this type get passed up to the application through dispatch
+   * handlers (see #DispatchHandler).
    */
   class Event : public ReferenceCount {
 
@@ -197,7 +202,7 @@ namespace Hypertable {
   };
 
   typedef boost::intrusive_ptr<Event> EventPtr;
-
+  /** @}*/
 } // namespace Hypertable
 
 #endif // HYPERTABLE_EVENT_H

@@ -35,7 +35,7 @@
 namespace Hypertable {
 
   /** \defgroup AsyncComm AsyncComm
-   * Provides efficient, asynchronous network communication services.
+   * Asynchronous network communication service.
    * The AsyncComm module is designed for maximally efficient network
    * programming by 1) providing an asynchronous API to facilitate
    * multiprogramming, and 2) using the most efficient polling mechanism for

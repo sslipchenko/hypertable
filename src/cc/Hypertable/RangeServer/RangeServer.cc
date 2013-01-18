@@ -303,9 +303,9 @@ RangeServer::RangeServer(PropertiesPtr &props, ConnectionManagerPtr &conn_mgr,
    * Create Master client
    */
   int timeout = props->get_i32("Hypertable.Request.Timeout");
+  ApplicationQueueInterfacePtr aq = m_app_queue;
   m_master_client = new MasterClient(m_conn_manager, m_hyperspace,
-                                     Global::toplevel_dir,
-                                     timeout, m_app_queue);
+                                     Global::toplevel_dir, timeout, aq);
   m_master_connection_handler = new ConnectionHandler(m_comm, m_app_queue, this);
   Global::location_initializer = new LocationInitializer(m_props);
 
@@ -3097,8 +3097,9 @@ void RangeServer::get_statistics(ResponseCallbackGetStatistics *cb) {
         if (!Global::range_locator)
           Global::range_locator = new Hypertable::RangeLocator(m_props, m_conn_manager,
                                                                Global::hyperspace, timeout_ms);
+        ApplicationQueueInterfacePtr aq = m_app_queue;
         Global::rs_metrics_table = new Table(m_props, Global::range_locator, m_conn_manager,
-                                             Global::hyperspace, m_app_queue, m_namemap,
+                                             Global::hyperspace, aq, m_namemap,
                                              "sys/RS_METRICS", 0, timeout_ms);
       }
       catch (Hypertable::Exception &e) {
@@ -4345,9 +4346,10 @@ RangeServer::replay_load_range(ResponseCallback *cb,
       if (!Global::range_locator)
         Global::range_locator = new Hypertable::RangeLocator(m_props,
                 m_conn_manager, Global::hyperspace, timeout_ms);
+      ApplicationQueueInterfacePtr aq = m_app_queue;
       Global::metadata_table = new Table(m_props, Global::range_locator,
-              m_conn_manager, Global::hyperspace, m_app_queue, m_namemap,
-              TableIdentifier::METADATA_NAME, 0, timeout_ms);
+              m_conn_manager, Global::hyperspace, aq, m_namemap,
+                           TableIdentifier::METADATA_NAME, 0, timeout_ms);
     }
 
     schema = table_info->get_schema();

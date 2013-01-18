@@ -43,7 +43,7 @@ namespace {
   };
 }
 
-IntervalScannerAsync::IntervalScannerAsync(Comm *comm, ApplicationQueuePtr &app_queue,
+IntervalScannerAsync::IntervalScannerAsync(Comm *comm, ApplicationQueueInterfacePtr &app_queue,
     Table *table, RangeLocatorPtr &range_locator, const ScanSpec &scan_spec,
     uint32_t timeout_ms, bool current, TableScannerAsync *scanner, int id)
   : m_comm(comm), m_table(table), m_range_locator(range_locator),

@@ -33,8 +33,7 @@ namespace Hypertable {
    *  @{
    */
 
-  /**
-   *
+  /** I/O handler for listen socket.
    */
   class IOHandlerAccept : public IOHandler {
 

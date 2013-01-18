@@ -42,7 +42,7 @@ namespace Hypertable {
    *  @{
    */
 
-  /**
+  /** I/O handler for TCP socket.
    */
   class IOHandlerData : public IOHandler {
 
@@ -113,6 +113,7 @@ namespace Hypertable {
     std::list<CommBufPtr> m_send_queue;
   };
 
+  /** Smart pointer to IOHandlerData type */
   typedef intrusive_ptr<IOHandlerData> IOHandlerDataPtr;
   /** @}*/
 }

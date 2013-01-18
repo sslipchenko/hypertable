@@ -25,7 +25,7 @@
 #include <boost/thread/mutex.hpp>
 #include <boost/thread/condition.hpp>
 
-#include "AsyncComm/ApplicationQueue.h"
+#include "AsyncComm/ApplicationQueueInterface.h"
 #include "AsyncComm/CommBuf.h"
 #include "AsyncComm/ConnectionManager.h"
 #include "AsyncComm/DispatchHandler.h"
@@ -65,7 +65,7 @@ namespace Hypertable {
 
     MasterClient(ConnectionManagerPtr &, Hyperspace::SessionPtr &,
                  const String &toplevel_dir, uint32_t timeout_ms,
-                 ApplicationQueuePtr &);
+                 ApplicationQueueInterfacePtr &);
     MasterClient(ConnectionManagerPtr &, InetAddr &addr, uint32_t timeout_ms);
     MasterClient(Comm *comm, InetAddr &addr, uint32_t timeout_ms);
     ~MasterClient();
@@ -159,7 +159,7 @@ namespace Hypertable {
     Comm                  *m_comm;
     ConnectionManagerPtr   m_conn_manager;
     Hyperspace::SessionPtr m_hyperspace;
-    ApplicationQueuePtr    m_app_queue;
+    ApplicationQueueInterfacePtr    m_app_queue;
     uint64_t               m_master_file_handle;
     Hyperspace::HandleCallbackPtr m_master_file_callback;
     InetAddr               m_master_addr;

@@ -62,7 +62,7 @@ void TableMutatorAsync::handle_send_exceptions() {
 }
 
 TableMutatorAsync::TableMutatorAsync(PropertiesPtr &props, Comm *comm, 
-        ApplicationQueuePtr &app_queue, Table *table, 
+        ApplicationQueueInterfacePtr &app_queue, Table *table, 
         RangeLocatorPtr &range_locator, uint32_t timeout_ms, 
         ResultCallback *cb,  uint32_t flags, bool explicit_block_only)
   : m_comm(comm), m_app_queue(app_queue), m_table(table), 
@@ -76,7 +76,7 @@ TableMutatorAsync::TableMutatorAsync(PropertiesPtr &props, Comm *comm,
 
 
 TableMutatorAsync::TableMutatorAsync(Mutex &mutex, boost::condition &cond,
-        PropertiesPtr &props, Comm *comm, ApplicationQueuePtr &app_queue, 
+        PropertiesPtr &props, Comm *comm, ApplicationQueueInterfacePtr &app_queue, 
         Table *table, RangeLocatorPtr &range_locator, uint32_t timeout_ms, 
         ResultCallback *cb, uint32_t flags, bool explicit_block_only,
         TableMutator *mutator)

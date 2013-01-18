@@ -41,7 +41,7 @@ using namespace Hypertable;
  *
  */
 TableScannerAsync::TableScannerAsync(Comm *comm, 
-      ApplicationQueuePtr &app_queue, Table *table,
+      ApplicationQueueInterfacePtr &app_queue, Table *table,
       RangeLocatorPtr &range_locator, const ScanSpec &scan_spec, 
       uint32_t timeout_ms, ResultCallback *cb, int flags)
   : m_bytes_scanned(0), m_current_scanner(0), m_outstanding(0), 
@@ -217,7 +217,7 @@ void TableScannerAsync::add_index_row(ScanSpecBuilder &ssb, const char *row)
                     ri.end, ri.end_inclusive);
 }
 
-void TableScannerAsync::init(Comm *comm, ApplicationQueuePtr &app_queue, 
+void TableScannerAsync::init(Comm *comm, ApplicationQueueInterfacePtr &app_queue, 
         Table *table, RangeLocatorPtr &range_locator, 
         const ScanSpec &scan_spec, uint32_t timeout_ms, ResultCallback *cb)
 {

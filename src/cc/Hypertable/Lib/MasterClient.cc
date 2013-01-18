@@ -25,7 +25,7 @@
 #include "Common/InetAddr.h"
 #include "Common/Time.h"
 
-#include "AsyncComm/ApplicationQueue.h"
+#include "AsyncComm/ApplicationQueueInterface.h"
 #include "AsyncComm/DispatchHandlerSynchronizer.h"
 #include "Common/Serialization.h"
 #include "Common/Timer.h"
@@ -42,7 +42,7 @@ using namespace Serialization;
 
 MasterClient::MasterClient(ConnectionManagerPtr &conn_mgr,
     Hyperspace::SessionPtr &hyperspace, const String &toplevel_dir,
-    uint32_t timeout_ms, ApplicationQueuePtr &app_queue)
+    uint32_t timeout_ms, ApplicationQueueInterfacePtr &app_queue)
   : m_verbose(true), m_conn_manager(conn_mgr),
     m_hyperspace(hyperspace), m_app_queue(app_queue),
     m_hyperspace_init(false), m_hyperspace_connected(true),

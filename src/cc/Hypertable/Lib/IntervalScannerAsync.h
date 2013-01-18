@@ -55,7 +55,7 @@ namespace Hypertable {
      * @param scanner pointer to table scanner
      * @param id scanner id
      */
-    IntervalScannerAsync(Comm *comm, ApplicationQueuePtr &app_queue, Table *table,
+    IntervalScannerAsync(Comm *comm, ApplicationQueueInterfacePtr &app_queue, Table *table,
                          RangeLocatorPtr &range_locator,
                          const ScanSpec &scan_spec, uint32_t timeout_ms,
                          bool current, TableScannerAsync *scanner, int id);

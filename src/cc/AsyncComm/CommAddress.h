@@ -57,23 +57,27 @@ namespace Hypertable {
      */
     CommAddress() : m_type(NONE) { }
 
-    /** Constructs an CommAddress object of type CommAddress#INET initialized
-     * to <code>addr</code>.
+    /** Constructs a CommAddress object of type CommAddress#INET.
+     * @param addr IPv4:port address
      */
     CommAddress(const sockaddr_in addr) : m_type(INET) { inet=addr; }
 
-    /** Sets address type to CommAddress#PROXY and value to proxy name
+    /** Sets address type to CommAddress#PROXY and #proxy name to
      * <code>p</code>.
+     * @param p proxy name
      */
     void set_proxy(const String &p) { proxy = p; m_type=PROXY; }
 
-    /** Sets address type to CommAddress#INET and value to IPv4:port address
+    /** Sets address type to CommAddress#INET and #inet value to
      * <code>addr</code>.
+     * @param addr IPv4:port address
      */
-    void set_inet(sockaddr_in iaddr) { inet = iaddr; m_type=INET; }
+    void set_inet(sockaddr_in addr) { inet = addr; m_type=INET; }
 
-    /** Sets address type to CommAddress#INET and value to IP address
+    /** Sets address type to CommAddress#INET and #inet value to
      * <code>addr</code>.
+     * @param addr IPv4:port address
+     * @return reference to this CommAddress object
      */
     CommAddress &operator=(sockaddr_in addr) 
       { inet = addr; m_type=INET; return *this; }
@@ -85,6 +89,7 @@ namespace Hypertable {
      * compare #inet members.  If both addresses are of type CommAddress#NONE,
      * <i>true</i> is returned.  <i>false</i> is returned if the addresses
      * are of different types.
+     * @param other object to compare to
      * @return <i>true</i> if addresses are equal, <i>false</i> otherwise
      */
     bool operator==(const CommAddress &other) const {
@@ -99,6 +104,7 @@ namespace Hypertable {
 
     /** Inequality operator.
      * Returns the exact opposite of what is returned by #operator==
+     * @param other object to compare to
      * @return <i>true</i> if addresses are not equal, <i>false</i> otherwise
      */
     bool operator!=(const CommAddress &other) const {
@@ -112,6 +118,7 @@ namespace Hypertable {
      * members is returned.  If addresses are of type CommAddress#INET then
      * Inet#operator< is used to compare the IP addresses, and if addresses are
      * of type CommAddress#NONE, <i>false</i> is returned.
+     * @param other object on right-hand side of comparison
      * @return <i>true</i> if address is less than <code>other</code>,
      * <i>false</i> otherwise
      */
@@ -172,8 +179,13 @@ namespace Hypertable {
   class CommAddressHash {
   public:
     /** Parenthesis operator with a single CommAddress parameter.
-     * This method returns a hash value for the given <code>addr</code>
-     * object.  
+     * This method returns the hash value for the object specified in the
+     * <code>addr</code> parameter.  If the address type is CommAddress#INET,
+     * then the hash code is computed as the bitwise exclusive OR of the IP
+     * address and the port.  If the address is of type CommAddress#PROXY, then
+     * the hash code is computed with <code>__gnu_cxx::hash<const char *><code>.
+     * Otherwise the hash value is 0.
+     * @return hash value
      */
     size_t operator () (const CommAddress &addr) const {
       if (addr.is_inet())
@@ -186,12 +198,14 @@ namespace Hypertable {
     }
   };
 
+  /// Parameterized hash map for mapping CommAddress to arbitrary type.
   template<typename TypeT, typename addr=CommAddress>
   class CommAddressMap : public hash_map<addr, TypeT, CommAddressHash> {
   };
 
+  /// Defines set of CommAddress objects
   typedef std::set<CommAddress> CommAddressSet;
-
+  /** @}*/
 } // namespace Hypertable
 
 #endif // HYPERTABLE_COMMADDRESS_H

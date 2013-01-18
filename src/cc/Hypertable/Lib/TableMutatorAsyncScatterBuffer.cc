@@ -40,7 +40,7 @@ using namespace Hypertable;
 
 
 TableMutatorAsyncScatterBuffer::TableMutatorAsyncScatterBuffer(Comm *comm,
-    ApplicationQueuePtr &app_queue, TableMutatorAsync *mutator,
+    ApplicationQueueInterfacePtr &app_queue, TableMutatorAsync *mutator,
     const TableIdentifier *table_identifier, SchemaPtr &schema,
     RangeLocatorPtr &range_locator, bool auto_refresh, uint32_t timeout_ms, uint32_t id)
   : m_comm(comm), m_app_queue(app_queue), m_mutator(mutator), m_schema(schema),
