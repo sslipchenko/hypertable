@@ -194,12 +194,14 @@ TableMutatorAsync::update_with_index(Key &key, const void *value,
   //
   // if value has a 0 byte then we also have to escape it
   if (cf->has_index) {
+    size_t escaped_len;
     const char *val_ptr = (const char *)value;
     for (const char *v = val_ptr; v < val_ptr + value_len; v++) {
       if (*v == '\0') {
         const char *outp;
-        ldev.escape(val_ptr, (size_t)value_len, 
-                    &outp, (size_t *)&value_len);
+        escaped_len = (size_t)value_len;
+        ldev.escape(val_ptr, (size_t)value_len, &outp, &escaped_len);
+        value_len = (uint32_t)escaped_len;
         value = outp;
         break;
       }

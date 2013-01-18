@@ -411,11 +411,18 @@ void Comm::cancel_timer(DispatchHandler *handler) {
 
 
 void Comm::close_socket(const CommAddress &addr) {
-  IOHandler *handler;
+  IOHandler *handler = 0;
+  IOHandlerAccept *accept_handler;
+  IOHandlerData *data_handler;
+  IOHandlerDatagram *datagram_handler;
 
-  if (m_handler_map->checkout_handler(addr, (IOHandlerData **)&handler) != Error::OK &&
-      m_handler_map->checkout_handler(addr, (IOHandlerDatagram **)&handler) != Error::OK &&
-      m_handler_map->checkout_handler(addr, (IOHandlerAccept **)&handler) != Error::OK)
+  if (m_handler_map->checkout_handler(addr, &data_handler) == Error::OK)
+    handler = data_handler;
+  else if (m_handler_map->checkout_handler(addr, &datagram_handler) == Error::OK)
+    handler = datagram_handler;
+  else if (m_handler_map->checkout_handler(addr, &accept_handler) == Error::OK)
+    handler = accept_handler;
+  else
     return;
 
   HT_ON_OBJ_SCOPE_EXIT(*m_handler_map.get(), &HandlerMap::decrement_reference_count, handler);

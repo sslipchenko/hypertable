@@ -3572,7 +3572,7 @@ void RangeServer::replay_fragments(ResponseCallback *cb, int64_t op_id,
     receiver_plan.get_locations(receivers);
     CommAddress addr;
     uint32_t timeout_ms = m_props->get_i32("Hypertable.Request.Timeout");
-    Timer timer(replay_timeout);
+    Timer timer(replay_timeout, true);
     foreach_ht(const String &receiver, receivers) {
       addr.set_proxy(receiver);
       m_conn_manager->add(addr, timeout_ms, "RangeServer");
