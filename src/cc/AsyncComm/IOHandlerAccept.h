@@ -29,6 +29,10 @@
 
 namespace Hypertable {
 
+  /** \addtogroup AsyncComm
+   *  @{
+   */
+
   /**
    *
    */
@@ -65,9 +69,8 @@ namespace Hypertable {
   };
 
   typedef intrusive_ptr<IOHandlerAccept> IOHandlerAcceptPtr;
-
+  /** @}*/
 }
-
 
 #endif // HYPERTABLE_IOHANDLERACCEPT_H
 

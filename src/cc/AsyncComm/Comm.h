@@ -34,14 +34,33 @@
 
 namespace Hypertable {
 
+  /** \defgroup AsyncComm AsyncComm
+   * Provides efficient, asynchronous network communication services.
+   * The AsyncComm module is designed for maximally efficient network
+   * programming by 1) providing an asynchronous API to facilitate
+   * multiprogramming, and 2) using the most efficient polling mechanism for
+   * each supported system (<code>epoll</code> on Linux, <code>kqueue</code>
+   * on OSX and FreeBSD, and <code>port_associate</code> on Solaris).
+   * @{
+   */
+
   /**
-   * Provides communication (message passing) services to an application.
+   * Primary entry point to AsyncComm service.
    * There should be only one instance of this class per process and the static
    * method ReactorFactory#initialize must be called prior to constructing this
    * class in order to create the system-wide I/O reactor threads.
    */
   class Comm : public ReferenceCount {
   public:
+
+    /** Creates/returns singleton instance of the Comm class.
+     * This method will construct a new instance of the Comm class if it has
+     * not already been created.  All calls to this method return a pointer
+     * to the same singleton instance of the Comm object between calls to
+     * #destroy.  The static method ReactorFactory#initialize must be called
+     * prior to calling this method for the first time, in order to create
+     * system-wide I/O reactor threads.
+     */
     static Comm *instance() {
       ScopedLock lock(ms_mutex);
 
@@ -51,6 +70,10 @@ namespace Hypertable {
       return ms_instance;
     }
 
+    /** Destroys singleton instance of the Comm class.
+     * This method deletes the singleton instance of the Comm class, setting
+     * the ms_instance pointer to 0.
+     */
     static void destroy();
 
     /**
@@ -64,11 +87,11 @@ namespace Hypertable {
      * resulting in a DISCONNECT event only.  The returned error code can be
      * inspected to determine if the handler was installed and may be
      * subsequently called back.  The following return codes indicate that
-     * the handler was installed:
-     * <ul>
-     * <li><code>Error::COMM_BROKEN_CONNECTION</code></li>
-     * <li><code>Error::OK</code></li>
-     * </ul>
+     * the default event handler was successfully associated:
+     *
+     *   - <code>Error::COMM_BROKEN_CONNECTION</code>
+     *   - <code>Error::OK</code>
+     *
      * The default event handler will be associated with the connection until
      * either a) a DISCONNECT message has been delivered to the handler, or b)
      * close_socket has been called with <code>addr</code>.  A return value
@@ -78,15 +101,23 @@ namespace Hypertable {
      * handler.  The following return codes indicate that the default event
      * handler was <b>not</b> associated with a connection and the caller
      * can assume that the call had no effect:
-     * <ul>
-     * <li><code>Error::COMM_ALREADY_CONNECTED</code></li>
-     * <li><code>Error::COMM_INVALID_PROXY</code></li>
-     * <li><code>Error::COMM_SOCKET_ERROR</code></li>
-     * <li><code>Error::COMM_BIND_ERROR</code></li>
-     * <li><code>Error::COMM_CONNECT_ERROR</code></li>
-     * <li><code>Error::COMM_POLL_ERROR</code></li>
-     * </ul>
      *
+     *   - <code>Error::COMM_ALREADY_CONNECTED</code>
+     *   - <code>Error::COMM_INVALID_PROXY</code>
+     *   - <code>Error::COMM_SOCKET_ERROR</code>
+     *   - <code>Error::COMM_BIND_ERROR</code>
+     *   - <code>Error::COMM_CONNECT_ERROR</code>
+     *   - <code>Error::COMM_POLL_ERROR</code>
+     *
+     * The default event handler, <code>default_handler</code>, will never be
+     * called back via the calling thread.  It will be called back from a
+     * reactor thread.  Because reactor threads are used to service I/O
+     * events on many different sockets, the default event handler should
+     * return quickly from the callback.  When calling back into the default
+     * event handler, the calling reactor thread does not hold any locks
+     * so the default event handler callback may safely callback into the
+     * Comm object (e.g. #send_response).
+     * 
      * @param addr address to connect to
      * @param default_handler smart pointer to default event handler
      * @return Error::OK on success or error code on failure (see description)
@@ -306,21 +337,21 @@ namespace Hypertable {
     Comm();     // prevent non-singleton usage
     ~Comm();
 
-    static Comm *ms_instance;
-
     int send_request(IOHandlerData *data_handler, uint32_t timeout_ms,
                      CommBufPtr &cbuf, DispatchHandler *response_handler);
 
     int connect_socket(int sd, const CommAddress &addr,
                        DispatchHandlerPtr &default_handler);
 
-    static atomic_t ms_next_request_id;
-
-    static Mutex   ms_mutex;
-    HandlerMapPtr  m_handler_map;
-    ReactorPtr     m_timer_reactor;
-    InetAddr       m_local_addr;
+    static Comm *ms_instance;       //!< Pointer to singleton instance of this class
+    static atomic_t ms_next_request_id; //!< Atomic integer used for assinging request IDs
+    static Mutex   ms_mutex;        //!< Mutex for serializing access to ms_instance
+    HandlerMapPtr  m_handler_map;   //!< Pointer to IOHandler map
+    ReactorPtr     m_timer_reactor; //!< Pointer to dedicated reactor for handling timer events
+    InetAddr       m_local_addr;    //!< Local address initialized to primary interface and empty port
   };
+
+  /** @}*/
 
 } // namespace Hypertable
 

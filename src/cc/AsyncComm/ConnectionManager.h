@@ -48,6 +48,10 @@ extern "C" {
 
 namespace Hypertable {
 
+  /** \addtogroup AsyncComm
+   *  @{
+   */
+
   class Event;
 
   /**
@@ -311,7 +315,7 @@ namespace Hypertable {
   };
   typedef boost::intrusive_ptr<ConnectionManager> ConnectionManagerPtr;
 
+  /** @}*/
 }
-
 
 #endif // HYPERTABLE_CONNECTIONMANAGER_H

@@ -38,6 +38,10 @@ extern "C" {
 
 namespace Hypertable {
 
+  /** \addtogroup AsyncComm
+   *  @{
+   */
+
   /**
    */
   class IOHandlerData : public IOHandler {
@@ -110,6 +114,8 @@ namespace Hypertable {
   };
 
   typedef intrusive_ptr<IOHandlerData> IOHandlerDataPtr;
+  /** @}*/
 }
 
 #endif // HYPERTABLE_IOHANDLERDATA_H
+
