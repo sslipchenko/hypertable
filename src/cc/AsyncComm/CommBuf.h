@@ -144,7 +144,7 @@ namespace Hypertable {
      */
     void write_header_and_reset() {
       uint8_t *buf = data.base;
-      HT_ASSERT((data_ptr - data.base) == (int)data.size);
+      HT_ASSERT((data_ptr-data.base) == (int)data.size || data_ptr == data.base);
       header.encode(&buf);
       data_ptr = data.base;
       ext_ptr = ext.base;

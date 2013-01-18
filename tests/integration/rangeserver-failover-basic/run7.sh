@@ -81,6 +81,8 @@ L=`grep "Barrier for RECOVERY will be up" $MASTER_LOG  | wc -l`
 if [ "$L" -ne "2" ]
 then
   echo "Test failed"
+  echo "Renaming $MASTER_LOG to $MASTER_LOG.graceperiod"
+  mv $MASTER_LOG $MASTER_LOG
   exit 1
 fi
 

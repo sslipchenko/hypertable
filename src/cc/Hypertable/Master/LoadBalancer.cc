@@ -31,7 +31,7 @@
 using namespace Hypertable;
 
 LoadBalancer::LoadBalancer(ContextPtr context)
-  : m_context(context), m_new_server_added(false) {
+  : m_context(context), m_new_server_added(false), m_paused(false) {
 
   m_crontab = new Crontab( m_context->props->get_str("Hypertable.LoadBalancer.Crontab") );
 
@@ -66,11 +66,12 @@ void LoadBalancer::signal_new_server() {
 
 bool LoadBalancer::balance_needed() {
   ScopedLock lock(m_add_mutex);
+  time_t now = time(0);
   if (m_paused)
     return false;
-  if (m_new_server_added && time(0) >= m_next_balance_time_new_server)
+  if (m_new_server_added && now >= m_next_balance_time_new_server)
     return true;
-  if (m_enabled && time(0) >= m_next_balance_time_load)
+  if (m_enabled && now >= m_next_balance_time_load)
     return true;
   return false;
 }

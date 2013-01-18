@@ -59,9 +59,7 @@ sleep 30
 #dump METADATA location
 ${HT_HOME}/bin/ht shell --no-prompt --exec "use sys; select Location from METADATA MAX_VERSIONS=1 into file '${RUN_DIR}/metadata.post';"
 
-#shut everything down
-stop_range_servers
-$HT_HOME/bin/clean-database.sh
+RETVAL=0
 
 #make sure ranges are evenly divided
 TOTAL_RANGES=`grep Location metadata.post|wc -l`
@@ -72,8 +70,22 @@ if (( $MOVED_RANGES >= 2*$TOTAL_RANGES/5 && $MOVED_RANGES < $TOTAL_RANGES/2))
 then
   echo "Test passed"
 else 
-  echo "Test failed"
-  exit 1
+    # Capture state of OperationProcessor and Master
+    \rm -f ${HT_HOME}/run/op.output
+    touch ${HT_HOME}/run/debug-op
+    let i=0
+    while [ ! -e ${HT_HOME}/log/op.output ] && [ $i -lt 15 ]; do
+        sleep 5
+        let i++
+    done
+    mv ${HT_HOME}/run/op.output .
+    cp ${HT_HOME}/log/Hypertable.Master.log .
+    echo "Test failed"
+    RETVAL=1
 fi
 
-exit 0
+#shut everything down
+stop_range_servers
+$HT_HOME/bin/clean-database.sh
+
+exit $RETVAL

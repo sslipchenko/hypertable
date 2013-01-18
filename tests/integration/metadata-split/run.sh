@@ -79,9 +79,9 @@ save_failure_state() {
   mv Hypertable.Master.*.log $ARCHIVE_DIR
   cp $HT_HOME/log/Hypertable.Master.log $ARCHIVE_DIR
   if [ -e Testing/Temporary/LastTest.log.tmp ] ; then
-    mv Testing/Temporary/LastTest.log.tmp $ARCHIVE_DIR
+    ln Testing/Temporary/LastTest.log.tmp $ARCHIVE_DIR
   elif [ -e ../../../Testing/Temporary/LastTest.log.tmp ] ; then
-    mv ../../../Testing/Temporary/LastTest.log.tmp $ARCHIVE_DIR
+    mv ../../../Testing/Temporary/LastTest.log.tmp $ARCHIVE_DIR/LastTest.log.tmp
   fi
   echo "Failure state saved to directory $ARCHIVE_DIR"
   #exec 1>&-

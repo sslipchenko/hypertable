@@ -207,7 +207,7 @@ run_test() {
         echo "Test $TEST PASSED." >> report.txt
     fi
 
-    sleep 10
+    sleep 20
 
     # shut down master and range servers
     kill -9 `cat $HT_HOME/run/Hypertable.Master.pid`
