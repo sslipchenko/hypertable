@@ -55,7 +55,7 @@ run_test() {
   $SCRIPT_DIR/rangeserver-launcher.sh $@ > rangeserver.output.$TEST_ID 2>&1 &
 
   set_start_vars Hypertable.RangeServer
-  wait_for_server_up rangeserver "$pidname" "Range Server"
+  wait_for_server_up rangeserver "$pidname"
 
   $HT_SHELL --batch < $SCRIPT_DIR/create-test-table.hql
   if [ $? != 0 ] ; then
@@ -89,8 +89,6 @@ run_test() {
         echo "Problem dumping table 'split-test', exiting ..."
         exit 1
     fi
-    #exec 1>&-
-    #sleep 86400
   else
     echo "Test $TEST_ID PASSED." >> report.txt
   fi

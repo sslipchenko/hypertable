@@ -451,9 +451,9 @@ void ClientKeepaliveHandler::destroy_session() {
     if (m_dead || m_destroying)
       return;
     m_destroying = true;
+    if (m_conn_handler)
+      m_conn_handler->disable_callbacks();
   }
-
-  m_conn_handler->disable_callbacks();
 
   CommBufPtr cbp(Hyperspace::Protocol::create_client_keepalive_request(
                  m_session_id, m_last_known_event, true));

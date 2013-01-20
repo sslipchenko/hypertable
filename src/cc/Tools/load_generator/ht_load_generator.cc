@@ -592,7 +592,7 @@ void generate_update_load_parallel(PropertiesPtr &props, String &tablename,
     }
 
     for (::int32_t i=0; i<parallel; i++) {
-      ScopedLock lock(load_vector[next].mutex);
+      ScopedLock lock(load_vector[i].mutex);
       load_vector[i].finished = true;
       load_vector[i].cond.notify_all();
     }

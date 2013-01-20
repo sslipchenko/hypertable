@@ -147,9 +147,11 @@ run_test() {
         # wait for RS_METRICS table to get created at rs1
         if [ $j -eq 1 ]; then
             fgrep RS_METRICS master.output.$TEST
-            while [ $? -ne 0 ] ; do
+            let k=0
+            while [ $? -ne 0 ] && [ $k -lt 10 ]; do
                 sleep 3
                 fgrep RS_METRICS master.output.$TEST
+                let k++
             done
         fi
         let j+=1
