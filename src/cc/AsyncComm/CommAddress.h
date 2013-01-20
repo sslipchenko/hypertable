@@ -172,7 +172,7 @@ namespace Hypertable {
     int32_t m_type; //!< Address type
   };
 
-  /** Hash function class (functor) for CommAddress objets.
+  /** Hash function (functor) for CommAddress objets.
    * This class is defined for use with STL template classes that require a
    * hash functor (e.g. <code>std::hash_map</code>).
    */

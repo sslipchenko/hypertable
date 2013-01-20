@@ -42,14 +42,15 @@ namespace Hypertable {
    *  @{
    */
 
-  /** I/O handler for TCP socket.
+  /** I/O handler for TCP sockets.
    */
   class IOHandlerData : public IOHandler {
 
   public:
 
     IOHandlerData(int sd, const InetAddr &addr, DispatchHandlerPtr &dhp, bool connected=false)
-      : IOHandler(sd, addr, dhp), m_event(0), m_send_queue() {
+      : IOHandler(sd, dhp), m_event(0), m_send_queue() {
+      memcpy(&m_addr, &addr, sizeof(InetAddr));
       m_connected = connected;
       reset_incoming_message_state();
     }

@@ -33,7 +33,7 @@ namespace Hypertable {
    *  @{
    */
 
-  /** I/O handler for listen socket.
+  /** I/O handler for listen sockets.
    */
   class IOHandlerAccept : public IOHandler {
 
@@ -42,6 +42,7 @@ namespace Hypertable {
     IOHandlerAccept(int sd, DispatchHandlerPtr &dhp,
                     HandlerMapPtr &hmap, ConnectionHandlerFactoryPtr &chfp)
       : IOHandler(sd, dhp), m_handler_map(hmap), m_handler_factory(chfp) {
+      memcpy(&m_addr, &m_local_addr, sizeof(InetAddr));
     }
 
     virtual ~IOHandlerAccept() { }

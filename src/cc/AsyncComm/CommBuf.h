@@ -311,6 +311,7 @@ namespace Hypertable {
     boost::shared_array<uint8_t> ext_shared_array;
   };
 
+  /// Smart pointer to CommBuf
   typedef intrusive_ptr<CommBuf> CommBufPtr;
   /** @}*/
 } // namespace Hypertable

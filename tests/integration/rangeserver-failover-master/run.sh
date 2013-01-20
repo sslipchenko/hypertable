@@ -146,12 +146,12 @@ run_test() {
             --config=${SCRIPT_DIR}/test.cfg 2>&1 > rangeserver.rs$j.output.$TEST &
         # wait for RS_METRICS table to get created at rs1
         if [ $j -eq 1 ]; then
-            fgrep RS_METRICS master.output.$TEST
             let k=0
+            fgrep RS_METRICS master.output.$TEST
             while [ $? -ne 0 ] && [ $k -lt 10 ]; do
                 sleep 3
-                fgrep RS_METRICS master.output.$TEST
                 let k++
+                fgrep RS_METRICS master.output.$TEST
             done
         fi
         let j+=1

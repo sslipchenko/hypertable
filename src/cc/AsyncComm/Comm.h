@@ -205,12 +205,17 @@ namespace Hypertable {
     /**
      * Sends a request message over a connection, expecting a response.  The
      * connection is specified by the addr argument which is the remote end of
-     * the connection.  The request message to send is encapsulated in the
-     * cbuf object (see CommBuf) and should start with a valid header.  The
+     * the connection.  The request message to send is encapsulated in
+     * <code>cbuf</code> (see CommBuf) and should start with a valid header.  The
      * dispatch handler given by the response_handler argument will get called
      * back with either a response MESSAGE event or a TIMEOUT event if no
      * response is received within the number of seconds specified by the
      * timeout argument.
+     *
+     * The following errors may be returned by this method:
+     *
+     * Error::COMM_NOT_CONNECTED
+     * Error::COMM_BROKEN_CONNECTION
      *
      * <p>If the server at the other end of the connection uses an
      * ApplicationQueue to carry out requests, then the gid field in the header

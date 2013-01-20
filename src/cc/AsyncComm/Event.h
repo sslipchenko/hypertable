@@ -201,6 +201,7 @@ namespace Hypertable {
     void display() { std::cerr << to_str() << std::endl; }
   };
 
+  /// Smart pointer to Event
   typedef boost::intrusive_ptr<Event> EventPtr;
   /** @}*/
 } // namespace Hypertable

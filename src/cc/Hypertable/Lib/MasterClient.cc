@@ -877,25 +877,32 @@ void
 MasterClient::send_message_async(CommBufPtr &cbp, DispatchHandler *handler,
                                  Timer *timer, const String &label) {
   boost::mutex::scoped_lock lock(m_mutex);
+  DispatchHandlerSynchronizer *sync_handler
+    = dynamic_cast<DispatchHandlerSynchronizer *>(handler);
   int error;
 
-  while ((error = m_comm->send_request(m_master_addr, timer->remaining(), cbp, handler))
-      != Error::OK) {
-    if (error == Error::COMM_NOT_CONNECTED ||
-	error == Error::COMM_BROKEN_CONNECTION ||
-	error == Error::COMM_CONNECT_ERROR) {
-      boost::xtime expire_time;
-      boost::xtime_get(&expire_time, boost::TIME_UTC_);
-      xtime_add_millis(expire_time, std::min(timer->remaining(), (System::rand32() % m_retry_interval)));
-      if (!m_cond.timed_wait(lock, expire_time)) {
-        if (timer->expired())
-          HT_THROWF(Error::REQUEST_TIMEOUT,
-                    "MasterClient operation %s to master %s failed", label.c_str(),
-                    m_master_addr.format().c_str());
+  while ((error = m_comm->send_request(m_master_addr, timer->remaining(), cbp,
+                                       handler)) != Error::OK) {
+    // COMM_BROKEN_CONNECTION implies handler will be called back, if handler
+    // is a DispatchHandlerSynchronizer, wait for callback and try again
+    if (error == Error::COMM_BROKEN_CONNECTION) {
+      if (sync_handler) {
+        EventPtr event;
+        sync_handler->wait_for_reply(event);
       }
+      else
+        return;
     }
-    else
-      HT_THROWF(error, "MasterClient operation %s failed", label.c_str());
+    boost::xtime expire_time;
+    boost::xtime_get(&expire_time, boost::TIME_UTC_);
+    xtime_add_millis(expire_time, std::min(timer->remaining(),
+                                           (System::rand32()%m_retry_interval)));
+    if (!m_cond.timed_wait(lock, expire_time)) {
+      if (timer->expired())
+        HT_THROWF(Error::REQUEST_TIMEOUT,
+                  "MasterClient operation %s to master %s failed", label.c_str(),
+                  m_master_addr.format().c_str());
+    }
   }
 }
 
@@ -1097,4 +1104,3 @@ void MasterClientHyperspaceSessionCallback::disconnected() {
 void MasterClientHyperspaceSessionCallback::reconnected() {
   m_masterclient->hyperspace_reconnected();
 }
-

@@ -41,7 +41,7 @@ namespace Hypertable {
    *  @{
    */
 
-  /** I/O handler for UDP socket.
+  /** I/O handler for UDP sockets.
    */
   class IOHandlerDatagram : public IOHandler {
 
@@ -49,6 +49,7 @@ namespace Hypertable {
 
     IOHandlerDatagram(int sd, DispatchHandlerPtr &dhp) : IOHandler(sd, dhp) {
       m_message = new uint8_t [65536];
+      memcpy(&m_addr, &m_local_addr, sizeof(InetAddr));
     }
 
     virtual ~IOHandlerDatagram() { delete [] m_message; }

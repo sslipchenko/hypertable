@@ -313,6 +313,7 @@ namespace Hypertable {
     SharedImplPtr m_impl;
 
   };
+  /// Smart pointer to ConnectionManager
   typedef boost::intrusive_ptr<ConnectionManager> ConnectionManagerPtr;
 
   /** @}*/

@@ -59,22 +59,25 @@ namespace Hypertable {
    *  @{
    */
 
-  /** Base class for I/O handlers
+  /** Base class for socket descriptor I/O handlers.
+   * When a socket is created, an I/O handler object is allocated to handle
+   * events that occur on the socket.  Events are encapsulated in the Event
+   * class and are delivered to the application through a DispatchHandler.  For
+   * example, a TCP socket will have an associated IOHandlerData object that
+   * reads messages off the socket and sends then to the application via the
+   * installed DispatchHandler object.
    */
   class IOHandler : public ReferenceCount {
 
   public:
 
-    IOHandler(int sd, const InetAddr &addr, DispatchHandlerPtr &dhp)
-      : m_reference_count(0), m_free_flag(0), m_error(Error::OK), m_addr(addr),
-        m_sd(sd), m_dispatch_handler(dhp), m_decomissioned(false) {
-      ReactorFactory::get_reactor(m_reactor);
-      m_poll_interest = 0;
-      socklen_t namelen = sizeof(m_local_addr);
-      getsockname(m_sd, (sockaddr *)&m_local_addr, &namelen);
-      memset(&m_alias, 0, sizeof(m_alias));
-    }
-
+    /** Constructor.
+     * Initializes the I/O handler, assigns it a Reactor, and sets m_local_addr
+     * to the locally bound address (IPv4:port) of <code>sd</code> (see
+     * <code>getsockname</code>).
+     * @param sd socket descriptor
+     * @param dhp dispatch handler
+     */
     IOHandler(int sd, DispatchHandlerPtr &dhp)
       : m_reference_count(0), m_free_flag(0), m_error(Error::OK),
         m_sd(sd), m_dispatch_handler(dhp), m_decomissioned(false) {
@@ -82,23 +85,43 @@ namespace Hypertable {
       m_poll_interest = 0;
       socklen_t namelen = sizeof(m_local_addr);
       getsockname(m_sd, (sockaddr *)&m_local_addr, &namelen);
-      memcpy(&m_addr, &m_local_addr, sizeof(m_local_addr));
       memset(&m_alias, 0, sizeof(m_alias));
     }
 
-    // define default poll() interface for everyone since it is chosen at runtime
+    /** Event handler method for Unix <i>poll</i> interface.
+     * @param event pointer to pollfd structure describing event
+     * @param arrival_time arrival time of event
+     * @return <i>true</i> if socket should be closed, <i>false</i> otherwise
+     */
     virtual bool handle_event(struct pollfd *event, time_t arival_time=0) = 0;
 
 #if defined(__APPLE__) || defined(__FreeBSD__)
+    /** Event handler method for <i>kqueue</i> interface (OSX, FreeBSD).
+     * @param event pointer to <code>kevent</code> structure describing event
+     * @param arrival_time arrival time of event
+     * @return <i>true</i> if socket should be closed, <i>false</i> otherwise
+     */
     virtual bool handle_event(struct kevent *event, time_t arival_time=0) = 0;
 #elif defined(__linux__)
+    /** Event handler method for Linux <i>epoll</i> interface.
+     * @param event pointer to <code>epoll_event</code> structure describing event
+     * @param arrival_time arrival time of event
+     * @return <i>true</i> if socket should be closed, <i>false</i> otherwise
+     */
     virtual bool handle_event(struct epoll_event *event, time_t arival_time=0) = 0;
 #elif defined(__sun__)
+    /** Event handler method for <i>port_associate</i> interface (Solaris).
+     * @param event pointer to <code>port_event_t</code> structure describing event
+     * @param arrival_time arrival time of event
+     * @return <i>true</i> if socket should be closed, <i>false</i> otherwise
+     */
     virtual bool handle_event(port_event_t *event, time_t arival_time=0) = 0;
 #else
-    ImplementMe;
+    // Implement me!!!
 #endif
 
+    /** Destructor.
+     */
     virtual ~IOHandler() {
       HT_ASSERT(m_free_flag != 0xdeadbeef);
       m_free_flag = 0xdeadbeef;
@@ -106,19 +129,11 @@ namespace Hypertable {
       return;
     }
 
-    void deliver_event(Event *event) {
-      memcpy(&event->local_addr, &m_local_addr, sizeof(m_local_addr));
-      if (!m_dispatch_handler) {
-        HT_INFOF("%s", event->to_str().c_str());
-        delete event;
-      }
-      else {
-        EventPtr event_ptr(event);
-        m_dispatch_handler->handle(event_ptr);
-      }
-    }
-
-    void deliver_event(Event *event, DispatchHandler *dh) {
+    /** Convenience method for delivering event to application.
+     * @param event pointer to Event
+     * @param dh DispatchHandler to deliver event to
+     */
+    void deliver_event(Event *event, DispatchHandler *dh=0) {
       memcpy(&event->local_addr, &m_local_addr, sizeof(m_local_addr));
       if (!dh) {
         if (!m_dispatch_handler) {

@@ -711,7 +711,9 @@ RangeServerClient::send_message(const CommAddress &addr, CommBufPtr &cbp,
       != Error::OK) {
     HT_WARNF("Comm::send_request to %s failed - %s",
              addr.to_str().c_str(), Error::get_text(error));
-    HT_THROWF(error, "Comm::send_request to %s failed",
-              addr.to_str().c_str());
+    // COMM_BROKEN_CONNECTION implies handler will get a callback
+    if (error != Error::COMM_BROKEN_CONNECTION)
+      HT_THROWF(error, "Comm::send_request to %s failed",
+                addr.to_str().c_str());
   }
 }

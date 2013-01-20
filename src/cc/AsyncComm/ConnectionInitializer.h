@@ -34,7 +34,7 @@ namespace Hypertable {
    *  @{
    */
 
-  /** Driver for connection initialization handshake in ConnectionManager.
+  /** Driver interface for connection initialization handshake in ConnectionManager.
    */
   class ConnectionInitializer : public ReferenceCount {
   public:
