@@ -29,7 +29,11 @@ fi
 $HT_HOME/bin/Hypertable.Master --verbose --pidfile=$PIDFILE \
     --config=${SCRIPT_DIR}/test.cfg $1
 
-[ "$1" ] || exit # base run
+# Exit if base run
+if [ -z $1 ]; then
+    \rm -f $LAUNCHER_PIDFILE
+    exit
+fi
 
 echo ""
 echo "!!!! CRASH ($@) !!!!"
@@ -47,3 +51,5 @@ fi
 #$HT_HOME/bin/ht valgrind -v --log-file=vg_rs1.log --track-origins=yes \
 $HT_HOME/bin/Hypertable.Master --pidfile=$PIDFILE --verbose \
     --config=${SCRIPT_DIR}/test.cfg 
+
+\rm -f $LAUNCHER_PIDFILE
