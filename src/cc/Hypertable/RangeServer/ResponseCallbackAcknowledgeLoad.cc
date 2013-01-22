@@ -27,7 +27,7 @@ using namespace Hypertable;
 
 int ResponseCallbackAcknowledgeLoad::response(const map<QualifiedRangeSpec, int> &error_map) {
   CommHeader header;
-  header.initialize_from_request_header(m_event_ptr->header);
+  header.initialize_from_request_header(m_event->header);
   size_t len = 8;
   map<QualifiedRangeSpec, int>::const_iterator map_it = error_map.begin();
   while (map_it != error_map.end()) {
@@ -44,5 +44,5 @@ int ResponseCallbackAcknowledgeLoad::response(const map<QualifiedRangeSpec, int>
     cbp->append_i32(map_it->second);
     ++map_it;
   }
-  return m_comm->send_response(m_event_ptr->addr, cbp);
+  return m_comm->send_response(m_event->addr, cbp);
 }

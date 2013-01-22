@@ -46,10 +46,10 @@ void RequestHandlerPhantomUpdate::run() {
   int plan_generation;
   uint32_t fragment;
 
-  ResponseCallbackPhantomUpdate cb(m_comm, m_event_ptr);
+  ResponseCallbackPhantomUpdate cb(m_comm, m_event);
 
-  const uint8_t *decode_ptr = m_event_ptr->payload;
-  size_t decode_remain = m_event_ptr->payload_len;
+  const uint8_t *decode_ptr = m_event->payload;
+  size_t decode_remain = m_event->payload_len;
   try {
     location = Serialization::decode_vstr(&decode_ptr, &decode_remain);
     plan_generation = Serialization::decode_i32(&decode_ptr, &decode_remain);
@@ -57,7 +57,7 @@ void RequestHandlerPhantomUpdate::run() {
     fragment = Serialization::decode_i32(&decode_ptr, &decode_remain);
     cb.initialize(range, fragment);
     m_range_server->phantom_update(&cb, location, plan_generation, 
-         range, fragment, m_event_ptr);
+         range, fragment, m_event);
   }
   catch (Exception &e) {
     HT_ERROR_OUT << e << HT_END;

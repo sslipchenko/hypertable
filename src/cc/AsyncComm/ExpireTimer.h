@@ -32,7 +32,7 @@ namespace Hypertable {
    *  @{
    */
 
-  /** Timer state.
+  /** State record for timer.
    */
   struct ExpireTimer {
     boost::xtime expire_time;   //!< Absolute expiration time

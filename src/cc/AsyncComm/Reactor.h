@@ -56,9 +56,6 @@ namespace Hypertable {
 
   /** Manages reactor (polling thread) state including poll interest, request cache,
    * and timers.
-   *
-   * @todo ERROR events for registered requests should be delivered via the
-   *       request's event handler, not the I/O handler's default event handler
    */
   class Reactor : public ReferenceCount {
 
@@ -135,7 +132,7 @@ namespace Hypertable {
     }
 
     /** Cancels timers associated with <code>handler</code>.
-     * @handler Event handler for which associated timers are to be cancelled
+     * @param handler Event handler for which associated timers are to be cancelled
      */
     void cancel_timer(DispatchHandler *handler) {
       ScopedLock lock(m_mutex);

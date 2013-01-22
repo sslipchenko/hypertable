@@ -26,13 +26,13 @@ using namespace Hypertable;
 
 int ResponseCallbackPhantomUpdate::response() {
   CommHeader header;
-  header.initialize_from_request_header(m_event_ptr->header);
+  header.initialize_from_request_header(m_event->header);
   size_t len = m_range.encoded_length() + 4 + 4;
   CommBufPtr cbp(new CommBuf(header, len));
   cbp->append_i32(Error::OK);
   m_range.encode(cbp->get_data_ptr_address());
   cbp->append_i32(m_fragment);
-  return m_comm->send_response(m_event_ptr->addr, cbp);
+  return m_comm->send_response(m_event->addr, cbp);
 }
 
 int ResponseCallbackPhantomUpdate::response_ok() {
@@ -41,7 +41,7 @@ int ResponseCallbackPhantomUpdate::response_ok() {
 
 int ResponseCallbackPhantomUpdate::error(int error, const String &msg) {
   CommHeader header;
-  header.initialize_from_request_header(m_event_ptr->header);
+  header.initialize_from_request_header(m_event->header);
   CommBufPtr cbp;
   String message;
   size_t max_msg_size = std::numeric_limits<int16_t>::max();
@@ -63,6 +63,6 @@ int ResponseCallbackPhantomUpdate::error(int error, const String &msg) {
   m_range.encode(cbp->get_data_ptr_address());
   cbp->append_i32(m_fragment);
 
-  return m_comm->send_response(m_event_ptr->addr, cbp);
+  return m_comm->send_response(m_event->addr, cbp);
 }
 

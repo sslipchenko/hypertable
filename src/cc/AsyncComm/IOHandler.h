@@ -75,8 +75,8 @@ namespace Hypertable {
      * Initializes the I/O handler, assigns it a Reactor, and sets m_local_addr
      * to the locally bound address (IPv4:port) of <code>sd</code> (see
      * <code>getsockname</code>).
-     * @param sd socket descriptor
-     * @param dhp dispatch handler
+     * @param sd Socket descriptor
+     * @param dhp Dispatch handler
      */
     IOHandler(int sd, DispatchHandlerPtr &dhp)
       : m_reference_count(0), m_free_flag(0), m_error(Error::OK),
@@ -89,33 +89,33 @@ namespace Hypertable {
     }
 
     /** Event handler method for Unix <i>poll</i> interface.
-     * @param event pointer to pollfd structure describing event
-     * @param arrival_time arrival time of event
+     * @param event Pointer to pollfd structure describing event
+     * @param arrival_time Arrival time of event
      * @return <i>true</i> if socket should be closed, <i>false</i> otherwise
      */
-    virtual bool handle_event(struct pollfd *event, time_t arival_time=0) = 0;
+    virtual bool handle_event(struct pollfd *event, time_t arrival_time=0) = 0;
 
 #if defined(__APPLE__) || defined(__FreeBSD__)
     /** Event handler method for <i>kqueue</i> interface (OSX, FreeBSD).
-     * @param event pointer to <code>kevent</code> structure describing event
-     * @param arrival_time arrival time of event
+     * @param event Pointer to <code>kevent</code> structure describing event
+     * @param arrival_time Arrival time of event
      * @return <i>true</i> if socket should be closed, <i>false</i> otherwise
      */
-    virtual bool handle_event(struct kevent *event, time_t arival_time=0) = 0;
+    virtual bool handle_event(struct kevent *event, time_t arrival_time=0) = 0;
 #elif defined(__linux__)
     /** Event handler method for Linux <i>epoll</i> interface.
-     * @param event pointer to <code>epoll_event</code> structure describing event
-     * @param arrival_time arrival time of event
+     * @param event Pointer to <code>epoll_event</code> structure describing event
+     * @param arrival_time Arrival time of event
      * @return <i>true</i> if socket should be closed, <i>false</i> otherwise
      */
-    virtual bool handle_event(struct epoll_event *event, time_t arival_time=0) = 0;
+    virtual bool handle_event(struct epoll_event *event, time_t arrival_time=0) = 0;
 #elif defined(__sun__)
     /** Event handler method for <i>port_associate</i> interface (Solaris).
-     * @param event pointer to <code>port_event_t</code> structure describing event
-     * @param arrival_time arrival time of event
+     * @param event Pointer to <code>port_event_t</code> structure describing event
+     * @param arrival_time Arrival time of event
      * @return <i>true</i> if socket should be closed, <i>false</i> otherwise
      */
-    virtual bool handle_event(port_event_t *event, time_t arival_time=0) = 0;
+    virtual bool handle_event(port_event_t *event, time_t arrival_time=0) = 0;
 #else
     // Implement me!!!
 #endif

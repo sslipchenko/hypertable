@@ -184,14 +184,14 @@ namespace Hypertable {
     /**
      * Same as above method except installs a connection initializer
      *
-     * @param addr The address to maintain a connection to
-     * @param timeout_ms The timeout value (in milliseconds) that gets passed
-     *        into Comm::connect and also used as the waiting period betweeen
-     *        connection attempts
-     * @param service_name The name of the serivce at the other end of the
-     *        connection used for descriptive log messages
-     * @param handler This is the default handler to install on the connection.
-     *        All events get changed through to this handler.
+     * @param addr Address to maintain a connection to
+     * @param timeout_ms Timeout value (in milliseconds) that gets passed into
+     * Comm#connect and also used as the waiting period between connection
+     * attempts
+     * @param service_name Name of the serivce at the other end of the
+     * connection used for descriptive log messages
+     * @param handler Default event handler for connection.
+     * @param initializer Connection initialization handshake driver
      */
     void add_with_initializer(const CommAddress &addr, uint32_t timeout_ms,
                               const char *service_name,

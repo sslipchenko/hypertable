@@ -60,12 +60,12 @@ namespace Hypertable {
    *
    * <pre>
    *   CommHeader header;
-   *   header.initialize_from_request_header(m_event_ptr->header);
+   *   header.initialize_from_request_header(m_event->header);
    *   CommBufPtr cbp(new CommBuf( header, 10, ext));
    *   cbp->append_i32(Error::OK);
    *   cbp->append_i16(moreflag);
    *   cbp->append_i32(id);
-   *   error = m_comm->send_response(m_event_ptr->addr, cbp);
+   *   error = m_comm->send_response(m_event->addr, cbp);
    * </pre>
    *
    */

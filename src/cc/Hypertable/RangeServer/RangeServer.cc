@@ -4289,9 +4289,8 @@ bool RangeServer::live(const QualifiedRangeSpec &spec) {
 
 
 void RangeServer::wait_for_maintenance(ResponseCallback *cb) {
-  boost::xtime expire_time;
+  boost::xtime expire_time = cb->get_event()->expiration_time();
   HT_INFO("wait_for_maintenance");
-  cb->get_event()->expiration_time(expire_time);
   if (!Global::maintenance_queue->wait_for_empty(expire_time))
     cb->error(Error::REQUEST_TIMEOUT, "");
   cb->response_ok();

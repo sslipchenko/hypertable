@@ -38,7 +38,7 @@ using namespace Serialization;
  *
  */
 void RequestHandlerPhantomLoad::run() {
-  ResponseCallback cb(m_comm, m_event_ptr);
+  ResponseCallback cb(m_comm, m_event);
   String location;
   int plan_generation;
   vector<uint32_t> fragments;
@@ -46,8 +46,8 @@ void RequestHandlerPhantomLoad::run() {
   vector<RangeState> states;
   uint32_t nn;
 
-  const uint8_t *decode_ptr = m_event_ptr->payload;
-  size_t decode_remain = m_event_ptr->payload_len;
+  const uint8_t *decode_ptr = m_event->payload;
+  size_t decode_remain = m_event->payload_len;
   QualifiedRangeSpec spec;
   RangeState state;
 

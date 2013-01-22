@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2007-2012 Hypertable, Inc.
+ * Copyright (C) 2007-2013 Hypertable, Inc.
  *
  * This file is part of Hypertable.
  *
@@ -34,82 +34,105 @@ extern "C" {
 
 namespace Hypertable {
 
+  /** \addtogroup AsyncComm
+   *  @{
+   */
+
   /** Abstract base clase for application request handlers.  Objects of this
-   * type are what get added to an ApplicationQueue.  Most application
+   * type are what get added to an ApplicationQueue.  Typically, application
    * requests are generated via MESSAGE events received from the Comm layer.
-   * The application queue supports serialization of requests for specific
-   * application objects.  This is achieved by setting the gid field of
-   * the message to a unique id associated with the application object
-   * (e.g. file handle).  The MESSAGE event object that gets created when
-   * a message arrives will create a 64-bit thread_group value that is the
-   * combination of the connection ID and the gid field in the message
-   * header.  This thread group value is used by the ApplicationQueue to
-   * serialize requests.
+   * There are two attributes of a request handler that control how it is
+   * handled in the Application queue:
+   *
+   * Group ID
+   *
+   * The ApplicationQueue supports serial execution of requests that operate on
+   * a common shared resource.  This is achieved through the application request
+   * handler group ID.  Application request handlers that contain the same group
+   * ID will get executed in series.  When initialized from a MESSAGE event,
+   * the group ID is the same as the CommHeader#gid field of the message header,
+   * otherwise it is 0.
+   *
+   * Urgent
+   *
+   * The ApplicationQueue supports two-level request prioritization.  Requests
+   * can be designated as <i>urgent</i> which will cause them to be executed
+   * before other non-urgent requests.  Urgent requests will also be executed
+   * even when the ApplicationQueue has been paused.  When initialized from a
+   * MESSAGE event, the #m_urgent field will get set to <i>true</i> if the
+   * CommHeader::FLAGS_BIT_URGENT is set in the CommHeader#flags field of the
+   * message header.
    */
   class ApplicationHandler {
 
   public:
-    /** Initializes the handler object with the event object that generated
-     * the request.
-     *
-     * @param event_ptr smart pointer to event object that generated the request
+    /** Constructor initializing from an Event object.
+     * Initializes #m_event to <code>event</code> and sets #m_urgent to
+     * <i>true</i> if the CommHeader::FLAGS_BIT_URGENT is set in the
+     * flags field of Event#header member of <code>event</code>.
+     * @param event Event that generated the request
      */
-    ApplicationHandler(EventPtr &event_ptr) : m_event_ptr(event_ptr) {
-      if (m_event_ptr)
-        m_urgent = (bool)(m_event_ptr->header.flags & CommHeader::FLAGS_BIT_URGENT);
+    ApplicationHandler(EventPtr &event) : m_event(event) {
+      if (m_event)
+        m_urgent = (bool)(m_event->header.flags & CommHeader::FLAGS_BIT_URGENT);
       else
         m_urgent = false;
     }
 
-    /** Initializes the handler object with NULL event object.
+    /** Constructor initializing to empty.
+     * @param urgent Request should be marked as urgent
      */
     ApplicationHandler(bool urgent=false) : m_urgent(urgent) { }
 
     /** Destructor */
-    virtual ~ApplicationHandler() { return; }
+    virtual ~ApplicationHandler() { }
 
-    /** Abstract method to carry out the request.  Called by an ApplicationQueue
-     * worker thread
+    /** Carries out the request.  Called by an ApplicationQueue worker thread.
      */
     virtual void run() = 0;
 
-    /** Returns the thread group that this request belongs to.  This value is
-     * taken from the associated event object (see Event#thread_group).
+    /** Returns the <i>group ID</i> that this request belongs to.  This
+     * value is taken from the associated event object (see Event#group_id).
+     * @return Group ID
      */
-    uint64_t get_thread_group() {
-      return (m_event_ptr) ?  m_event_ptr->thread_group : 0;
+    uint64_t get_group_id() {
+      return (m_event) ?  m_event->group_id : 0;
     }
 
-    /** Returns true of the 'urgent' bit is set in the message header
+    /** Returns <i>true</i> if request is urgent.
+     * @return <i>true</i> if urgent
      */
     bool is_urgent() { return m_urgent; }
 
-    bool expired() {
-      if (m_event_ptr && m_event_ptr->type == Event::MESSAGE &&
+    /** Returns <i>true</i> if request has expired.
+     * @return <i>true</i> if request has expired.
+     */
+    bool is_expired() {
+      if (m_event && m_event->type == Event::MESSAGE &&
           ReactorRunner::record_arrival_time &&
-          (m_event_ptr->header.flags & CommHeader::FLAGS_BIT_REQUEST)) {
+          (m_event->header.flags & CommHeader::FLAGS_BIT_REQUEST)) {
         uint32_t wait_ms;
 	time_t now = time(0);
 	HT_ASSERT(now != (time_t)-1);
-	if (now < m_event_ptr->arrival_time) {
+	if (now < m_event->arrival_time) {
 	  HT_WARNF("time() returned %ld which is less than the arrival time of %ld",
-		   (long int)now, (long int)m_event_ptr->arrival_time);
+		   (long int)now, (long int)m_event->arrival_time);
 	  wait_ms = 0;
 	}
 	else
-	  wait_ms = (now - m_event_ptr->arrival_time) * 1000;
-        if (wait_ms >= m_event_ptr->header.timeout_ms) {
-          if (m_event_ptr->header.flags & CommHeader::FLAGS_BIT_REQUEST)
+	  wait_ms = (now - m_event->arrival_time) * 1000;
+        if (wait_ms >= m_event->header.timeout_ms) {
+          if (m_event->header.flags & CommHeader::FLAGS_BIT_REQUEST)
             HT_WARNF("Request expired, wait time %u > timeout %u (now=%ld, arrival_time=%ld)",
-		     (unsigned)wait_ms, m_event_ptr->header.timeout_ms,
-		     (long int)now, (long int)m_event_ptr->arrival_time);
+		     (unsigned)wait_ms, m_event->header.timeout_ms,
+		     (long int)now, (long int)m_event->arrival_time);
           else
             HT_WARNF("Response expired, wait time %u > timeout %u", (unsigned)wait_ms,
-                 m_event_ptr->header.timeout_ms);
+                 m_event->header.timeout_ms);
 
-          if (m_event_ptr->header.timeout_ms == 0) {
+          if (m_event->header.timeout_ms == 0) {
             HT_INFO("Changing zero timeout request to 120000 ms");
-            m_event_ptr->header.timeout_ms = 120000;
+            m_event->header.timeout_ms = 120000;
             return false;
           }
 
@@ -120,10 +143,10 @@ namespace Hypertable {
     }
 
   protected:
-    EventPtr m_event_ptr;
-    bool m_urgent;
+    EventPtr m_event; //!< Event object from which request was created
+    bool m_urgent;    //!< Flag indicating if request is urgent
   };
-
+  /** @}*/
 } // namespace Hypertable
 
 #endif // HYPERTABLE_APPLICATIONHANDLER_H

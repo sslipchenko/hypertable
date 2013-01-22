@@ -39,7 +39,7 @@ using namespace Serialization;
  *
  */
 void RequestHandlerReplayFragments::run() {
-  ResponseCallback cb(m_comm, m_event_ptr);
+  ResponseCallback cb(m_comm, m_event);
   int64_t op_id;
   int type;
   int plan_generation;
@@ -49,8 +49,8 @@ void RequestHandlerReplayFragments::run() {
   RangeRecoveryReceiverPlan receiver_plan;
   uint32_t nn;
 
-  const uint8_t *decode_ptr = m_event_ptr->payload;
-  size_t decode_remain = m_event_ptr->payload_len;
+  const uint8_t *decode_ptr = m_event->payload;
+  size_t decode_remain = m_event->payload_len;
 
   try {
     op_id = decode_i64(&decode_ptr, &decode_remain);

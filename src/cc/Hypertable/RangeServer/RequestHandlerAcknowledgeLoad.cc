@@ -39,11 +39,11 @@ using namespace Serialization;
  *
  */
 void RequestHandlerAcknowledgeLoad::run() {
-  ResponseCallbackAcknowledgeLoad cb(m_comm, m_event_ptr);
+  ResponseCallbackAcknowledgeLoad cb(m_comm, m_event);
   vector<QualifiedRangeSpec> ranges;
   QualifiedRangeSpec range;
-  const uint8_t *decode_ptr = m_event_ptr->payload;
-  size_t decode_remain = m_event_ptr->payload_len;
+  const uint8_t *decode_ptr = m_event->payload;
+  size_t decode_remain = m_event->payload_len;
 
   try {
     int nn = Serialization::decode_i32(&decode_ptr, &decode_remain);

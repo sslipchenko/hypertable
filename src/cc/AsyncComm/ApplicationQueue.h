@@ -147,7 +147,7 @@ namespace Hypertable {
                 m_state.urgent_queue.erase(iter);
                 break;
               }
-              if (!rec->handler || rec->handler->expired()) {
+              if (!rec->handler || rec->handler->is_expired()) {
                 iter = m_state.urgent_queue.erase(iter);
                 remove_expired(rec);
               }
@@ -165,7 +165,7 @@ namespace Hypertable {
                   m_state.queue.erase(iter);
                   break;
                 }
-                if (!rec->handler || rec->handler->expired()) {
+                if (!rec->handler || rec->handler->is_expired()) {
                   iter = m_state.queue.erase(iter);
                   remove_expired(rec);
                 }
@@ -242,15 +242,17 @@ namespace Hypertable {
   public:
 
     /**
-     * Default ctor used by derived classes only
+     * Default constructor used by derived classes only
      */
     ApplicationQueue() : joined(true) {}
 
     /**
-     * Constructor to set up the application queue.  It creates a number
-     * of worker threads specified by the worker_count argument.
-     *
-     * @param worker_count number of worker threads to create
+     * Constructor initialized with worker thread count.
+     * This constructor sets up the application queue with a number of worker
+     * threads specified by <code>worker_count</code>.
+     * @param worker_count Number of worker threads to create
+     * @param dynamic_threads Dynamically create temporary thread to carry out
+     * requests if none available.
      */
     ApplicationQueue(int worker_count, bool dynamic_threads=true) 
       : joined(false), m_dynamic_threads(dynamic_threads) {
@@ -339,7 +341,7 @@ namespace Hypertable {
      */
     virtual void add(ApplicationHandler *app_handler) {
       GroupStateMap::iterator uiter;
-      uint64_t thread_group = app_handler->get_thread_group();
+      uint64_t thread_group = app_handler->get_group_id();
       WorkRec *rec = new WorkRec(app_handler);
       rec->group_state = 0;
 

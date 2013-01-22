@@ -64,9 +64,9 @@ namespace Hypertable {
 
     /** Sets address type to CommAddress#PROXY and #proxy name to
      * <code>p</code>.
-     * @param p proxy name
+     * @param str proxy name
      */
-    void set_proxy(const String &p) { proxy = p; m_type=PROXY; }
+    void set_proxy(const String &str) { proxy = str; m_type=PROXY; }
 
     /** Sets address type to CommAddress#INET and #inet value to
      * <code>addr</code>.
@@ -133,19 +133,19 @@ namespace Hypertable {
       return false;
     }
 
-    /** Tests if address is of type CommAddress#PROXY.
+    /** Returns <i>true</i> if address is of type CommAddress#PROXY.
      * @return <i>true</i> if address is of type CommAddress#PROXY,
      * <i>false</i> otherwise
      */
     bool is_proxy() const { return m_type == PROXY; }
 
-    /** Tests if address is of type CommAddress#INET.
+    /** Returns <i>true</i> if address is of type CommAddress#INET.
      * @return <i>true</i> if address is of type CommAddress#INET, <i>false</i>
      * otherwise
      */
     bool is_inet() const { return m_type == INET; }
 
-    /** Tests if address has been initialized.
+    /** Returns <i>true</i> if address has been initialized.
      * @return <i>true</i> if address is of type CommAddress#PROXY or
      * CommAddress#INET, <i>false</i> otherwise
      */
@@ -183,7 +183,7 @@ namespace Hypertable {
      * <code>addr</code> parameter.  If the address type is CommAddress#INET,
      * then the hash code is computed as the bitwise exclusive OR of the IP
      * address and the port.  If the address is of type CommAddress#PROXY, then
-     * the hash code is computed with <code>__gnu_cxx::hash<const char *><code>.
+     * the hash code is computed with <code>__gnu_cxx::hash<const char *></code>.
      * Otherwise the hash value is 0.
      * @return hash value
      */
