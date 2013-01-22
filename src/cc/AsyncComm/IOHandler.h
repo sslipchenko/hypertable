@@ -130,8 +130,13 @@ namespace Hypertable {
     }
 
     /** Convenience method for delivering event to application.
-     * @param event pointer to Event
-     * @param dh DispatchHandler to deliver event to
+     * This method will deliver <code>event</code> to the application via the
+     * event handler <code>dh</code> if supplied, otherwise the event will be
+     * delivered via the default event handler, or no default event handler
+     * exists, it will just log the event.  This method is (and should always)
+     * by called from a reactor thread.
+     * @param event pointer to Event (deleted by this method)
+     * @param dh Event handler via which to deliver event
      */
     void deliver_event(Event *event, DispatchHandler *dh=0) {
       memcpy(&event->local_addr, &m_local_addr, sizeof(m_local_addr));
@@ -151,6 +156,9 @@ namespace Hypertable {
       }
     }
 
+    /**
+     *
+     */
     int start_polling(int mode=Reactor::READ_READY);
 
     int add_poll_interest(int mode);
@@ -213,14 +221,8 @@ namespace Hypertable {
     void decrement_reference_count() {
       HT_ASSERT(m_reference_count > 0);
       m_reference_count--;
-      if (m_reference_count == 0 && m_decomissioned) {
-        ExpireTimer timer;
+      if (m_reference_count == 0 && m_decomissioned)
         m_reactor->schedule_removal(this);
-        boost::xtime_get(&timer.expire_time, boost::TIME_UTC_);
-        timer.expire_time.nsec += 200000000LL;
-        timer.handler = 0;
-        m_reactor->add_timer(timer);
-      }
     }
 
     size_t reference_count() {
@@ -230,14 +232,8 @@ namespace Hypertable {
     void decomission() {
       if (!m_decomissioned) {
         m_decomissioned = true;
-        if (m_reference_count == 0) {
-          ExpireTimer timer;
+        if (m_reference_count == 0)
           m_reactor->schedule_removal(this);
-          boost::xtime_get(&timer.expire_time, boost::TIME_UTC_);
-          timer.expire_time.nsec += 200000000LL;
-          timer.handler = 0;
-          m_reactor->add_timer(timer);
-        }
       }
     }
 

@@ -27,6 +27,7 @@
 #include <boost/thread/thread.hpp>
 
 #include <cassert>
+#include <set>
 #include <vector>
 
 #include "Common/atomic.h"
@@ -74,6 +75,7 @@ namespace Hypertable {
 
     /** vector of reactors */
     static std::vector<ReactorPtr> ms_reactors;
+    static std::set<uint16_t> reserved_udp_ports;
 
     static boost::thread_group ms_threads;
 

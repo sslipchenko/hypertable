@@ -67,26 +67,6 @@ namespace {
 
   typedef Meta::list<AppPolicy, DfsBrokerPolicy, DefaultCommPolicy> Policies;
 
-  /** Dispatch handler used to help reserve Hyperspace UDP port.
-   * To prevent one of its linked libraries from binding to Hyperspace's UDP port
-   * and causing a conflict, the local broker binds to Hyperspace's UDP port
-   * (with SO_REUSEADDR option) and installs this handler.  The receipt
-   * of an event by this handler is assumed to be caused by Hyperspace UDP
-   * traffic, indicating that Hyperspace successfully came up, so the socket is
-   * immediately closed.
-   */
-  class HyperspacePortReserveHandler : public DispatchHandler {
-  public:
-    HyperspacePortReserveHandler(Comm *comm) : m_comm(comm) { }
-    virtual void handle(EventPtr &event) {
-      CommAddress addr(event->local_addr);
-      m_comm->close_socket(addr);
-      HT_INFOF("Closed Hyperspace UDP socket %s", addr.to_str().c_str());
-    }
-  private:
-    Comm *m_comm;
-  };
-
 } // local namespace
 
 
@@ -100,13 +80,6 @@ int main(int argc, char **argv) {
       port = get_i16("port");
 
     Comm *comm = Comm::instance();
-
-    // Hack to preserve UDP port 38040 until Hyperspace comes up
-    DispatchHandlerPtr reserve_handler = new HyperspacePortReserveHandler(comm);
-    CommAddress local_addr = InetAddr(INADDR_ANY,
-                                      get_i16("Hyperspace.Replica.Port"));
-    HT_INFOF("Reserving Hyperspace UDP socket %s", local_addr.to_str().c_str());
-    comm->create_datagram_receive_socket(local_addr, 0, reserve_handler);
 
     ApplicationQueuePtr app_queue = new ApplicationQueue(worker_count);
     BrokerPtr broker = new LocalBroker(properties);

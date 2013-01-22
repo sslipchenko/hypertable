@@ -28,17 +28,31 @@
 
 namespace Hypertable {
 
+  /** \addtogroup AsyncComm
+   *  @{
+   */
+
+  /** Timer state.
+   */
   struct ExpireTimer {
-    boost::xtime       expire_time;
-    DispatchHandlerPtr handler;
+    boost::xtime expire_time;   //!< Absolute expiration time
+    DispatchHandlerPtr handler; //!< Event handler to receive TIMER event
   };
 
-  struct LtTimer {
+  /** Comparison function (functor) for timer heap.
+   */
+  struct LtTimerHeap {
+    /** Parenthesis operator with two ExpireTimer parameters.
+     * Provides "largest first" comparison.
+     * @param t1 Lefthand side of comparison
+     * @param t2 Righthand side of comparison
+     * @return true if <code>t1</code> is greater than <code>t2</code>
+     */
     bool operator()(const ExpireTimer &t1, const ExpireTimer &t2) const {
       return xtime_cmp(t1.expire_time, t2.expire_time) > 0;
     }
   };
-
+  /** @}*/
 }
 
 #endif // HYPERTABLE_ExpireTimer_H
