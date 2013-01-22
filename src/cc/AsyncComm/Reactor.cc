@@ -293,7 +293,7 @@ int Reactor::poll_loop_interrupt() {
     }
 
     if ((n = FileUtils::recv(m_interrupt_sd, buf, 8)) == -1) {
-      HT_ERRORF("recv(interrupt_sd) failed - %s", strerror(errno));
+      HT_FATALF("recv(interrupt_sd) failed - %s", strerror(errno));
       return Error::COMM_RECEIVE_ERROR;
     }
   }

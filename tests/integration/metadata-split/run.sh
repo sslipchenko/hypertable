@@ -10,7 +10,6 @@ startlog=/tmp/start-metadata-split$$.log
 . $HT_HOME/bin/ht-env.sh
 
 cleanup_and_abort() {
-    kill %1
     sleep 10
     if [ -f $PIDFILE ]; then
       kill -9 `cat $PIDFILE`
@@ -208,11 +207,7 @@ env | grep '^TEST_[0-9]' || set_tests 0 1 2 3 4 5 6 7 8 9 10 11 12
 [ "$TEST_11" ] && run_test 11 "--induce-failure=move-range-STARTED:exit:0"
 [ "$TEST_12" ] && run_test 12 "--induce-failure=move-range-LOAD_RANGE:exit:0"
 
-kill %1
-if [ -f $PIDFILE ]; then
-    kill -9 `cat $PIDFILE`
-    rm -f $PIDFILE
-fi
+stop_range_server
 
 echo ""
 echo "**** TEST REPORT ****"
