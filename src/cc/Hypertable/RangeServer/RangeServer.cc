@@ -372,10 +372,10 @@ void RangeServer::shutdown() {
 
     // stop application queue
     m_app_queue->stop();
-    boost::xtime expire_time;
-    boost::xtime_get(&expire_time, boost::TIME_UTC_);
-    expire_time.sec += 30;  // wait for up to 30 seconds
-    m_app_queue->wait_for_empty(expire_time, 1);
+    boost::xtime deadline;
+    boost::xtime_get(&deadline, boost::TIME_UTC_);
+    deadline.sec += 30;  // wait no more than 30 seconds
+    m_app_queue->wait_for_idle(deadline, 1);
 
     ScopedLock lock(m_stats_mutex);
 

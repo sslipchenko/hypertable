@@ -552,7 +552,7 @@ void IOHandlerData::handle_message_header(time_t arrival_time) {
   }
 
   m_event = new Event(Event::MESSAGE, m_addr);
-  m_event->load_header(m_sd, m_message_header, header_len);
+  m_event->load_message_header(m_message_header, header_len);
   m_event->arrival_time = arrival_time;
 
 #if defined(__linux__)

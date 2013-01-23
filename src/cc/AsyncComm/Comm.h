@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (C) 2007-2012 Hypertable, Inc.
  *
  * This file is part of Hypertable.
@@ -19,6 +19,11 @@
  * 02110-1301, USA.
  */
 
+/** @file
+ * Primary entry point for AsyncComm service.
+ * This file contains the definition for singleton class Comm
+ */
+
 #ifndef HYPERTABLE_COMMENGINE_H
 #define HYPERTABLE_COMMENGINE_H
 
@@ -31,10 +36,11 @@
 #include "DispatchHandler.h"
 #include "HandlerMap.h"
 
-
+/** Hypertable definitions
+ */
 namespace Hypertable {
 
-  /** \defgroup AsyncComm AsyncComm
+  /** @defgroup AsyncComm AsyncComm
    * Asynchronous network communication service.
    * The AsyncComm module is designed for maximally efficient network
    * programming by 1) providing an asynchronous API to facilitate

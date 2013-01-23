@@ -19,6 +19,13 @@
  * 02110-1301, USA.
  */
 
+/** @file
+ * Contains definition of ApplicationHandler.
+ * This file contains the definition for ApplcationHandler, a base class
+ * for application handlers to be added to and carried out by an application
+ * queue.
+ */
+
 #ifndef HYPERTABLE_APPLICATIONHANDLER_H
 #define HYPERTABLE_APPLICATIONHANDLER_H
 
@@ -38,28 +45,28 @@ namespace Hypertable {
    *  @{
    */
 
-  /** Abstract base clase for application request handlers.  Objects of this
-   * type are what get added to an ApplicationQueue.  Typically, application
-   * requests are generated via MESSAGE events received from the Comm layer.
+  /** Base clase for application handlers.  Objects of this type are what get
+   * added to an ApplicationQueue.  Provides a constructor for initialization
+   * from request MESSAGE Event received from the Comm layer.
    * There are two attributes of a request handler that control how it is
-   * handled in the Application queue:
+   * treated in the Application queue:
    *
-   * Group ID
+   * <b>Group ID</b>
    *
    * The ApplicationQueue supports serial execution of requests that operate on
-   * a common shared resource.  This is achieved through the application request
-   * handler group ID.  Application request handlers that contain the same group
-   * ID will get executed in series.  When initialized from a MESSAGE event,
-   * the group ID is the same as the CommHeader#gid field of the message header,
-   * otherwise it is 0.
+   * a shared resource.  This is achieved through the application request
+   * handler <i>group ID</i>.  Application request handlers that contain the
+   * same group ID will get executed in series.  When initialized from a MESSAGE
+   * event, the group ID is the same as the CommHeader#gid field of the message
+   * header, otherwise it is 0.
    *
-   * Urgent
+   * <b>Urgency</b>
    *
    * The ApplicationQueue supports two-level request prioritization.  Requests
    * can be designated as <i>urgent</i> which will cause them to be executed
    * before other non-urgent requests.  Urgent requests will also be executed
    * even when the ApplicationQueue has been paused.  When initialized from a
-   * MESSAGE event, the #m_urgent field will get set to <i>true</i> if the
+   * MESSAGE Event, the #m_urgent field will get set to <i>true</i> if the
    * CommHeader::FLAGS_BIT_URGENT is set in the CommHeader#flags field of the
    * message header.
    */
@@ -79,8 +86,8 @@ namespace Hypertable {
         m_urgent = false;
     }
 
-    /** Constructor initializing to empty.
-     * @param urgent Request should be marked as urgent
+    /** Default constructor with #m_urgent flag initialization.
+     * @param urgent Handler should be marked as urgent
      */
     ApplicationHandler(bool urgent=false) : m_urgent(urgent) { }
 
@@ -91,8 +98,10 @@ namespace Hypertable {
      */
     virtual void run() = 0;
 
-    /** Returns the <i>group ID</i> that this request belongs to.  This
-     * value is taken from the associated event object (see Event#group_id).
+    /** Returns the <i>group ID</i> that this handler belongs to.  This
+     * value is taken from the associated event object (see Event#group_id)
+     * if it exists, otherwise the value is 0 indicating that the handler
+     * does not belong to a group.
      * @return Group ID
      */
     uint64_t get_group_id() {
@@ -143,8 +152,8 @@ namespace Hypertable {
     }
 
   protected:
-    EventPtr m_event; //!< Event object from which request was created
-    bool m_urgent;    //!< Flag indicating if request is urgent
+    EventPtr m_event; //!< MESSAGE Event from which handler was initialized
+    bool m_urgent;    //!< Flag indicating if handler is urgent
   };
   /** @}*/
 } // namespace Hypertable

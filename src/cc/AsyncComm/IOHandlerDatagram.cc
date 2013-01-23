@@ -70,7 +70,7 @@ IOHandlerDatagram::handle_event(struct pollfd *event, time_t) {
 
       Event *event = new Event(Event::MESSAGE, addr, Error::OK);
 
-      event->load_header(m_sd, m_message, (size_t)m_message[1]);
+      event->load_message_header(m_message, (size_t)m_message[1]);
 
       payload_len = nread - (ssize_t)event->header.header_len;
       event->payload_len = payload_len;
@@ -131,7 +131,7 @@ bool IOHandlerDatagram::handle_event(struct epoll_event *event, time_t) {
       Event *event = new Event(Event::MESSAGE, addr, Error::OK);
       
       try {
-        event->load_header(m_sd, m_message, (size_t)m_message[1]);
+        event->load_message_header(m_message, (size_t)m_message[1]);
       }
       catch (Hypertable::Exception &e) {
         HT_ERROR_OUT << e << " - from " << addr.format() << HT_END;
@@ -196,7 +196,7 @@ bool IOHandlerDatagram::handle_event(port_event_t *event, time_t) {
 
 	Event *event = new Event(Event::MESSAGE, addr, Error::OK);
 
-	event->load_header(m_sd, m_message, (size_t)m_message[1]);
+	event->load_message_header(m_message, (size_t)m_message[1]);
 
 	payload_len = nread - (ssize_t)event->header.header_len;
 	event->payload_len = payload_len;
@@ -283,7 +283,7 @@ bool IOHandlerDatagram::handle_event(struct kevent *event, time_t) {
 
     Event *event = new Event(Event::MESSAGE, addr, Error::OK);
 
-    event->load_header(m_sd, m_message, (size_t)m_message[1]);
+    event->load_message_header(m_message, (size_t)m_message[1]);
 
     payload_len = nread - (ssize_t)event->header.header_len;
     event->payload_len = payload_len;

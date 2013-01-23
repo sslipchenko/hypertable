@@ -1,4 +1,4 @@
-/** -*- c++ -*-
+/* -*- c++ -*-
  * Copyright (C) 2007-2013 Hypertable, Inc.
  *
  * This file is part of Hypertable.
@@ -19,6 +19,12 @@
  * 02110-1301, USA.
  */
 
+/** @file
+ * Contains definition of ApplicationQueueInterface.
+ * This file contains the definition for ApplcationQueueInterface, an abstract
+ * base class for an application queue.
+ */
+
 #ifndef HYPERTABLE_APPLICATIONQUEUEINTERFACE_H
 #define HYPERTABLE_APPLICATIONQUEUEINTERFACE_H
 
@@ -28,7 +34,7 @@
 
 namespace Hypertable {
 
-  /** \addtogroup AsyncComm
+  /** @addtogroup AsyncComm
    *  @{
    */
 
@@ -39,11 +45,11 @@ namespace Hypertable {
 
   public:
 
-    /** Add request (application handler) to queue.
+    /** Adds an application handler to queue.
      */
     virtual void add(ApplicationHandler *app_handler) = 0;
 
-    /** Add request (application handler) to queue without locking.
+    /** Adds an application handler to queue without locking.
      * This method is similar to #add except that it does not do any
      * locking to serialize access to the queue.  It is for situations
      * where access serialization is handled by the caller.
@@ -52,6 +58,7 @@ namespace Hypertable {
 
   };
 
+  /// Smart pointer to ApplicationQueueInterface
   typedef boost::intrusive_ptr<ApplicationQueueInterface> ApplicationQueueInterfacePtr;
   /** @}*/
 } // namespace Hypertable

@@ -114,20 +114,15 @@ namespace Hypertable {
       delete [] proxy_buf;
     }
 
-    /** Loads header object from serialized MESSAGE buffer.  This method
+    /** Loads header object from serialized message buffer.  This method
      * also sets the group_id member.
      *
-     * @param sd Socket descriptor from which the event was generated
-     *        (used for group_id)
      * @param buf Buffer containing serialized header
      * @param len Length of buffer
      */
-    void load_header(int sd, const uint8_t *buf, size_t len) {
+    void load_message_header(const uint8_t *buf, size_t len) {
       header.decode(&buf, &len);
-      if (header.gid != 0)
-        group_id = ((uint64_t)sd << 32) | header.gid;
-      else
-        group_id = 0;
+      group_id = header.gid;
     }
 
     void set_proxy(const String &p) {
