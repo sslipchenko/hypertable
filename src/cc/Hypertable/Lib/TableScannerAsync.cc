@@ -475,7 +475,7 @@ void TableScannerAsync::handle_result(int scanner_id, EventPtr &event, bool is_c
     HT_ERROR_OUT << e << HT_END;
     m_error = e.code();
     m_error_msg = e.what();
-    next = m_interval_scanners[current_scanner]->has_outstanding_requests();
+    next = !m_interval_scanners[current_scanner]->has_outstanding_requests();
     maybe_callback_error(current_scanner, next);
     throw;
   }

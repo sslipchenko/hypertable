@@ -607,26 +607,23 @@ void IntervalScannerAsync::do_readahead() {
   if (!m_cur_scanner_finished) {
     HT_ASSERT(!m_fetch_outstanding && !m_eos && m_current);
     // request next scanblock and block
-    while (true) {
-      try {
-        m_fetch_timer.start();
-        m_fetch_outstanding = true;
-        m_range_server.fetch_scanblock(m_range_info.addr, m_cur_scanner_id,
-                                       &m_fetch_handler, m_fetch_timer);
+    try {
+      m_fetch_timer.start();
+      m_fetch_outstanding = true;
+      m_range_server.fetch_scanblock(m_range_info.addr, m_cur_scanner_id,
+                                     &m_fetch_handler, m_fetch_timer);
+    }
+    catch (Exception &e) {
+      m_fetch_outstanding = false;
+      m_fetch_timer.reset();
+      if (e.code() == Error::COMM_NOT_CONNECTED ||
+          e.code() == Error::COMM_BROKEN_CONNECTION) {
+        HT_ASSERT(m_state == 0);
+        m_state = RESTART;
+        return;
       }
-      catch (Exception &e) {
-        m_fetch_outstanding = false;
-        m_fetch_timer.reset();
-        if (e.code() == Error::COMM_NOT_CONNECTED ||
-            e.code() == Error::COMM_BROKEN_CONNECTION) {
-          HT_ASSERT(m_state == 0);
-          m_state = RESTART;
-          return;
-        }
-        HT_THROW2F(e.code(), e, "Problem calling RangeServer::fetch_scanblock(%s, sid=%d)",
-                   m_range_info.addr.proxy.c_str(), (int)m_cur_scanner_id);
-      }
-      break;
+      HT_THROW2F(e.code(), e, "Problem calling RangeServer::fetch_scanblock(%s, sid=%d)",
+                 m_range_info.addr.proxy.c_str(), (int)m_cur_scanner_id);
     }
 
     // if an OFFSET predicate was specified: return; we don't want to create
