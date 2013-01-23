@@ -280,22 +280,12 @@ int Reactor::poll_loop_interrupt() {
 
   if (ReactorFactory::ms_epollet) {
 
-    char buf[8];
-    ssize_t n;
-
-    /**
-     * Send and receive 1 byte to ourselves to cause epoll_wait to return
-     */
-
-    if ((n = FileUtils::send(m_interrupt_sd, "1", 1)) < 0) {
+    // Send 1 byte to ourself to cause epoll_wait to return
+    if (FileUtils::send(m_interrupt_sd, "1", 1) < 0) {
       HT_ERRORF("send(interrupt_sd) failed - %s", strerror(errno));
       return Error::COMM_SEND_ERROR;
     }
 
-    if ((n = FileUtils::recv(m_interrupt_sd, buf, 8)) == -1) {
-      HT_FATALF("recv(interrupt_sd) failed - %s", strerror(errno));
-      return Error::COMM_RECEIVE_ERROR;
-    }
   }
   else {
 
@@ -349,6 +339,11 @@ int Reactor::poll_loop_continue() {
 
   if (!ReactorFactory::ms_epollet) {
     struct epoll_event event;
+    char buf[8];
+
+    // Receive message(s) we sent to ourself in poll_loop_interrupt()
+    while (FileUtils::recv(m_interrupt_sd, buf, 8) > 0)
+      ;
 
     memset(&event, 0, sizeof(struct epoll_event));
     event.events = EPOLLERR | EPOLLHUP;
