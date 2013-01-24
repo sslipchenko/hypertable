@@ -10,6 +10,7 @@ RS2_PIDFILE=$HT_HOME/run/Hypertable.RangeServer.rs2.pid
 RS3_PIDFILE=$HT_HOME/run/Hypertable.RangeServer.rs3.pid
 MASTER_LOG=master.output
 RUN_DIR=`pwd`
+TEST_ID=graceperiod
 
 . $HT_HOME/bin/ht-env.sh
 
@@ -36,13 +37,13 @@ start_master
 # start the rangeservers
 $HT_HOME/bin/ht Hypertable.RangeServer --verbose --pidfile=$RS1_PIDFILE \
    --Hypertable.RangeServer.ProxyName=rs1 \
-   --Hypertable.RangeServer.Port=38060 --config=${SCRIPT_DIR}/test.cfg 2>&1 > rangeserver.rs1.output&
+   --Hypertable.RangeServer.Port=38060 --config=${SCRIPT_DIR}/test.cfg 2>&1 > rangeserver.rs1.output.$TEST_ID&
 $HT_HOME/bin/ht Hypertable.RangeServer --verbose --pidfile=$RS2_PIDFILE \
    --Hypertable.RangeServer.ProxyName=rs2 \
-   --Hypertable.RangeServer.Port=38061 --config=${SCRIPT_DIR}/test.cfg 2>&1 > rangeserver.rs2.output&
+   --Hypertable.RangeServer.Port=38061 --config=${SCRIPT_DIR}/test.cfg 2>&1 > rangeserver.rs2.output.$TEST_ID&
 $HT_HOME/bin/ht Hypertable.RangeServer --verbose --pidfile=$RS3_PIDFILE \
    --Hypertable.RangeServer.ProxyName=rs3 \
-   --Hypertable.RangeServer.Port=38062 --config=${SCRIPT_DIR}/test.cfg 2>&1 > rangeserver.rs3.output&
+   --Hypertable.RangeServer.Port=38062 --config=${SCRIPT_DIR}/test.cfg 2>&1 > rangeserver.rs3.output.$TEST_ID&
 
 # create table
 $HT_HOME/bin/ht shell --no-prompt < $SCRIPT_DIR/create-table.hql
@@ -81,8 +82,8 @@ L=`grep "Barrier for RECOVERY will be up" $MASTER_LOG  | wc -l`
 if [ "$L" -ne "2" ]
 then
   echo "Test failed"
-  echo "Renaming $MASTER_LOG to $MASTER_LOG.graceperiod"
-  mv $MASTER_LOG $MASTER_LOG
+  echo "Copying $MASTER_LOG to $MASTER_LOG.$TEST_ID"
+  cp $MASTER_LOG $MASTER_LOG.$TEST_ID
   exit 1
 fi
 
