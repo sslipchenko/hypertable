@@ -200,6 +200,8 @@ Comm::listen(const CommAddress &addr, ConnectionHandlerFactoryPtr &chf,
 #elif defined(__APPLE__) || defined(__FreeBSD__)
   if (setsockopt(sd, SOL_SOCKET, SO_NOSIGPIPE, &one, sizeof(one)) < 0)
     HT_WARNF("setsockopt(SO_NOSIGPIPE) failure: %s", strerror(errno));
+  if (setsockopt(sd, SOL_SOCKET, SO_REUSEPORT, &one, sizeof(one)) < 0)
+    HT_WARNF("setsockopt(SO_REUSEPORT) failure: %s", strerror(errno));
 #endif
 
   if (setsockopt(sd, SOL_SOCKET, SO_REUSEADDR, &one, sizeof(one)) < 0)
@@ -323,6 +325,11 @@ Comm::create_datagram_receive_socket(CommAddress &addr, int tos,
     HT_WARNF("setsockopt(SO_REUSEADDR) failure: %s", strerror(errno));
   }
 
+#if defined(__APPLE__) || defined(__FreeBSD__)
+  if (setsockopt(sd, SOL_SOCKET, SO_REUSEPORT, &one, sizeof(one)) < 0)
+    HT_WARNF("setsockopt(SO_REUSEPORT) failure: %s", strerror(errno));
+#endif
+
   if (tos) {
     int opt;
 #if defined(__linux__)
@@ -445,6 +452,11 @@ void Comm::find_available_tcp_port(InetAddr &addr) {
     if (setsockopt(sd, SOL_SOCKET, SO_REUSEADDR, &one, sizeof(one)) < 0)
       HT_FATALF("setting TCP socket SO_REUSEADDR: %s", strerror(errno));
 
+#if defined(__APPLE__) || defined(__FreeBSD__)
+    if (setsockopt(sd, SOL_SOCKET, SO_REUSEPORT, &one, sizeof(one)) < 0)
+      HT_WARNF("setsockopt(SO_REUSEPORT) failure: %s", strerror(errno));
+#endif
+
     check_addr = addr;
     check_addr.sin_port = htons(starting_port+i);
 
@@ -474,6 +486,11 @@ void Comm::find_available_udp_port(InetAddr &addr) {
 
     if (setsockopt(sd, SOL_SOCKET, SO_REUSEADDR, &one, sizeof(one)) < 0)
       HT_FATALF("setting UDP socket SO_REUSEADDR: %s", strerror(errno));
+
+#if defined(__APPLE__) || defined(__FreeBSD__)
+    if (setsockopt(sd, SOL_SOCKET, SO_REUSEPORT, &one, sizeof(one)) < 0)
+      HT_WARNF("setsockopt(SO_REUSEPORT) failure: %s", strerror(errno));
+#endif
 
     check_addr = addr;
     check_addr.sin_port = htons(starting_port+i);

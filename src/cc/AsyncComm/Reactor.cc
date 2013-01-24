@@ -94,6 +94,11 @@ Reactor::Reactor() : m_interrupt_in_progress(false) {
     if (setsockopt(m_interrupt_sd, SOL_SOCKET, SO_REUSEADDR, &one, sizeof(one)) < 0)
       HT_WARNF("setsockopt(SO_REUSEADDR) failure: %s", strerror(errno));
 
+#if defined(__APPLE__) || defined(__FreeBSD__)
+    if (setsockopt(m_interrupt_sd, SOL_SOCKET, SO_REUSEPORT, &one, sizeof(one)) < 0)
+      HT_WARNF("setsockopt(SO_REUSEPORT) failure: %s", strerror(errno));
+#endif
+
     // create address structure to bind to - any available port - any address
     memset(&addr, 0 , sizeof(sockaddr_in));
     addr.sin_family = AF_INET;
