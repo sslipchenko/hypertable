@@ -112,7 +112,7 @@ Reactor::Reactor() : m_interrupt_in_progress(false) {
 
     // If ephemeral port chosen by bind() is not one of our reserved
     // ports, then the address is OK and we can continue
-    if (ReactorFactory::reserved_udp_ports.count(addr.sin_port) == 0)
+    if (ReactorFactory::reserved_udp_ports.count(ntohs(addr.sin_port)) == 0)
       break;
 
     // otherwise, close socket and try again
@@ -123,7 +123,8 @@ Reactor::Reactor() : m_interrupt_in_progress(false) {
 
   // connect to ourself
   if (connect(m_interrupt_sd, (sockaddr *)&addr, sizeof(addr)) < 0) {
-    HT_ERRORF("connect(interrupt_sd) failed - %s", strerror(errno));
+    HT_ERRORF("connect(interrupt_sd) to port %d failed - %s",
+              (int)ntohs(addr.sin_port), strerror(errno));
     exit(1);
   }
 
