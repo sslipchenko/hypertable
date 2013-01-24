@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Copyright (C) 2007-2012 Hypertable, Inc.
+# Copyright (C) 2007-2013 Hypertable, Inc.
 #
 # This file is part of Hypertable.
 #
@@ -30,10 +30,9 @@ recipient=root
 
 ###############################################################################
 
-type=$1
+subject=$1
 message=$2
 
 # write the information to a file
-echo -e $type > /tmp/issue736-output
-echo -e $message >> /tmp/issue736-output
-
+echo -e $subject >> @CMAKE_CURRENT_BINARY_DIR@/output
+echo -e $message >> @CMAKE_CURRENT_BINARY_DIR@/output

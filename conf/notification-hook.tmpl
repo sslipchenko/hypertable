@@ -34,9 +34,8 @@ recipient=root
 
 ###############################################################################
 
-type=$1
+subject=$1
 message=$2
 
 # send the mail
-echo -e $message | mail -s "[$type] Hypertable alert" ${recipient}
-
+echo -e $message | mail -s "$subject" ${recipient}

@@ -11,7 +11,7 @@ RUN_DIR=`pwd`
 
 . $HT_HOME/bin/ht-env.sh
 
-rm /tmp/issue736-output
+\rm -f output
 
 wait_for_recovery() {
   grep "Leaving RecoverServer rs1 state=COMPLETE" \
@@ -36,7 +36,7 @@ stop_rs2() {
 
 # install our sample hook
 cp ${HYPERTABLE_HOME}/conf/notification-hook.sh notification-hook.bak
-cp ${SCRIPT_DIR}/notification-hook.sh ${HYPERTABLE_HOME}/conf/notification-hook.sh
+cp notification-hook.sh ${HYPERTABLE_HOME}/conf/notification-hook.sh
 
 # stop and start servers
 $HT_HOME/bin/start-test-servers.sh --no-rangeserver --no-thriftbroker \
@@ -79,18 +79,18 @@ stop_rs2
 
 # check if the hook was executed
 sed "s/HOSTNAME/`hostname`/" ${SCRIPT_DIR}/issue736.golden > golden
-diff /tmp/issue736-output golden
+diff output golden
 
 if [ "$?" -ne "0" ]
 then
   echo "Test failed, golden file differs"
   # restore the old hook
-  mv notification-hook.bak ${HYPERTABLE_HOME}/conf/notification-hook.sh
+  cp notification-hook.bak ${HYPERTABLE_HOME}/conf/notification-hook.sh
   exit 1
 fi
 
 # restore the old hook
-mv notification-hook.bak ${HYPERTABLE_HOME}/conf/notification-hook.sh
+cp notification-hook.bak ${HYPERTABLE_HOME}/conf/notification-hook.sh
 
 echo "Test passed"
 exit 0
