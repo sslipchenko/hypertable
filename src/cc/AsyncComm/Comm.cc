@@ -430,6 +430,68 @@ void Comm::close_socket(const CommAddress &addr) {
   m_handler_map->decomission_handler(handler);
 }
 
+void Comm::find_available_tcp_port(InetAddr &addr) {
+  int one = 1;
+  int sd;
+  InetAddr check_addr;
+  uint16_t starting_port = ntohs(addr.sin_port);
+
+  for (size_t i=0; i<15; i++) {
+
+    if ((sd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0)
+      HT_FATALF("socket(AF_INET, SOCK_STREAM, IPPROTO_TCP) failure: %s",
+                strerror(errno));
+
+    if (setsockopt(sd, SOL_SOCKET, SO_REUSEADDR, &one, sizeof(one)) < 0)
+      HT_FATALF("setting TCP socket SO_REUSEADDR: %s", strerror(errno));
+
+    check_addr = addr;
+    check_addr.sin_port = htons(starting_port+i);
+
+    if (bind(sd, (const sockaddr *)&check_addr, sizeof(sockaddr_in)) == 0) {
+      ::close(sd);
+      addr.sin_port = check_addr.sin_port;
+      return;
+    }
+    ::close(sd);
+  }
+
+  HT_FATALF("Unable to find available TCP port in range [%d..%d]",
+            (int)addr.sin_port, (int)addr.sin_port+14);
+
+}
+
+void Comm::find_available_udp_port(InetAddr &addr) {
+  int one = 1;
+  int sd;
+  InetAddr check_addr;
+  uint16_t starting_port = ntohs(addr.sin_port);
+
+  for (size_t i=0; i<15; i++) {
+
+    if ((sd = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
+      HT_FATALF("socket(AF_INET, SOCK_DGRAM, 0) failure: %s", strerror(errno));
+
+    if (setsockopt(sd, SOL_SOCKET, SO_REUSEADDR, &one, sizeof(one)) < 0)
+      HT_FATALF("setting UDP socket SO_REUSEADDR: %s", strerror(errno));
+
+    check_addr = addr;
+    check_addr.sin_port = htons(starting_port+i);
+
+    if (bind(sd, (const sockaddr *)&addr, sizeof(sockaddr_in)) == 0) {
+      ::close(sd);
+      addr.sin_port = check_addr.sin_port;
+      return;
+    }
+    ::close(sd);
+  }
+
+  HT_FATALF("Unable to find available UDP port in range [%d..%d]",
+            (int)addr.sin_port, (int)addr.sin_port+14);
+  
+}
+
+
 
 /**
  *  ----- Private methods -----
