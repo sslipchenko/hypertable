@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (C) 2007-2012 Hypertable, Inc.
  *
  * This file is part of Hypertable.
@@ -19,6 +19,12 @@
  * 02110-1301, USA.
  */
 
+/** @file
+ * Declarations for DispatchHandler.
+ * This file contains type declarations for DispatchHandler, an abstract
+ * base class for event handlers.
+ */
+
 #ifndef HYPERTABLE_DISPATCHHANDLER_H
 #define HYPERTABLE_DISPATCHHANDLER_H
 
@@ -28,7 +34,7 @@
 
 namespace Hypertable {
 
-  /** \addtogroup AsyncComm
+  /** @addtogroup AsyncComm
    *  @{
    */
 

@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (C) 2007-2012 Hypertable, Inc.
  *
  * This file is part of Hypertable.
@@ -19,6 +19,11 @@
  * 02110-1301, USA.
  */
 
+/** @file
+ * Declarations for ConnectionHandlerFactory.
+ * This file contains type declarations for ConnectionHandlerFactory, a class
+ * for creating default event handlers.
+ */
 
 #ifndef HYPERTABLE_CONNECTIONHANDLERFACTORY_H
 #define HYPERTABLE_CONNECTIONHANDLERFACTORY_H
@@ -30,7 +35,7 @@
 namespace Hypertable {
 
 
-  /** \addtogroup AsyncComm
+  /** @addtogroup AsyncComm
    *  @{
    */
 

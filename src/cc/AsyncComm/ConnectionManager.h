@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (C) 2007-2012 Hypertable, Inc.
  *
  * This file is part of Hypertable.
@@ -17,6 +17,12 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
  * 02110-1301, USA.
+ */
+
+/** @file
+ * Declarations for ConnectionManager.
+ * This file contains type declarations for ConnectionManager, a class for
+ * establishing and maintaining TCP connections.
  */
 
 #ifndef HYPERTABLE_CONNECTIONMANAGER_H
@@ -48,7 +54,7 @@ extern "C" {
 
 namespace Hypertable {
 
-  /** \addtogroup AsyncComm
+  /** @addtogroup AsyncComm
    *  @{
    */
 

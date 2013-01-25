@@ -20,8 +20,8 @@
  */
 
 /** @file
- * Contains definition of ApplicationQueueInterface.
- * This file contains the definition for ApplcationQueueInterface, an abstract
+ * Declarations for ApplicationQueueInterface.
+ * This file contains type declarations for ApplcationQueueInterface, an abstract
  * base class for an application queue.
  */
 

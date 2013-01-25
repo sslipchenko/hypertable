@@ -20,7 +20,7 @@
  */
 
 /** @file
- * Declarations for RangeServer
+ * Declarations for RangeServer.
  * This file contains the type declarations for the RangeServer
  */
 
@@ -78,7 +78,7 @@ namespace Hypertable {
   class UpdateThread;
 
   /** @defgroup RangeServer RangeServer
-   * Server that manages ranges of table data.
+   * Server that holds and carries out operations on a set of ranges.
    * The @ref RangeServer module contains the definition of the RangeServer
    * @{
    */

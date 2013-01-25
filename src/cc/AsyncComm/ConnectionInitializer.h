@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (C) 2007-2012 Hypertable, Inc.
  *
  * This file is part of Hypertable.
@@ -19,6 +19,12 @@
  * 02110-1301, USA.
  */
 
+/** @file
+ * Declarations for ConnectionInitializer.
+ * This file contains type declarations for ConnectionInitializer, an abstract
+ * base class for classes that handle connection initialization handshake.
+ */
+
 #ifndef HYPERTABLE_CONNECTIONINITIALIZER_H
 #define HYPERTABLE_CONNECTIONINITIALIZER_H
 
@@ -30,7 +36,7 @@ namespace Hypertable {
 
   class Event;
 
-  /** \addtogroup AsyncComm
+  /** @addtogroup AsyncComm
    *  @{
    */
 

@@ -34,7 +34,7 @@
 
 namespace Hypertable {
 
-  /** \addtogroup AsyncComm
+  /** @addtogroup Master
    *  @{
    */
 

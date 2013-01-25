@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (C) 2007-2013 Hypertable, Inc.
  *
  * This file is part of Hypertable.
@@ -20,7 +20,7 @@
  */
 
 /** @file
- * Contains definition of ApplicationHandler.
+ * Contains declarations of ApplicationHandler.
  * This file contains the definition for ApplcationHandler, a base class
  * for application handlers to be added to and carried out by an application
  * queue.
@@ -41,7 +41,7 @@ extern "C" {
 
 namespace Hypertable {
 
-  /** \addtogroup AsyncComm
+  /** @addtogroup AsyncComm
    *  @{
    */
 

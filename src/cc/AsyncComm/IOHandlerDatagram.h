@@ -1,4 +1,4 @@
-/** -*- C++ -*-
+/* -*- C++ -*-
  * Copyright (C) 2007-2012 Hypertable, Inc.
  *
  * This file is part of Hypertable.
@@ -37,7 +37,7 @@ extern "C" {
 
 namespace Hypertable {
 
-  /** \addtogroup AsyncComm
+  /** @addtogroup AsyncComm
    *  @{
    */
 

@@ -1,4 +1,4 @@
-/** -*- c++ -*-
+/* -*- c++ -*-
  * Copyright (C) 2007-2012 Hypertable, Inc.
  *
  * This file is part of Hypertable.
@@ -19,6 +19,12 @@
  * 02110-1301, USA.
  */
 
+/** @file
+ * Declarations for Event.
+ * This file contains type declarations for Event, a class for representing
+ * a network communication event.
+ */
+
 #ifndef HYPERTABLE_EVENT_H
 #define HYPERTABLE_EVENT_H
 
@@ -35,7 +41,7 @@
 
 namespace Hypertable {
 
-  /** \addtogroup AsyncComm
+  /** @addtogroup AsyncComm
    *  @{
    */
 

@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (C) 2007-2012 Hypertable, Inc.
  *
  * This file is part of Hypertable.
@@ -17,6 +17,11 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
  * 02110-1301, USA.
+ */
+
+/** @file
+ * Primary entry point for AsyncComm service.
+ * This file contains method definitions for singleton class Comm
  */
 
 //#define HT_DISABLE_LOG_DEBUG

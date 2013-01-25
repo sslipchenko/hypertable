@@ -1,4 +1,4 @@
-/** -*- c++ -*-
+/* -*- c++ -*-
  * Copyright (C) 2007-2012 Hypertable, Inc.
  *
  * This file is part of Hypertable.
@@ -19,6 +19,12 @@
  * 02110-1301, USA.
  */
 
+/** @file
+ * Declarations for CommAddress.
+ * This file contains type declarations for CommAddress, and abstraction class
+ * for holding an arbitrary address type.
+ */
+
 #ifndef HYPERTABLE_COMMADDRESS_H
 #define HYPERTABLE_COMMADDRESS_H
 
@@ -31,7 +37,7 @@
 
 namespace Hypertable {
 
-  /** \addtogroup AsyncComm
+  /** @addtogroup AsyncComm
    *  @{
    */
 

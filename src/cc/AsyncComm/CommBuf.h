@@ -1,4 +1,4 @@
-/** -*- c++ -*-
+/* -*- c++ -*-
  * Copyright (C) 2007-2012 Hypertable, Inc.
  *
  * This file is part of Hypertable.
@@ -19,6 +19,13 @@
  * 02110-1301, USA.
  */
 
+/** @file
+ * Declarations for CommBuf.
+ * This file contains type declarations for CommBuf, a class to create and
+ * manipulate messages to be transmitted over a network.
+ */
+
+
 #ifndef HYPERTABLE_COMMBUF_H
 #define HYPERTABLE_COMMBUF_H
 
@@ -37,11 +44,11 @@
 
 namespace Hypertable {
 
-  /** \addtogroup AsyncComm
+  /** @addtogroup AsyncComm
    *  @{
    */
 
-  /** Message buffer for holding data to be transmitted over network.
+  /** Message buffer for holding data to be transmitted over a network.
    * The CommBuf class contains a primary buffer and an extended buffer along
    * with buffer pointers to keep track of how much data has been written into
    * the buffers. These pointers are managed by the IOHandler while the buffer

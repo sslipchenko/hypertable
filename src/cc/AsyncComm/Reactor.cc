@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (C) 2007-2012 Hypertable, Inc.
  *
  * This file is part of Hypertable.
@@ -17,6 +17,12 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
  * 02110-1301, USA.
+ */
+
+/** @file
+ * Definitions for Reactor.
+ * This file contains variable and method definitions for Reactor, a class
+ * to manage state for a polling thread.
  */
 
 #include "Common/Compat.h"
@@ -89,17 +95,6 @@ Reactor::Reactor() : m_interrupt_in_progress(false) {
 
     // Set to non-blocking (are we sure we should do this?)
     FileUtils::set_flags(m_interrupt_sd, O_NONBLOCK);
-
-    /**
-    int one = 1;
-    if (setsockopt(m_interrupt_sd, SOL_SOCKET, SO_REUSEADDR, &one, sizeof(one)) < 0)
-      HT_WARNF("setsockopt(SO_REUSEADDR) failure: %s", strerror(errno));
-
-#if defined(__APPLE__) || defined(__FreeBSD__)
-    if (setsockopt(m_interrupt_sd, SOL_SOCKET, SO_REUSEPORT, &one, sizeof(one)) < 0)
-      HT_WARNF("setsockopt(SO_REUSEPORT) failure: %s", strerror(errno));
-#endif
-    */
 
     // create address structure to bind to - any available port - any address
     memset(&addr, 0 , sizeof(sockaddr_in));

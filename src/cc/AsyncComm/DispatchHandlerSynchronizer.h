@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (C) 2007-2012 Hypertable, Inc.
  *
  * This file is part of Hypertable.
@@ -19,6 +19,12 @@
  * 02110-1301, USA.
  */
 
+/** @file
+ * Declarations for DispatchHandlerSynchronizer.
+ * This file contains type declarations for DispatchHandlerSynchronizer, a class
+ * used to synchronzie with response messages.
+ */
+
 #ifndef DISPATCHHANDLERSYNCHRONIZER_H
 #define DISPATCHHANDLERSYNCHRONIZER_H
 
@@ -32,7 +38,7 @@
 
 namespace Hypertable {
 
-  /** \addtogroup AsyncComm
+  /** @addtogroup AsyncComm
    *  @{
    */
 

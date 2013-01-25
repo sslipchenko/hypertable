@@ -1,4 +1,4 @@
-/** -*- c++ -*-
+/* -*- c++ -*-
  * Copyright (C) 2007-2013 Hypertable, Inc.
  *
  * This file is part of Hypertable.
@@ -17,6 +17,12 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
  * 02110-1301, USA.
+ */
+
+/** @file
+ * Declarations for ApplicationQueue.
+ * This file contains type declarations for ApplcationQueue, a base class for
+ * an application queue.
  */
 
 #ifndef HYPERTABLE_APPLICATIONQUEUE_H
@@ -42,7 +48,7 @@
 
 namespace Hypertable {
 
-  /** \addtogroup AsyncComm
+  /** @addtogroup AsyncComm
    *  @{
    */
 
