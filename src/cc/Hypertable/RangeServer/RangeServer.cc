@@ -2775,7 +2775,7 @@ void RangeServer::update_add_and_respond() {
        */
       for (hash_map<Range *, RangeUpdateList *>::iterator iter = table_update->range_map.begin(); iter != table_update->range_map.end(); ++iter) {
         if ((*iter).first->need_maintenance() &&
-            !Global::maintenance_queue->is_scheduled((*iter).first)) {
+            !Global::maintenance_queue->contains((*iter).first)) {
           ScopedLock lock(m_mutex);
           m_maintenance_scheduler->need_scheduling();
           maintenance_needed = true;

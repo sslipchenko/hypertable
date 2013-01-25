@@ -71,6 +71,12 @@ namespace Hypertable {
   class TableUpdate;
   class UpdateThread;
 
+  /** @defgroup RangeServer RangeServer
+   * Server for managing ranges of table data
+   * The @ref RangeServer module contains the definition of the RangeServer
+   * @{
+   */
+
   class RangeServer : public ReferenceCount {
   public:
     RangeServer(PropertiesPtr &, ConnectionManagerPtr &,
@@ -314,8 +320,9 @@ namespace Hypertable {
     Mutex                  m_profile_mutex;
   };
 
+  /// Smart pointer to RangeServer
   typedef intrusive_ptr<RangeServer> RangeServerPtr;
-
+  /** @}*/
 } // namespace Hypertable
 
 #endif // HYPERTABLE_RANGESERVER_H
