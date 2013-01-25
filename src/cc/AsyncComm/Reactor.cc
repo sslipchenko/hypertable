@@ -126,12 +126,12 @@ Reactor::Reactor() : m_interrupt_in_progress(false) {
               " trying another one", (int)addr.sin_port);
   }
 
-  // connect to ourself
-  if (connect(m_interrupt_sd, (sockaddr *)&addr, sizeof(addr)) < 0) {
-    HT_ERRORF("connect(interrupt_sd) to port %d failed - %s",
-              (int)ntohs(addr.sin_port), strerror(errno));
-    exit(1);
-  }
+  // Connect to ourself
+  // NOTE: Here we assume that any error returned by connect implies
+  //       that it will be carried out asynchronously
+  if (connect(m_interrupt_sd, (sockaddr *)&addr, sizeof(addr)) < 0)
+    HT_INFOF("connect(interrupt_sd) to port %d failed - %s",
+             (int)ntohs(addr.sin_port), strerror(errno));
 
   if (ReactorFactory::use_poll) {
     ScopedLock lock(m_polldata_mutex);
