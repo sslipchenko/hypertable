@@ -95,7 +95,7 @@ $HT_HOME/bin/stop-servers.sh
 kill_rs 2
 
 # check output
-ORIGINAL_RANGES=`cat metadata.pre|wc -l`
+ORIGINAL_RANGES=`grep Location metadata.pre|wc -l`
 RS1_RANGES=`grep "rs1" metadata.post|wc -l`
 RS2_RANGES=`grep "rs2" metadata.post|wc -l`
 echo "Total keys returned=${TOTAL_KEYS}, ${TOTAL_KEYS2}, expected keys=${EXPECTED_KEYS}, original ranges=${ORIGINAL_RANGES}, rs1_ranges=${RS1_RANGES}, rs2_ranges=${RS2_RANGES}"
