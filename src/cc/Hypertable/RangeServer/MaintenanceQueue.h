@@ -1,4 +1,4 @@
-/** -*- c++ -*-
+/* -*- c++ -*-
  * Copyright (C) 2007-2012 Hypertable, Inc.
  *
  * This file is part of Hypertable.
@@ -20,8 +20,8 @@
  */
 
 /** @file
- * Contains definition of MaintenanceQueue
- * This file contains the definition for the MaintenanceQueue
+ * Declarations for MaintenanceQueue
+ * This file contains the type declarations for the MaintenanceQueue
  */
 
 #ifndef HYPERTABLE_MAINTENANCEQUEUE_H
@@ -48,7 +48,7 @@ namespace Hypertable {
    *  @{
    */
 
-  /**
+  /** Queue for periodic maintenance work
    */
   class MaintenanceQueue : public ReferenceCount {
 

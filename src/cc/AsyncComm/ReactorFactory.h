@@ -23,6 +23,8 @@
 #ifndef HYPERTABLE_REACTORFACTORY_H
 #define HYPERTABLE_REACTORFACTORY_H
 
+#include <boost/random.hpp>
+#include <boost/random/uniform_01.hpp>
 #include <boost/thread/mutex.hpp>
 #include <boost/thread/thread.hpp>
 
@@ -73,11 +75,11 @@ namespace Hypertable {
       reactor_ptr = ms_reactors.back();
     }
 
-    /** vector of reactors */
+    /// Vector of reactors
     static std::vector<ReactorPtr> ms_reactors;
-    static std::set<uint16_t> reserved_udp_ports;
 
     static boost::thread_group ms_threads;
+    static boost::mt19937 rng; //!< Random number generator
 
     static bool ms_epollet;
     static bool use_poll;

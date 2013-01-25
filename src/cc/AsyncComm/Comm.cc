@@ -101,21 +101,34 @@ int
 Comm::connect(const CommAddress &addr, DispatchHandlerPtr &default_handler) {
   int sd;
   int error = m_handler_map->contains_data_handler(addr);
+  uint16_t port;
 
   if (error == Error::OK)
     return Error::COMM_ALREADY_CONNECTED;
   else if (error != Error::COMM_NOT_CONNECTED)
     return error;
 
-  if ((sd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0) {
-    HT_ERRORF("socket: %s", strerror(errno));
-    return Error::COMM_SOCKET_ERROR;
-  }
+  while (true) {
 
-  // bind socket to local address
-  if ((bind(sd, (const sockaddr *)&m_local_addr, sizeof(sockaddr_in))) < 0) {
-    HT_ERRORF( "bind: %s: %s", m_local_addr.format().c_str(), strerror(errno));
-    return Error::COMM_BIND_ERROR;
+    if ((sd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0) {
+      HT_ERRORF("socket: %s", strerror(errno));
+      return Error::COMM_SOCKET_ERROR;
+    }
+
+    // Get arbitray ephemeral port that won't conflict with our reserved ports
+    port = (uint16_t)(49152 + (ReactorFactory::rng() % 16383));
+    m_local_addr.sin_port = htons(port);
+
+    // bind socket to local address
+    if ((bind(sd, (const sockaddr *)&m_local_addr, sizeof(sockaddr_in))) < 0) {
+      if (errno == EADDRINUSE) {
+        ::close(sd);
+        continue;
+      }
+      HT_ERRORF( "bind: %s: %s", m_local_addr.format().c_str(), strerror(errno));
+      return Error::COMM_BIND_ERROR;
+    }
+    break;
   }
 
   return connect_socket(sd, addr, default_handler);

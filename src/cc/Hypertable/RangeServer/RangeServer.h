@@ -1,4 +1,4 @@
-/** -*- c++ -*-
+/* -*- c++ -*-
  * Copyright (C) 2007-2012 Hypertable, Inc.
  *
  * This file is part of Hypertable.
@@ -18,6 +18,12 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
  * 02110-1301, USA.
  */
+
+/** @file
+ * Declarations for RangeServer
+ * This file contains the type declarations for the RangeServer
+ */
+
 
 #ifndef HYPERTABLE_RANGESERVER_H
 #define HYPERTABLE_RANGESERVER_H
@@ -72,7 +78,7 @@ namespace Hypertable {
   class UpdateThread;
 
   /** @defgroup RangeServer RangeServer
-   * Server for managing ranges of table data
+   * Server that manages ranges of table data.
    * The @ref RangeServer module contains the definition of the RangeServer
    * @{
    */

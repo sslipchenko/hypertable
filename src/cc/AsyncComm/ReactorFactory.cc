@@ -37,8 +37,8 @@ extern "C" {
 }
 
 std::vector<ReactorPtr> ReactorFactory::ms_reactors;
-std::set<uint16_t>  ReactorFactory::reserved_udp_ports;
 boost::thread_group ReactorFactory::ms_threads;
+boost::mt19937 ReactorFactory::rng(1);
 Mutex        ReactorFactory::ms_mutex;
 atomic_t     ReactorFactory::ms_next_reactor = ATOMIC_INIT(0);
 bool         ReactorFactory::ms_epollet = true;
@@ -71,11 +71,6 @@ void ReactorFactory::initialize(uint16_t reactor_count) {
 
   if (Config::properties->get_bool("Comm.UsePoll") == true)
     use_poll = true;
-
-  if (Config::properties->has("Hyperspace.Replica.Port")) {
-    uint16_t port = Config::properties->get_i16("Hyperspace.Replica.Port");
-    reserved_udp_ports.insert(port);
-  }
 
   for (uint16_t i=0; i<=reactor_count; i++) {
     reactor_ptr = new Reactor();

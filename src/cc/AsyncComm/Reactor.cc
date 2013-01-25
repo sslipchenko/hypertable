@@ -90,6 +90,7 @@ Reactor::Reactor() : m_interrupt_in_progress(false) {
     // Set to non-blocking (are we sure we should do this?)
     FileUtils::set_flags(m_interrupt_sd, O_NONBLOCK);
 
+    /**
     int one = 1;
     if (setsockopt(m_interrupt_sd, SOL_SOCKET, SO_REUSEADDR, &one, sizeof(one)) < 0)
       HT_WARNF("setsockopt(SO_REUSEADDR) failure: %s", strerror(errno));
@@ -98,32 +99,26 @@ Reactor::Reactor() : m_interrupt_in_progress(false) {
     if (setsockopt(m_interrupt_sd, SOL_SOCKET, SO_REUSEPORT, &one, sizeof(one)) < 0)
       HT_WARNF("setsockopt(SO_REUSEPORT) failure: %s", strerror(errno));
 #endif
+    */
 
     // create address structure to bind to - any available port - any address
     memset(&addr, 0 , sizeof(sockaddr_in));
     addr.sin_family = AF_INET;
     addr.sin_addr.s_addr = inet_addr("127.0.0.1");
-    addr.sin_port = 0;
+    // Arbitray ephemeral port that won't conflict with our reserved ports    
+    uint16_t port = (uint16_t)(49152 + (ReactorFactory::rng() % 16383));
+    addr.sin_port = htons(port);
 
     // bind socket
     if ((bind(m_interrupt_sd, (sockaddr *)&addr, sizeof(sockaddr_in))) < 0) {
-      HT_ERRORF("bind() failure: %s", strerror(errno));
-      exit(1);
+      if (errno == EADDRINUSE) {
+        ::close(m_interrupt_sd);
+        continue;
+      }
+      HT_FATALF("bind(%s) failure: %s",
+                InetAddr::format(addr).c_str(), strerror(errno));
     }
-
-    // get the assigned address
-    socklen_t namelen = sizeof(addr);
-    getsockname(m_interrupt_sd, (sockaddr *)&addr, &namelen);
-
-    // If ephemeral port chosen by bind() is not one of our reserved
-    // ports, then the address is OK and we can continue
-    if (ReactorFactory::reserved_udp_ports.count(ntohs(addr.sin_port)) == 0)
-      break;
-
-    // otherwise, close socket and try again
-    ::close(m_interrupt_sd);
-    HT_DEBUGF("Port chosen (%d) for polling interrupt socket is reserved,"
-              " trying another one", (int)addr.sin_port);
+    break;
   }
 
   // Connect to ourself
