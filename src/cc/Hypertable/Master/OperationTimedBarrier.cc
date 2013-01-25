@@ -44,11 +44,11 @@ OperationTimedBarrier::OperationTimedBarrier(ContextPtr &context,
 
 void OperationTimedBarrier::execute() {
   ScopedLock lock(m_mutex);
-  HiResTime now;
 
   HT_INFOF("Entering TimedBarrier-%lld state=%s", (Lld)header.id,
            OperationState::get_text(m_state));
 
+  HiResTime now;
   while (now < m_expire_time) {
     HT_INFOF("Barrier for %s will be up for %lld milliseconds",
              m_block_dependency.c_str(), (Lld)xtime_diff_millis(now, m_expire_time));
