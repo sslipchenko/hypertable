@@ -8,9 +8,8 @@ MAX_KEYS=${MAX_KEYS:-"500000"}
 RS1_PIDFILE=$HT_HOME/run/Hypertable.RangeServer.rs1.pid
 RS2_PIDFILE=$HT_HOME/run/Hypertable.RangeServer.rs2.pid
 RS3_PIDFILE=$HT_HOME/run/Hypertable.RangeServer.rs3.pid
-MASTER_LOG=master.output
+MASTER_LOG=$HT_HOME/log/Hypertable.Master.log
 RUN_DIR=`pwd`
-TEST_ID=graceperiod
 
 . $HT_HOME/bin/ht-env.sh
 
@@ -37,13 +36,13 @@ start_master
 # start the rangeservers
 $HT_HOME/bin/ht Hypertable.RangeServer --verbose --pidfile=$RS1_PIDFILE \
    --Hypertable.RangeServer.ProxyName=rs1 \
-   --Hypertable.RangeServer.Port=38060 --config=${SCRIPT_DIR}/test.cfg 2>&1 > rangeserver.rs1.output.$TEST_ID&
+   --Hypertable.RangeServer.Port=38060 --config=${SCRIPT_DIR}/test.cfg 2>&1 > rangeserver.rs1.output&
 $HT_HOME/bin/ht Hypertable.RangeServer --verbose --pidfile=$RS2_PIDFILE \
    --Hypertable.RangeServer.ProxyName=rs2 \
-   --Hypertable.RangeServer.Port=38061 --config=${SCRIPT_DIR}/test.cfg 2>&1 > rangeserver.rs2.output.$TEST_ID&
+   --Hypertable.RangeServer.Port=38061 --config=${SCRIPT_DIR}/test.cfg 2>&1 > rangeserver.rs2.output&
 $HT_HOME/bin/ht Hypertable.RangeServer --verbose --pidfile=$RS3_PIDFILE \
    --Hypertable.RangeServer.ProxyName=rs3 \
-   --Hypertable.RangeServer.Port=38062 --config=${SCRIPT_DIR}/test.cfg 2>&1 > rangeserver.rs3.output.$TEST_ID&
+   --Hypertable.RangeServer.Port=38062 --config=${SCRIPT_DIR}/test.cfg 2>&1 > rangeserver.rs3.output&
 
 # create table
 $HT_HOME/bin/ht shell --no-prompt < $SCRIPT_DIR/create-table.hql
@@ -59,6 +58,8 @@ fi
 
 # kill rs1
 stop_rs 1
+
+cp $HT_HOME/run/monitoring/mop.dot .
 
 # after 10 seconds: stop the second RangeServer
 kill_rs 2
@@ -79,11 +80,11 @@ kill_rs 3
 #   1. When rs1 is stopped
 #   2. When barrier is pushed back by 5 seconds after rs2 is stopped
 L=`grep "Barrier for RECOVERY will be up" $MASTER_LOG  | wc -l`
-if [ "$L" -ne "2" ]
+if [ $L -ne 2 ]
 then
   echo "Test failed"
-  echo "Copying $MASTER_LOG to $MASTER_LOG.$TEST_ID"
-  cp $MASTER_LOG $MASTER_LOG.$TEST_ID
+  mkdir failed-run-graceperiod
+  cp $MASTER_LOG rangeserver.rs?.output dbdump* mop.dot failed-run-graceperiod
   exit 1
 fi
 

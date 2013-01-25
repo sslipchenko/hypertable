@@ -51,6 +51,8 @@ done
 echo "wait for maintenance; quit;" | $HT_HOME/bin/ht rsclient localhost:38061
 echo "wait for maintenance; quit;" | $HT_HOME/bin/ht rsclient localhost:38060
 
+$HT_HOME/bin/stop-servers.sh master
+
 echo "shutdown; quit;" | $HT_HOME/bin/ht rsclient localhost:38061
 echo "shutdown; quit;" | $HT_HOME/bin/ht rsclient localhost:38060
 sleep 1
@@ -70,15 +72,23 @@ $HT_HOME/bin/ht Hypertable.RangeServer --verbose --pidfile=$RS2_PIDFILE \
 # Wait for RangeServers to come up
 echo "use '/'; select * from LoadTest KEYS_ONLY;" | $HT_HOME/bin/ht shell --batch > /dev/null
 
+sleep 7
+
 # Move a range from one RangeServer to the other
 HQL_COMMAND=`$SCRIPT_DIR/generate_range_move.py 4`
 echo $HQL_COMMAND
 echo $HQL_COMMAND | $HT_HOME/bin/ht shell --batch --Hypertable.Request.Timeout=10000
 
-sleep 5
-
+# Wait for the Master to die
+let j=0
 $HT_HOME/bin/ht serverup master
-if [ $? == 0 ]; then
+while [ $? -eq 0 ] && [ $j -lt 6 ]; do
+    sleep 10
+    let j++
+    $HT_HOME/bin/ht serverup master
+done
+
+if [ $j -eq 6 ]; then
   echo "Master did not die as it should have.  Exiting..."
   touch $HT_HOME/run/debug-op
   sleep 60

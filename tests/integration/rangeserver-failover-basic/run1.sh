@@ -8,7 +8,6 @@ MAX_KEYS=${MAX_KEYS:-"200000"}
 RS1_PIDFILE=$HT_HOME/run/Hypertable.RangeServer.rs1.pid
 RS2_PIDFILE=$HT_HOME/run/Hypertable.RangeServer.rs2.pid
 RUN_DIR=`pwd`
-TEST_ID=1
 
 . $HT_HOME/bin/ht-env.sh
 
@@ -31,11 +30,11 @@ $HT_HOME/bin/start-test-servers.sh --no-rangeserver --no-thriftbroker \
 # start both rangeservers
 $HT_HOME/bin/ht Hypertable.RangeServer --verbose --pidfile=$RS1_PIDFILE \
    --Hypertable.RangeServer.ProxyName=rs1 \
-   --Hypertable.RangeServer.Port=38060 --config=${SCRIPT_DIR}/test.cfg 2>&1 > rangeserver.rs1.output.$TEST_ID&
+   --Hypertable.RangeServer.Port=38060 --config=${SCRIPT_DIR}/test.cfg 2>&1 > rangeserver.rs1.output&
 wait_for_server_connect
 $HT_HOME/bin/ht Hypertable.RangeServer --verbose --pidfile=$RS2_PIDFILE \
    --Hypertable.RangeServer.ProxyName=rs2 \
-   --Hypertable.RangeServer.Port=38061 --config=${SCRIPT_DIR}/test.cfg 2>&1 > rangeserver.rs2.output.$TEST_ID&
+   --Hypertable.RangeServer.Port=38061 --config=${SCRIPT_DIR}/test.cfg 2>&1 > rangeserver.rs2.output&
 
 # create table
 $HT_HOME/bin/ht shell --no-prompt < $SCRIPT_DIR/create-table.hql
@@ -75,10 +74,6 @@ dump_keys dbdump-a.1
 # dump METADATA location
 ${HT_HOME}/bin/ht shell --config=${SCRIPT_DIR}/test.cfg --no-prompt --exec "use sys; select Files,Location from METADATA MAX_VERSIONS=1 into file '${RUN_DIR}/metadata.post';"
 
-# copy state
-cp -R ${HT_HOME}/fs ${RUN_DIR}
-cp -R ${HT_HOME}/log/Hypertable.Master.log ${RUN_DIR}
-
 # bounce servers
 $HT_HOME/bin/stop-servers.sh
 kill_rs 2
@@ -88,7 +83,7 @@ $HT_HOME/bin/start-test-servers.sh --no-rangeserver --no-thriftbroker \
     --config=${SCRIPT_DIR}/test.cfg
 $HT_HOME/bin/ht Hypertable.RangeServer --verbose --pidfile=$RS2_PIDFILE \
    --Hypertable.RangeServer.ProxyName=rs2 \
-   --Hypertable.RangeServer.Port=38061 --config=${SCRIPT_DIR}/test.cfg 2>&1 >> rangeserver.rs2.output.$TEST_ID&
+   --Hypertable.RangeServer.Port=38061 --config=${SCRIPT_DIR}/test.cfg 2>&1 >> rangeserver.rs2.output&
 
 # dump METADATA location
 ${HT_HOME}/bin/ht shell --config=${SCRIPT_DIR}/test.cfg --no-prompt --exec "use sys; select Files,Location from METADATA MAX_VERSIONS=1 into file '${RUN_DIR}/metadata.post2';"
@@ -108,7 +103,12 @@ echo "Total keys returned=${TOTAL_KEYS}, ${TOTAL_KEYS2}, expected keys=${EXPECTE
 if [ "$RS2_RANGES" -lt "$ORIGINAL_RANGES" ] 
 then
   echo "Test failed, expected at least ${ORIGINAL_RANGES} on rs2, found ${RS2_RANGES}"
-  cp $HT_HOME/log/Hypertable.Master.log Hypertable.Master.log.$TEST_ID
+  mkdir failed-run-basic-1
+  cp $HT_HOME/log/Hypertable.Master.log rangeserver.rs1.output rangeserver.rs2.output \
+      metadata.pre metadata.post failed-run-basic-1
+  cp $HT_HOME/fs/local/hypertable/servers/rs1 failed-run-basic-1
+  cp $HT_HOME/fs/local/hypertable/servers/rs2 failed-run-basic-1
+  cp *dump* failed-run-basic-1
   exit 1
 fi
 
