@@ -207,29 +207,37 @@ run_test() {
         echo "Test $TEST PASSED." >> report.txt
     fi
 
-    sleep 20
-
-    # shut down master and range servers
-    kill -9 `cat $HT_HOME/run/Hypertable.Master.pid`
-    kill_range_servers $RS_COUNT
+    sleep 10
 
     # Make sure all ranges have been acknowledged
-    let j=2
-    while [ $j -le $RS_COUNT ] ; do
-        if test -z "${INDUCED_FAILURE[$j]}" ; then
-            $HT_HOME/bin/metalog_dump /hypertable/servers/rs$j/log/rsml | fgrep "load_acknowledged=false"
-            if [ $? == 0 ] ; then
-                echo "ERROR: Unacknowledged ranges"
-                save_failure_state
-                exit 1
+    let i=0
+    let error_count=1
+    while [ $error_count -ne 0 ] && [ $i -le 6 ] ; do
+        sleep 10
+        let error_count=0
+        let j=2
+        while [ $j -le $RS_COUNT ] ; do
+            if test -z "${INDUCED_FAILURE[$j]}" ; then
+                $HT_HOME/bin/metalog_dump /hypertable/servers/rs$j/log/rsml | fgrep "load_acknowledged=false"
+                if [ $? -eq 0 ] ; then
+                    let error_count++
+                fi
             fi
-        fi
-        let j+=1
+            let j+=1
+        done
+        let i++
     done
 
-    # shut down remaining servers
+    # shut down all servers
+    kill -9 `cat $HT_HOME/run/Hypertable.Master.pid`
+    kill_range_servers $RS_COUNT
     $HT_HOME/bin/stop-servers.sh --no-master --no-rangeserver
 
+    if [ $error_count -ne 0 ]; then
+        echo "ERROR: Unacknowledged ranges"
+        save_failure_state
+        exit 1
+    fi
 }
 
 if [ $TEST == 0 ] ; then
