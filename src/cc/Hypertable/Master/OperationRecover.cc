@@ -44,10 +44,10 @@ using namespace Hyperspace;
 
 
 OperationRecover::OperationRecover(ContextPtr &context, 
-        RangeServerConnectionPtr &rsc)
+                                   RangeServerConnectionPtr &rsc, int flags)
   : Operation(context, MetaLog::EntityType::OPERATION_RECOVER_SERVER),
     m_location(rsc->location()), m_rsc(rsc), m_hyperspace_handle(0), 
-    m_lock_acquired(false) {
+    m_restart(flags==RESTART), m_lock_acquired(false) {
   m_subop_dependency = format("operation-id-%lld", (Lld)id());
   m_dependencies.insert(m_subop_dependency);
   m_dependencies.insert(Dependency::RECOVERY_BLOCKER);
@@ -59,8 +59,9 @@ OperationRecover::OperationRecover(ContextPtr &context,
 }
 
 OperationRecover::OperationRecover(ContextPtr &context,
-    const MetaLog::EntityHeader &header_)
-  : Operation(context, header_), m_hyperspace_handle(0), m_lock_acquired(false) {
+                                   const MetaLog::EntityHeader &header_)
+  : Operation(context, header_), m_hyperspace_handle(0),
+    m_restart(false), m_lock_acquired(false) {
   m_subop_dependency = format("operation-id-%lld", (Lld)id());
 }
 
@@ -227,14 +228,18 @@ bool OperationRecover::acquire_server_lock() {
     if (lock_status != LOCK_STATUS_GRANTED) {
       HT_INFO_OUT << "Couldn't obtain lock on '" << fname
                   << "' due to conflict, lock_status=" << lock_status << HT_END;
-      // Send notification
-      subject = format("NOTICE: Recovery of %s (%s) aborted",
-                       m_location.c_str(), m_hostname.c_str());
-      message = format("Aborting recovery of range server %s (%s) because "
-                       "unable to aquire lock.", m_location.c_str(),
-                       m_hostname.c_str());
-      HT_INFO_OUT << message << HT_END;
-      m_context->notification_hook(subject, message);
+      if (!m_restart) {
+        // Send notification
+        subject = format("NOTICE: Recovery of %s (%s) aborted",
+                         m_location.c_str(), m_hostname.c_str());
+        message = format("Aborting recovery of range server %s (%s) because "
+                         "unable to aquire lock.", m_location.c_str(),
+                         m_hostname.c_str());
+        HT_INFO_OUT << message << HT_END;
+        m_context->notification_hook(subject, message);
+      }
+      else
+        m_restart = false;
       return false;
     }
 

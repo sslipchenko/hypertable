@@ -34,11 +34,32 @@
 
 namespace Hypertable {
 
-  using namespace std;
+  /** \addtogroup AsyncComm
+   *  @{
+   */
 
   class OperationRecover : public Operation {
   public:
-    OperationRecover(ContextPtr &context, RangeServerConnectionPtr &rsc);
+
+    enum {
+      RESTART = 1
+    };
+
+    /** Constructor for new object.
+     * @param context Master context object
+     * @param rsc RangeServerConnection object referring to server to be
+     * recovered
+     * @param flags Set to #RESTART if this object is being created due to a
+     * server restart
+     * This method constructs a new OperationRecover object.  If #RESTART is
+     * passed in for the <code>flags</code> argument then it will prevent
+     * notifiction if unable to acquire lock on range server's lock file.
+     * This is expected behavior on service restart, so no notification
+     * should be deliverd.
+     */
+    OperationRecover(ContextPtr &context, RangeServerConnectionPtr &rsc,
+                     int flags=0);
+
     OperationRecover(ContextPtr &context, const MetaLog::EntityHeader &header_);
 
     virtual ~OperationRecover();
@@ -89,10 +110,14 @@ namespace Hypertable {
     String m_subop_dependency;
     String m_hostname;
     uint64_t m_hyperspace_handle;
+    bool m_restart;
     bool m_lock_acquired;
   };
 
+  /// Smart pointer to OperationRecover
   typedef intrusive_ptr<OperationRecover> OperationRecoverPtr;
+
+  /** @}*/
 
 } // namespace Hypertable
 

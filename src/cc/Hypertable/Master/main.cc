@@ -19,6 +19,12 @@
  * 02110-1301, USA.
  */
 
+/** @file
+ * Contains main function for Master server
+ * This file contains the definition for the main function for the Master
+ * server
+ */
+
 #include "Common/Compat.h"
 
 extern "C" {
@@ -94,6 +100,17 @@ namespace {
 
 } // local namespace
 
+/** @defgroup Master Master
+ * Master server
+ * The Master module contains all of the definitions that make up the Master
+ * server process which is responsible for handling meta operations such
+ * the following
+ *   - Creating, altering, and dropping tables
+ *   - CellStore garbage collection
+ *   - RangeServer failover orchestration
+ *   - Load balancing
+ * @{
+ */
 
 void obtain_master_lock(ContextPtr &context);
 
@@ -242,7 +259,7 @@ int main(int argc, char **argv) {
         if (recovery_operations.find(rsc->location())
                 == recovery_operations.end())
           recovery_operations[rsc->location()] =
-              new OperationRecover(context, rsc);
+            new OperationRecover(context, rsc, OperationRecover::RESTART);
         added_servers++;
       }
       else {
@@ -398,3 +415,5 @@ void obtain_master_lock(ContextPtr &context) {
     HT_FATAL_OUT << e << HT_END;
   }
 }
+
+/** @}*/
