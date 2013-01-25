@@ -222,7 +222,7 @@ int main(int argc, char **argv) {
   if (system("diff ./client3.out ./client3.golden"))
     return 1;
 
-  return 0;
+  _exit(0);
 }
 
 
