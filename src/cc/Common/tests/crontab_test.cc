@@ -116,11 +116,6 @@ int main(int argc, char *argv[]) {
 
   tmval.tm_mday = 29;
   tmval.tm_mon = 1;
-  tmval.tm_year = 2100 - 1900;
-  display_next_event(crontab, &tmval);
-
-  tmval.tm_mday = 29;
-  tmval.tm_mon = 1;
   tmval.tm_year = 2000 - 1900;
   display_next_event(crontab, &tmval);
 
