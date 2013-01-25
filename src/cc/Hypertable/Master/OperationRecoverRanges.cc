@@ -643,13 +643,12 @@ bool OperationRecoverRanges::acknowledge() {
       response_map_it = response_map.begin();
       while (response_map_it != response_map.end()) {
         if (response_map_it->second != Error::OK)
-          HT_ERRORF("Problem acknowledging load for %s[%s..%s] - %s",
+          HT_WARNF("Problem acknowledging load for %s[%s..%s] - %s",
                   response_map_it->first.table.id,
                   response_map_it->first.range.start_row,
                   response_map_it->first.range.end_row,
                   Error::get_text(response_map_it->second));
-        else
-          acknowledged.push_back(QualifiedRangeSpec(arena, response_map_it->first));
+        acknowledged.push_back(QualifiedRangeSpec(arena, response_map_it->first));
         ++response_map_it;
       }
       HT_INFO_OUT << "acknowledge_load complete for " << range_ptrs.size()
