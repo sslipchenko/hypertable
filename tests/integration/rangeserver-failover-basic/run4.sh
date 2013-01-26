@@ -70,6 +70,15 @@ $HT_HOME/bin/ht load_generator --spec-file=$SCRIPT_DIR/data.spec \
     --max-keys=$MAX_KEYS --row-seed=$ROW_SEED --table=LoadTest \
     --Hypertable.Mutator.FlushDelay=50 update
 if [ $? != 0 ] ; then
+    $HT_HOME/bin/stop-servers.sh
+    kill_rs 1
+    kill_rs 2
+    kill_rs 3
+    kill_rs 4
+    kill_rs 5
+    mkdir failed-run-quorum
+    cp rangeserver.rs*.output $HT_HOME/log/* failed-run-quorum
+    cp -r $HT_HOME/fs failed-run-quorum
     echo "Problem loading table 'LoadTest', exiting ..."
     exit 1
 fi

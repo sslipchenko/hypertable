@@ -62,6 +62,7 @@ stop_rs 1
 cp $HT_HOME/run/monitoring/mop.dot .
 
 # after 10 seconds: stop the second RangeServer
+sleep 10
 kill_rs 2
 
 # wait for recovery to complete 
