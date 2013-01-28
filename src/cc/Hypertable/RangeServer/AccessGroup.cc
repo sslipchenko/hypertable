@@ -827,6 +827,9 @@ void AccessGroup::shrink(String &split_row, bool drop_high) {
 
     m_stores = new_stores;
 
+    // This recomputes m_disk_usage as well
+    recompute_compression_ratio();
+
     m_needs_merging = find_merge_run();
 
     m_earliest_cached_revision_saved = TIMESTAMP_MAX;
@@ -953,7 +956,7 @@ void AccessGroup::recompute_compression_ratio(int64_t *total_index_entriesp) {
   for (size_t i=0; i<m_stores.size(); i++) {
     HT_ASSERT(m_stores[i].cs);
     if (total_index_entriesp)
-      *total_index_entriesp += (int64_t)m_stores[i].index_entries;
+      *total_index_entriesp += (int64_t)m_stores[i].cs->block_count();
     double disk_usage = m_stores[i].cs->disk_usage();
     m_disk_usage += (uint64_t)disk_usage;
     m_compression_ratio += disk_usage / m_stores[i].cs->compression_ratio();

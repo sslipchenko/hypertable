@@ -55,7 +55,7 @@ namespace Hypertable {
       uint64_t block_index_access_counter;
     };
 
-    CellStore() : m_bytes_read(0) { }
+    CellStore() : m_block_count(0), m_bytes_read(0) { }
 
     virtual ~CellStore() { return; }
 
@@ -141,6 +141,12 @@ namespace Hypertable {
      * @return disk used by this cell store or portion thereof
      */
     virtual uint64_t disk_usage() = 0;
+
+    /**
+     * Returns the number of CellStore blocks covered by this object.
+     * @return block count
+     */
+    virtual size_t block_count() { return m_block_count; }
 
     /**
      * Returns block compression ratio of this cell store.
@@ -279,6 +285,7 @@ namespace Hypertable {
     static const char INDEX_FIXED_BLOCK_MAGIC[10];
     static const char INDEX_VARIABLE_BLOCK_MAGIC[10];
 
+    size_t m_block_count;
     uint64_t m_bytes_read;
     IndexMemoryStats m_index_stats;
     std::vector <String> m_replaced_files;

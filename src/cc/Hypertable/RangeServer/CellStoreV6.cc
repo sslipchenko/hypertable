@@ -694,6 +694,9 @@ void CellStoreV6::finalize(TableIdentifier *table_identifier) {
     record_split_row( m_index_map64.middle_key() );
     index_memory = m_index_map64.memory_used();
     m_trailer.flags |= CellStoreTrailerV6::INDEX_64BIT;
+    m_disk_usage = m_index_map64.disk_used() + 
+      ((m_offset-m_trailer.fix_index_offset) * m_index_map64.fraction_covered());
+    m_block_count = m_index_map64.index_entries();
   }
   else {
     m_index_map32.load(m_index_builder.fixed_buf(),
@@ -702,6 +705,9 @@ void CellStoreV6::finalize(TableIdentifier *table_identifier) {
     m_trailer.index_entries = m_index_map32.index_entries();
     index_memory = m_index_map32.memory_used();
     record_split_row( m_index_map32.middle_key() );
+    m_disk_usage = m_index_map32.disk_used() + 
+      ((m_offset-m_trailer.fix_index_offset) * m_index_map32.fraction_covered());
+    m_block_count = m_index_map32.index_entries();
   }
 
   // deallocate fix index data
@@ -748,12 +754,6 @@ void CellStoreV6::finalize(TableIdentifier *table_identifier) {
 
   /** Re-open file for reading **/
   m_fd = m_filesys->open(m_filename, Filesystem::OPEN_FLAG_DIRECTIO);
-
-  // If compacting due to a split, estimate the disk usage at 1/2
-  if (m_trailer.flags & CellStoreTrailerV6::SPLIT)
-    m_disk_usage = m_file_length / 2;
-  else
-    m_disk_usage = m_file_length;
 
   m_index_stats.block_index_memory = index_memory;
 
@@ -838,12 +838,6 @@ CellStoreV6::open(const String &fname, const String &start_row,
 
   m_trailer = *static_cast<CellStoreTrailerV6 *>(trailer);
 
-  // If compacting due to a split, estimate the disk usage at 1/2
-  if (m_trailer.flags & CellStoreTrailerV6::SPLIT)
-    m_disk_usage = m_file_length / 2;
-  else
-    m_disk_usage = m_file_length;
-
   m_bloom_filter_mode = (BloomFilterMode)m_trailer.bloom_filter_mode;
 
   /** Sanity check trailer **/
@@ -858,6 +852,9 @@ CellStoreV6::open(const String &fname, const String &start_row,
               "Bad index offsets in CellStore trailer fd=%u fix=%lld, var=%lld, "
               "length=%llu, file='%s'", (unsigned)m_fd, (Lld)m_trailer.fix_index_offset,
            (Lld)m_trailer.var_index_offset, (Llu)m_file_length, fname.c_str());
+
+  // This is necessary to get m_disk_usage and m_block_count set properly
+  load_block_index();
 
   Global::memory_tracker->add( sizeof(CellStoreV6) + sizeof(CellStoreInfo) );
 
@@ -942,6 +939,9 @@ void CellStoreV6::load_block_index() {
                        m_trailer.fix_index_offset, m_start_row, m_end_row);
     record_split_row( m_index_map64.middle_key() );
     m_index_stats.block_index_memory = m_index_map64.memory_used();
+    m_disk_usage = m_index_map64.disk_used() + 
+      ((m_offset-m_trailer.fix_index_offset) * m_index_map64.fraction_covered());
+    m_block_count = m_index_map64.index_entries();
   }
   else {
     m_index_map32.load(m_index_builder.fixed_buf(),
@@ -949,6 +949,9 @@ void CellStoreV6::load_block_index() {
                        m_trailer.fix_index_offset, m_start_row, m_end_row);
     record_split_row( m_index_map32.middle_key() );
     m_index_stats.block_index_memory = m_index_map32.memory_used();
+    m_disk_usage = m_index_map32.disk_used() + 
+      ((m_offset-m_trailer.fix_index_offset) * m_index_map32.fraction_covered());
+    m_block_count = m_index_map32.index_entries();
   }
 
   m_index_builder.release_fixed_buf();

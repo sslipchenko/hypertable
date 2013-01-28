@@ -28,6 +28,7 @@
 
 #include "Common/StaticBuffer.h"
 
+#include "Hypertable/Lib/Key.h"
 #include "Hypertable/Lib/SerializedKey.h"
 
 
@@ -84,8 +85,6 @@ namespace Hypertable {
       bool in_scope = (start_row == "") ? true : false;
       bool check_for_end_row = end_row != "";
 
-      m_index_entries = (int64_t)total_entries;
-
       assert(variable.own);
 
       m_end_of_last_block = end_of_data;
@@ -94,7 +93,7 @@ namespace Hypertable {
       fixed.ptr = fixed.base;
       key_ptr   = m_keydata.base;
 
-      for (int64_t i=0; i<m_index_entries; ++i) {
+      for (size_t i=0; i<total_entries; ++i) {
 
         // variable portion
         key.ptr = key_ptr;
@@ -112,7 +111,7 @@ namespace Hypertable {
         else if (check_for_end_row &&
                  strcmp(key.row(), end_row.c_str()) > 0) {
           m_map.insert(m_map.end(), value_type(key, offset));
-          if (i+1 < m_index_entries) {
+          if (i+1 < total_entries) {
             key.ptr = key_ptr;
             key_ptr += key.length();
             memcpy(&m_end_of_last_block, fixed.ptr, sizeof(offset));
@@ -137,6 +136,10 @@ namespace Hypertable {
         m_middle_key = (*iter).first;
       }
 
+      if (m_map.size() == total_entries)
+        m_fraction_covered = 1.0;
+      else
+        m_fraction_covered = (float)m_map.size() / (float)total_entries;
     }
 
     void display() {
@@ -171,9 +174,11 @@ namespace Hypertable {
 
     int64_t disk_used() { return m_disk_used; }
 
+    double fraction_covered() { return (double)m_fraction_covered; }
+
     int64_t end_of_last_block() { return m_end_of_last_block; }
 
-    int64_t index_entries() { return m_index_entries; }
+    int64_t index_entries() { return m_map.size(); }
 
     iterator begin() {
       return iterator(m_map.begin());
@@ -195,7 +200,7 @@ namespace Hypertable {
       m_map.clear();
       m_keydata.free();
       m_middle_key.ptr = 0;
-      m_index_entries = 0;
+      m_fraction_covered = 0.0;
     }
 
   private:
@@ -204,7 +209,7 @@ namespace Hypertable {
     SerializedKey m_middle_key;
     int64_t m_end_of_last_block;
     int64_t m_disk_used;
-    int64_t m_index_entries;
+    float m_fraction_covered;
   };
 
 
