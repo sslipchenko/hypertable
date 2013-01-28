@@ -102,14 +102,15 @@ namespace Hypertable {
       const uint8_t *key_ptr;
       bool in_scope = (start_row == "") ? true : false;
       bool check_for_end_row = end_row != "";
+      const uint8_t *variable_start = variable.base;
+      const uint8_t *variable_end = variable.ptr;
 
       assert(variable.own);
 
       m_end_of_last_block = end_of_data;
 
-      m_keydata = variable;
       fixed.ptr = fixed.base;
-      key_ptr   = m_keydata.base;
+      key_ptr   = variable.base;
 
       for (size_t i=0; i<total_entries; ++i) {
 
@@ -124,6 +125,7 @@ namespace Hypertable {
         if (!in_scope) {
           if (strcmp(key.row(), start_row.c_str()) <= 0)
             continue;
+          variable_start = key.ptr;
           in_scope = true;
         }
         else if (check_for_end_row &&
@@ -134,6 +136,7 @@ namespace Hypertable {
           if (i+1 < total_entries) {
             key.ptr = key_ptr;
             key_ptr += key.length();
+            variable_end = key_ptr;
             memcpy(&m_end_of_last_block, fixed.ptr, sizeof(offset));
           }
           break;
@@ -143,17 +146,33 @@ namespace Hypertable {
         m_array.push_back(ee);
       }
 
-      HT_ASSERT(key_ptr <= (m_keydata.base + m_keydata.size));
+      HT_ASSERT(key_ptr <= variable.ptr);
 
       if (!m_array.empty()) {
+        HT_ASSERT(variable_start < variable_end);
 
-        /** compute space covered by this index scope **/
+        // Copy portion of variable buffer used to m_keydata and fixup the
+        // array pointers to point into this new buffer
+        StaticBuffer keydata(variable_end-variable_start);
+        memcpy(keydata.base, variable_start, variable_end-variable_start);
+        foreach_ht (ElementT &element, m_array) {
+          HT_ASSERT(element.key.ptr < variable_end);
+          uint64_t offset = element.key.ptr - variable_start;
+          element.key.ptr = keydata.base + offset;
+        }
+        m_keydata.free();
+        m_keydata = keydata;
+
+        // compute space covered by this index scope
         m_disk_used = m_end_of_last_block - (*m_array.begin()).offset;
 
-        /** determine split key **/
+        // determine split key
         size_t mid_point = (m_array.size()==2) ? 0 : m_array.size()/2;
         m_middle_key = m_array[mid_point].key;
       }
+
+      // Free variable buf here to maintain original semantics
+      variable.free();
 
       if (m_array.size() == total_entries)
         m_fraction_covered = 1.0;
