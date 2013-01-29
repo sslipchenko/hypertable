@@ -694,8 +694,9 @@ void CellStoreV6::finalize(TableIdentifier *table_identifier) {
     record_split_row( m_index_map64.middle_key() );
     index_memory = m_index_map64.memory_used();
     m_trailer.flags |= CellStoreTrailerV6::INDEX_64BIT;
-    m_disk_usage = m_index_map64.disk_used() + 
-      ((m_offset-m_trailer.fix_index_offset) * m_index_map64.fraction_covered());
+    m_disk_usage = m_index_map64.disk_used() +
+      (int64_t)((double)(m_offset-m_trailer.fix_index_offset) *
+		m_index_map64.fraction_covered());
     m_block_count = m_index_map64.index_entries();
   }
   else {
@@ -705,8 +706,9 @@ void CellStoreV6::finalize(TableIdentifier *table_identifier) {
     m_trailer.index_entries = m_index_map32.index_entries();
     index_memory = m_index_map32.memory_used();
     record_split_row( m_index_map32.middle_key() );
-    m_disk_usage = m_index_map32.disk_used() + 
-      ((m_offset-m_trailer.fix_index_offset) * m_index_map32.fraction_covered());
+    m_disk_usage = m_index_map32.disk_used() +
+      (int64_t)((double)(m_offset-m_trailer.fix_index_offset)
+		* m_index_map32.fraction_covered());
     m_block_count = m_index_map32.index_entries();
   }
 
@@ -875,7 +877,8 @@ CellStoreV6::rescope(const String &start_row, const String &end_row) {
       record_split_row( m_index_map64.middle_key() );
       m_index_stats.block_index_memory = m_index_map64.memory_used();
       m_disk_usage = m_index_map64.disk_used() + 
-        ((m_offset-m_trailer.fix_index_offset) * m_index_map64.fraction_covered());
+        (int64_t)((double)(m_file_length-m_trailer.fix_index_offset) *
+		  m_index_map64.fraction_covered());
       m_block_count = m_index_map64.index_entries();
     }
     else {
@@ -883,7 +886,8 @@ CellStoreV6::rescope(const String &start_row, const String &end_row) {
       record_split_row( m_index_map32.middle_key() );
       m_index_stats.block_index_memory = m_index_map32.memory_used();
       m_disk_usage = m_index_map32.disk_used() + 
-        ((m_offset-m_trailer.fix_index_offset) * m_index_map32.fraction_covered());
+        (int64_t)((double)(m_file_length-m_trailer.fix_index_offset) *
+		  m_index_map32.fraction_covered());
       m_block_count = m_index_map32.index_entries();
     }
     Global::memory_tracker->add( m_index_stats.block_index_memory );
@@ -973,7 +977,8 @@ void CellStoreV6::load_block_index() {
     record_split_row( m_index_map64.middle_key() );
     m_index_stats.block_index_memory = m_index_map64.memory_used();
     m_disk_usage = m_index_map64.disk_used() + 
-      ((m_offset-m_trailer.fix_index_offset) * m_index_map64.fraction_covered());
+      (int64_t)((double)(m_file_length-m_trailer.fix_index_offset) *
+		m_index_map64.fraction_covered());
     m_block_count = m_index_map64.index_entries();
   }
   else {
@@ -983,7 +988,8 @@ void CellStoreV6::load_block_index() {
     record_split_row( m_index_map32.middle_key() );
     m_index_stats.block_index_memory = m_index_map32.memory_used();
     m_disk_usage = m_index_map32.disk_used() + 
-      ((m_offset-m_trailer.fix_index_offset) * m_index_map32.fraction_covered());
+      (int64_t)((double)(m_file_length-m_trailer.fix_index_offset) *
+		m_index_map32.fraction_covered());
     m_block_count = m_index_map32.index_entries();
   }
 
