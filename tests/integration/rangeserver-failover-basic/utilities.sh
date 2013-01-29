@@ -79,5 +79,23 @@ stop_rs() {
 }
 
 kill_rs() {
-    kill -9 `cat $HT_HOME/run/Hypertable.RangeServer.rs$1.pid`
+    for num in "$@"; do
+        kill -9 `cat $HT_HOME/run/Hypertable.RangeServer.rs${num}.pid`
+    done
+}
+
+save_failure_state() {
+    local label=$1
+    shift
+    mkdir -p failed-run-$label
+    \rm -f $HT_HOME/run/op.output
+    touch $HT_HOME/run/debug-op
+    ps auxww | fgrep -i hyper | fgrep -v java > failed-run-$label/ps-output.txt
+    cp $HT_HOME/log/* failed-run-$label
+    pstack `cat $HT_HOME/run/Hypertable.Master.pid` > failed-run-$label/master-stack.txt
+    sleep 60
+    cp $HT_HOME/run/op.output failed-run-$label
+    cp rangeserver.* failed-run-$label
+    cp rangeserver.*.output failed-run-$label
+    cp master.* failed-run-$label
 }
