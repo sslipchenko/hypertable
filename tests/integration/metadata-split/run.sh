@@ -123,7 +123,7 @@ run_test() {
     cleanup_and_abort
   fi
 
-  $HT_HOME/bin/ht ht_load_generator update --spec-file=$SCRIPT_DIR/data.spec --max-bytes=300K \
+  $HT_HOME/bin/ht ht_load_generator update --spec-file=$SCRIPT_DIR/data.spec --max-bytes=600K \
       --Hypertable.Mutator.ScatterBuffer.FlushLimit.PerServer=11K \
       --Hypertable.Mutator.FlushDelay=250
 

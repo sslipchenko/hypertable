@@ -35,6 +35,17 @@ stop_range_server() {
   fi
 }
 
+save_failure_state() {
+    local TEST_ID=$1
+    shift
+    mkdir failed-run-$TEST_ID
+    pstack `cat $HT_HOME/run/Hypertable.Master.pid` > failed-run-$TEST_ID/master.stack
+    cp rangeserver.output.$TEST_ID $HT_HOME/log/* failed-run-$TEST_ID
+    touch $HT_HOME/run/debug-op
+    sleep 60
+    cp $HT_HOME/run/op.output failed-run-$TEST_ID
+}
+
 set_tests() {
   for i in $@; do
     eval TEST_$i=1
@@ -60,12 +71,14 @@ run_test() {
   $HT_SHELL --batch < $SCRIPT_DIR/create-test-table.hql
   if [ $? != 0 ] ; then
     echo "Unable to create table 'split-test', exiting ..."
+    save_failure_state $TEST_ID
     exit 1
   fi
 
   $HT_SHELL --Hypertable.Mutator.ScatterBuffer.FlushLimit.PerServer=100K --batch < $SCRIPT_DIR/load.hql
   if [ $? != 0 ] ; then
     echo "Problem loading table 'split-test', exiting ..."
+    save_failure_state $TEST_ID
     exit 1
   fi
 
@@ -74,6 +87,7 @@ run_test() {
   $HT_SHELL -l error --batch < $SCRIPT_DIR/dump-test-table.hql | grep -v "hypertable" > dbdump.$TEST_ID
   if [ $? != 0 ] ; then
     echo "Problem dumping table 'split-test', exiting ..."
+    save_failure_state $TEST_ID
     exit 1
   fi
 
@@ -87,6 +101,7 @@ run_test() {
     $HT_SHELL -l error --batch < $SCRIPT_DIR/dump-test-table.hql | grep -v "hypertable" > dbdump.$TEST_ID.again
     if [ $? != 0 ] ; then
         echo "Problem dumping table 'split-test', exiting ..."
+	save_failure_state $TEST_ID
         exit 1
     fi
   else
