@@ -180,6 +180,26 @@ namespace Hypertable {
         m_fraction_covered = (float)m_array.size() / (float)total_entries;
     }
 
+    void rescope(const String &start_row="", const String &end_row="") {
+      DynamicBuffer fixed(m_array.size() * sizeof(OffsetT));
+      DynamicBuffer variable;
+
+      // Transfer ownership of m_keydata buffer to variable
+      m_keydata.own = false;
+      variable.base = variable.mark = m_keydata.base;
+      variable.size = m_keydata.size;
+      variable.ptr = variable.base + variable.size;
+
+      // Populate fixed array
+      foreach_ht (ElementT &element, m_array)
+        fixed.add_unchecked(&element.offset, sizeof(OffsetT));
+      m_array.clear();
+
+      // Perform normal load
+      load(fixed, variable, m_end_of_last_block, start_row, end_row);
+    }
+
+
     void display() {
       SerializedKey last_key;
       int64_t last_offset = 0;

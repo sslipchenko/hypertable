@@ -190,6 +190,7 @@ namespace Hypertable {
 
     Mutex                m_mutex;
     Mutex                m_outstanding_scanner_mutex;
+    boost::condition     m_outstanding_scanner_cond;
     int32_t              m_outstanding_scanner_count;
     TableIdentifierManaged m_identifier;
     SchemaPtr            m_schema;

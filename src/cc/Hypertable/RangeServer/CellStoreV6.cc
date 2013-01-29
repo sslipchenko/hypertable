@@ -861,6 +861,39 @@ CellStoreV6::open(const String &fname, const String &start_row,
 }
 
 
+
+void
+CellStoreV6::rescope(const String &start_row, const String &end_row) {
+  HT_ASSERT(m_start_row.compare(start_row)<0 || m_end_row.compare(end_row)>0);
+  m_start_row = start_row;
+  m_end_row = end_row;
+  m_restricted_range = true;
+  if (m_index_stats.block_index_memory != 0) {
+    Global::memory_tracker->subtract( m_index_stats.block_index_memory );
+    if (m_64bit_index) {
+      m_index_map64.rescope(m_start_row, m_end_row);
+      record_split_row( m_index_map64.middle_key() );
+      m_index_stats.block_index_memory = m_index_map64.memory_used();
+      m_disk_usage = m_index_map64.disk_used() + 
+        ((m_offset-m_trailer.fix_index_offset) * m_index_map64.fraction_covered());
+      m_block_count = m_index_map64.index_entries();
+    }
+    else {
+      m_index_map32.rescope(m_start_row, m_end_row);
+      record_split_row( m_index_map32.middle_key() );
+      m_index_stats.block_index_memory = m_index_map32.memory_used();
+      m_disk_usage = m_index_map32.disk_used() + 
+        ((m_offset-m_trailer.fix_index_offset) * m_index_map32.fraction_covered());
+      m_block_count = m_index_map32.index_entries();
+    }
+    Global::memory_tracker->add( m_index_stats.block_index_memory );
+  }
+  else
+    load_block_index();
+}
+
+
+
 void CellStoreV6::load_block_index() {
   int64_t amount, index_amount;
   int64_t len = 0;

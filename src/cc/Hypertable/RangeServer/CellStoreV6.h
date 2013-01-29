@@ -87,6 +87,7 @@ namespace Hypertable {
     virtual void open(const String &fname, const String &start_row,
                       const String &end_row, int32_t fd, int64_t file_length,
                       CellStoreTrailer *trailer);
+    virtual void rescope(const String &start_row, const String &end_row);
     virtual int64_t get_blocksize() { return m_trailer.blocksize; }
     virtual bool may_contain(const void *ptr, size_t len);
     bool may_contain(const String &key) {

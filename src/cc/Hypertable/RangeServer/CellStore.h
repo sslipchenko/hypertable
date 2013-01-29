@@ -107,6 +107,10 @@ namespace Hypertable {
                       const String &end_row, int32_t fd, int64_t file_length,
                       CellStoreTrailer *trailer) = 0;
 
+    virtual void rescope(const String &start_row, const String &end_row) {
+      HT_FATAL("Not implemented!");
+    }
+
     /**
      * Returns the block size used for this cell store.  The block size is the
      * amount of uncompressed key/value pairs to collect before compressing and

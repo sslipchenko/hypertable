@@ -228,7 +228,8 @@ CellListScanner *AccessGroup::create_scanner(ScanContextPtr &scan_context) {
   }
   catch (Exception &e) {
     ScopedLock lock(m_outstanding_scanner_mutex);
-    m_outstanding_scanner_count--;
+    if (--m_outstanding_scanner_count == 0)
+      m_outstanding_scanner_cond.notify_all();
     delete scanner;
     HT_THROW2F(e.code(), e, "Problem creating scanner on access group %s",
                m_full_name.c_str());
@@ -302,12 +303,12 @@ void AccessGroup::space_usage(int64_t *memp, int64_t *diskp) {
 
 
 uint64_t AccessGroup::purge_memory(MaintenanceFlag::Map &subtask_map) {
-  ScopedLock lock(m_outstanding_scanner_mutex);
+  ScopedLock lock(m_mutex);
   uint64_t memory_purged = 0;
   int flags;
 
   {
-    ScopedLock lock(m_mutex);
+    ScopedLock lock(m_outstanding_scanner_mutex);
     for (size_t i=0; i<m_stores.size(); i++) {
       flags = subtask_map.flags(m_stores[i].cs.get());
       if (MaintenanceFlag::purge_shadow_cache(flags) &&
@@ -754,7 +755,6 @@ void AccessGroup::shrink(String &split_row, bool drop_high) {
   ByteString key;
   ByteString value;
   Key key_comps;
-  std::vector<CellStoreInfo> new_stores;
   CellStore *new_cell_store;
   uint64_t memory_added = 0;
   uint64_t items_added = 0;
@@ -816,16 +816,27 @@ void AccessGroup::shrink(String &split_row, bool drop_high) {
 
     new_cell_cache->unlock();
 
-    /**
-     * Shrink the CellStores
-     */
-    for (size_t i=0; i<m_stores.size(); i++) {
-      String filename = m_stores[i].cs->get_filename();
-      new_cell_store = CellStoreFactory::open(filename, m_start_row.c_str(), m_end_row.c_str());
-      new_stores.push_back( new_cell_store );
+    bool cellstores_shrunk = false;
+    {
+      ScopedLock lock(m_outstanding_scanner_mutex);
+      // Shrink without having to re-create CellStores
+      if (m_outstanding_scanner_count == 0) {
+        for (size_t i=0; i<m_stores.size(); i++)
+          m_stores[i].cs->rescope(m_start_row, m_end_row);
+        cellstores_shrunk = true;
+      }
     }
-
-    m_stores = new_stores;
+    // If we didn't shrink using the method above, do it the expensive way
+    if (!cellstores_shrunk) {
+      std::vector<CellStoreInfo> new_stores;
+      for (size_t i=0; i<m_stores.size(); i++) {
+        String filename = m_stores[i].cs->get_filename();
+        new_cell_store = CellStoreFactory::open(filename, m_start_row.c_str(),
+                                                m_end_row.c_str());
+        new_stores.push_back( new_cell_store );
+      }
+      m_stores = new_stores;
+    }
 
     // This recomputes m_disk_usage as well
     recompute_compression_ratio();
@@ -853,7 +864,8 @@ void AccessGroup::release_files(const std::vector<String> &files) {
   {
     ScopedLock lock(m_outstanding_scanner_mutex);
     HT_ASSERT(m_outstanding_scanner_count > 0);
-    m_outstanding_scanner_count--;
+    if (--m_outstanding_scanner_count == 0)
+      m_outstanding_scanner_cond.notify_all();
   }
   m_file_tracker.remove_references(files);
   m_file_tracker.update_files_column();
