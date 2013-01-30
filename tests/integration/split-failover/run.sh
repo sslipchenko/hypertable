@@ -44,6 +44,7 @@ start_master() {
         --pidfile=$HT_HOME/run/Hypertable.Master.pid \
         --Hypertable.Master.Gc.Interval=30000 \
         --Hypertable.RangeServer.Range.SplitSize=18K \
+        --Hypertable.Master.Split.SoftLimitEnabled=false \
         --Hypertable.RangeServer.Range.MetadataSplitSize=20K \
         --Hypertable.Failover.GracePeriod=30000 \
         --Hypertable.Failover.Quorum.Percentage=40 \
