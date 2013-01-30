@@ -317,7 +317,6 @@ void
 Comm::create_datagram_receive_socket(CommAddress &addr, int tos,
                                      DispatchHandlerPtr &dhp) {
   IOHandlerDatagram *handler;
-  int one = 1;
   int sd;
 
   HT_ASSERT(addr.is_inet());
@@ -338,15 +337,6 @@ Comm::create_datagram_receive_socket(CommAddress &addr, int tos,
       < 0) {
     HT_ERRORF("setsockopt(SO_RCVBUF) failed - %s", strerror(errno));
   }
-
-  if (setsockopt(sd, SOL_SOCKET, SO_REUSEADDR, &one, sizeof(one)) < 0) {
-    HT_WARNF("setsockopt(SO_REUSEADDR) failure: %s", strerror(errno));
-  }
-
-#if defined(__APPLE__) || defined(__FreeBSD__)
-  if (setsockopt(sd, SOL_SOCKET, SO_REUSEPORT, &one, sizeof(one)) < 0)
-    HT_WARNF("setsockopt(SO_REUSEPORT) failure: %s", strerror(errno));
-#endif
 
   if (tos) {
     int opt;
