@@ -31,6 +31,8 @@
 #include "Hypertable/Lib/Key.h"
 #include "Hypertable/Lib/SerializedKey.h"
 
+#include "CellList.h"
+
 namespace Hypertable {
 
   template <typename OffsetT>
@@ -223,7 +225,38 @@ namespace Hypertable {
       std::cout << "sizeof(OffsetT) = " << sizeof(OffsetT) << std::endl;
     }
 
-    const SerializedKey middle_key() { return m_middle_key; }
+    /** Accumulates unique row estimates from block index entries.
+     * @param split_row_data Reference to accumulator map holding unique
+     * row and count estimates
+     * @param keys_per_block Key count to add for each index entry
+     */
+    void unique_row_count_estimate(CellList::SplitRowDataMapT &split_row_data,
+                                   int32_t keys_per_block) {
+      const char *row, *last_row = 0;
+      int64_t last_count = 0;
+      foreach_ht (ElementT &e, m_array) {
+        row = e.key.row();
+        if (last_row == 0)
+          last_row = row;
+        if (strcmp(row, last_row) != 0) {
+          CstrToInt64MapT::iterator iter = split_row_data.find(last_row);
+          if (iter == split_row_data.end())
+            split_row_data[last_row] = last_count;
+          else
+            iter->second += last_count;
+          last_row = row;
+          last_count = 0;
+        }
+        last_count += keys_per_block;
+      }
+      if (last_count > 0) {
+        CstrToInt64MapT::iterator iter = split_row_data.find(last_row);
+        if (iter == split_row_data.end())
+          split_row_data[last_row] = last_count;
+        else
+          iter->second += last_count;
+      }
+    }
 
     size_t memory_used() {
       return m_keydata.size + (m_array.size() * (sizeof(ElementT)));

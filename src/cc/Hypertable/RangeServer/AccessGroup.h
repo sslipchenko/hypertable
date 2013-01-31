@@ -104,10 +104,9 @@ namespace Hypertable {
 
     virtual void add(const Key &key, const ByteString value);
 
-    virtual const char *get_split_row();
-    virtual void get_split_rows(std::vector<String> &split_rows,
-                                bool include_cache);
-    virtual void get_cached_rows(std::vector<String> &rows);
+    void split_row_estimate_data_cached(SplitRowDataMapT &split_row_data);
+
+    void split_row_estimate_data_stored(SplitRowDataMapT &split_row_data);
 
     virtual int64_t get_total_entries() {
       boost::mutex::scoped_lock lock(m_mutex);

@@ -844,7 +844,7 @@ void Range::split() {
 void Range::split_install_log() {
   std::vector<String> split_rows;
   char md5DigestStr[33];
-  AccessGroupVector  ag_vector(0);
+  AccessGroupVector ag_vector(0);
 
   {
     ScopedLock lock(m_mutex);
@@ -860,52 +860,38 @@ void Range::split_install_log() {
   if (cancel_maintenance())
     HT_THROW(Error::CANCELLED, "");
 
-  for (size_t i=0; i<ag_vector.size(); i++)
-    ag_vector[i]->get_split_rows(split_rows, false);
-
   /**
-   * If we didn't get at least one row from each Access Group, then try again
-   * the hard way (scans CellCache for middle row)
+   * Split row determination Algorithm:
+   *
+   * TBD
    */
 
-  if (split_rows.size() < ag_vector.size()) {
-    for (size_t i=0; i<ag_vector.size(); i++)
-      ag_vector[i]->get_split_rows(split_rows, true);
-  }
-  sort(split_rows.begin(), split_rows.end());
+  {
+    StlArena arena(128000);
+    SplitRowDataMapT split_row_data = 
+      SplitRowDataMapT(LtCstr(), SplitRowDataAlloc(arena));
 
-  //HT_INFO_OUT << "thelma Dumping split rows for range " << m_name << HT_END;
-  //for (size_t i=0; i<split_rows.size(); i++)
-  //  HT_INFO_OUT << "thelma Range::get_split_row [" << i << "] = " << split_rows[i]
-  //              << HT_END;
-  //HT_INFO_OUT << "thelma Done calculating split rows for range " << m_name << HT_END;
+    // Fetch CellStore block index split row data from
+    foreach_ht (const AccessGroupPtr &ag, ag_vector)
+      ag->split_row_estimate_data_stored(split_row_data);
 
-  /**
-   * If we still didn't get a good split row, try again the *really* hard way
-   * by collecting all of the cached rows, sorting them and then taking the
-   * middle.
-   */
-  if (split_rows.size() > 0) {
-    ScopedLock lock(m_mutex);
-    m_split_row = split_rows[split_rows.size()/2];
-    if (strcmp(m_split_row.c_str(), m_metalog_entity->spec.start_row) < 0 ||
-        strcmp(m_split_row.c_str(), m_metalog_entity->spec.end_row) >= 0) {
-      if (!determine_split_row_from_cached_keys(ag_vector)) {
-	m_error = Error::RANGESERVER_ROW_OVERFLOW;
-	HT_THROWF(Error::RANGESERVER_ROW_OVERFLOW,
-		  "(a) Unable to determine split row for range %s[%s..%s]",
-		  m_metalog_entity->table.id, m_metalog_entity->spec.start_row, m_metalog_entity->spec.end_row);
-      }
-    }
-  }
-  else {
-    if (!determine_split_row_from_cached_keys(ag_vector)) {
+    // Fetch CellCache split row data from
+    foreach_ht (const AccessGroupPtr &ag, ag_vector)
+      ag->split_row_estimate_data_cached(split_row_data);
+
+    // Estimate split row from split row data
+    if (!estimate_split_row(split_row_data, m_split_row)) {
       m_error = Error::RANGESERVER_ROW_OVERFLOW;
       HT_THROWF(Error::RANGESERVER_ROW_OVERFLOW,
-		"(b) Unable to determine split row for range %s[%s..%s]",
-		m_metalog_entity->table.id, m_metalog_entity->spec.start_row, m_metalog_entity->spec.end_row);
+                "Unable to determine split row for range %s[%s..%s]",
+                m_metalog_entity->table.id, m_metalog_entity->spec.start_row,
+                m_metalog_entity->spec.end_row);
     }
+
+    HT_INFOF("Split row estimate for %s is '%s'",
+             m_name.c_str(), m_split_row.c_str());
   }
+
 
   {
     ScopedLock lock(m_mutex);
@@ -980,24 +966,34 @@ void Range::split_install_log() {
 
 }
 
+bool Range::estimate_split_row(SplitRowDataMapT &split_row_data, String &row) {
 
-bool Range::determine_split_row_from_cached_keys(AccessGroupVector &ag_vector) {
-  std::vector<String> split_rows;  
+  // Set target to half the total number of keys
+  int64_t target = 0;
+  for (SplitRowDataMapT::iterator iter=split_row_data.begin();
+       iter != split_row_data.end(); ++iter)
+    target += iter->second;
+  target /= 2;
 
-  for (size_t i=0; i<ag_vector.size(); i++)
-    ag_vector[i]->get_cached_rows(split_rows);
-
-  if (split_rows.size() > 0) {
-    sort(split_rows.begin(), split_rows.end());
-    m_split_row = split_rows[split_rows.size()/2];
-    if (strcmp(m_split_row.c_str(), m_metalog_entity->spec.start_row) < 0 ||
-	strcmp(m_split_row.c_str(), m_metalog_entity->spec.end_row) >= 0) {
-      return false;
-    }
-  }
-  else
+  row.clear();
+  if (target == 0)
     return false;
 
+  int64_t cumulative = 0;
+  for (SplitRowDataMapT::iterator iter=split_row_data.begin();
+       iter != split_row_data.end(); ++iter) {
+    if (cumulative + iter->second >= target) {
+      if (cumulative > 0)
+        --iter;
+      row = iter->first;
+      break;
+    }
+    cumulative += iter->second;
+  }
+  HT_ASSERT(!row.empty());
+  HT_ASSERT(row.compare(m_metalog_entity->spec.end_row) <= 0);
+  if (row.compare(m_metalog_entity->spec.end_row) == 0)
+    return false;
   return true;
 }
 

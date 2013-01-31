@@ -98,15 +98,14 @@ KeyDecompressor *CellStoreV6::create_key_decompressor() {
   return new KeyDecompressorPrefix();
 }
 
-
-const char *CellStoreV6::get_split_row() {
-  if (m_split_row != "")
-    return m_split_row.c_str();
+void CellStoreV6::split_row_estimate_data(SplitRowDataMapT &split_row_data) {
   if (m_index_stats.block_index_memory == 0)
     load_block_index();
-  if (m_split_row != "")
-    return m_split_row.c_str();
-  return 0;
+  int32_t keys_per_block = m_trailer.total_entries / m_trailer.index_entries;
+  if (m_64bit_index)
+    m_index_map64.unique_row_count_estimate(split_row_data, keys_per_block);
+  else
+    m_index_map32.unique_row_count_estimate(split_row_data, keys_per_block);
 }
 
 CellListScanner *CellStoreV6::create_scanner(ScanContextPtr &scan_ctx) {
@@ -691,7 +690,6 @@ void CellStoreV6::finalize(TableIdentifier *table_identifier) {
                        m_index_builder.variable_buf(),
                        m_trailer.fix_index_offset);
     m_trailer.index_entries = m_index_map64.index_entries();
-    record_split_row( m_index_map64.middle_key() );
     index_memory = m_index_map64.memory_used();
     m_trailer.flags |= CellStoreTrailerV6::INDEX_64BIT;
     m_disk_usage = m_index_map64.disk_used() +
@@ -705,7 +703,6 @@ void CellStoreV6::finalize(TableIdentifier *table_identifier) {
                        m_trailer.fix_index_offset);
     m_trailer.index_entries = m_index_map32.index_entries();
     index_memory = m_index_map32.memory_used();
-    record_split_row( m_index_map32.middle_key() );
     m_disk_usage = m_index_map32.disk_used() +
       (int64_t)((double)(m_offset-m_trailer.fix_index_offset)
 		* m_index_map32.fraction_covered());
@@ -874,7 +871,6 @@ CellStoreV6::rescope(const String &start_row, const String &end_row) {
     Global::memory_tracker->subtract( m_index_stats.block_index_memory );
     if (m_64bit_index) {
       m_index_map64.rescope(m_start_row, m_end_row);
-      record_split_row( m_index_map64.middle_key() );
       m_index_stats.block_index_memory = m_index_map64.memory_used();
       m_disk_usage = m_index_map64.disk_used() + 
         (int64_t)((double)(m_file_length-m_trailer.fix_index_offset) *
@@ -883,7 +879,6 @@ CellStoreV6::rescope(const String &start_row, const String &end_row) {
     }
     else {
       m_index_map32.rescope(m_start_row, m_end_row);
-      record_split_row( m_index_map32.middle_key() );
       m_index_stats.block_index_memory = m_index_map32.memory_used();
       m_disk_usage = m_index_map32.disk_used() + 
         (int64_t)((double)(m_file_length-m_trailer.fix_index_offset) *
@@ -974,7 +969,6 @@ void CellStoreV6::load_block_index() {
     m_index_map64.load(m_index_builder.fixed_buf(),
                        m_index_builder.variable_buf(),
                        m_trailer.fix_index_offset, m_start_row, m_end_row);
-    record_split_row( m_index_map64.middle_key() );
     m_index_stats.block_index_memory = m_index_map64.memory_used();
     m_disk_usage = m_index_map64.disk_used() + 
       (int64_t)((double)(m_file_length-m_trailer.fix_index_offset) *
@@ -985,7 +979,6 @@ void CellStoreV6::load_block_index() {
     m_index_map32.load(m_index_builder.fixed_buf(),
                        m_index_builder.variable_buf(),
                        m_trailer.fix_index_offset, m_start_row, m_end_row);
-    record_split_row( m_index_map32.middle_key() );
     m_index_stats.block_index_memory = m_index_map32.memory_used();
     m_disk_usage = m_index_map32.disk_used() + 
       (int64_t)((double)(m_file_length-m_trailer.fix_index_offset) *
@@ -1059,14 +1052,4 @@ void CellStoreV6::display_block_info() {
     m_index_map64.display();
   else
     m_index_map32.display();
-}
-
-
-
-void CellStoreV6::record_split_row(const SerializedKey key) {
-  if (key.ptr) {
-    std::string split_row = key.row();
-    if (split_row > m_start_row && split_row < m_end_row)
-      m_split_row = split_row;
-  }
 }

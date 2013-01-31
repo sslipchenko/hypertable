@@ -5,11 +5,11 @@ PIDFILE=$HT_HOME/run/Hypertable.RangeServer.pid
 SCRIPT_DIR=`dirname $0`
 DATA_SIZE=${DATA_SIZE:-"20000000"}
 
-$HT_HOME/bin/start-test-servers.sh --clear --no-rangeserver --no-thriftbroker
+$HT_HOME/bin/start-test-servers.sh --clear --no-rangeserver --no-thriftbroker \
+    --Hypertable.RangeServer.Range.SplitSize=2000000 \
+    --Hypertable.Master.Split.SoftLimitEnabled=false
 
 $HT_HOME/bin/ht Hypertable.RangeServer --verbose --pidfile=$PIDFILE \
-    --Hypertable.RangeServer.Range.SplitSize=2000000 \
-    --Hypertable.RangeServer.CellStore.DefaultBlockSize=10000 \
     --Hypertable.RangeServer.Maintenance.Interval=100 > rangeserver.output 2>&1 &
 
 sleep 2

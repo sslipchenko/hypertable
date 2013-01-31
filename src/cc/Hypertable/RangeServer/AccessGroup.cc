@@ -251,34 +251,17 @@ bool AccessGroup::include_in_scan(ScanContextPtr &scan_context) {
   return false;
 }
 
-const char *AccessGroup::get_split_row() {
-  std::vector<String> split_rows;
-  get_split_rows(split_rows, true);
-  if (split_rows.size() > 0) {
-    sort(split_rows.begin(), split_rows.end());
-    return (split_rows[split_rows.size()/2]).c_str();
-  }
-  return "";
+
+void AccessGroup::split_row_estimate_data_cached(SplitRowDataMapT &split_row_data) {
+  ScopedLock lock(m_mutex);
+  m_cell_cache_manager->split_row_estimate_data(split_row_data);
 }
 
-void
-AccessGroup::get_split_rows(std::vector<String> &split_rows,
-                            bool include_cache) {
+
+void AccessGroup::split_row_estimate_data_stored(SplitRowDataMapT &split_row_data) {
   ScopedLock lock(m_mutex);
-  const char *row;
-
-  for (size_t i=0; i<m_stores.size(); i++) {
-    if ((row = m_stores[i].cs->get_split_row()) != 0)
-      split_rows.push_back(row);
-  }
-
-  if (include_cache)
-    m_cell_cache_manager->get_split_rows(split_rows);
-}
-
-void AccessGroup::get_cached_rows(std::vector<String> &rows) {
-  ScopedLock lock(m_mutex);
-  m_cell_cache_manager->get_rows(rows);
+  foreach_ht (CellStoreInfo &csinfo, m_stores)
+    csinfo.cs->split_row_estimate_data(split_row_data);
 }
 
 

@@ -337,7 +337,7 @@ namespace Hypertable {
     void relinquish_install_log();
     void relinquish_compact_and_finish();
 
-    bool determine_split_row_from_cached_keys(AccessGroupVector &ag_vector);
+    bool estimate_split_row(SplitRowDataMapT &split_row_data, String &row);
 
     void split_install_log();
     void split_compact_and_shrink();
