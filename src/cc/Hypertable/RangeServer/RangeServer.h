@@ -113,6 +113,8 @@ namespace Hypertable {
     void commit_log_sync(ResponseCallback *, const TableIdentifier *);
     void drop_table(ResponseCallback *, const TableIdentifier *);
     void dump(ResponseCallback *, const char *, bool);
+    void dump_pseudo_table(ResponseCallback *cb, const TableIdentifier *table,
+                           const char *pseudo_table, const char *outfile);
     void get_statistics(ResponseCallbackGetStatistics *);
 
     void replay_load_range(ResponseCallback *, MetaLog::EntityRange *,

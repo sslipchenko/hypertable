@@ -131,6 +131,9 @@ namespace Hypertable {
 
     CellListScanner *create_scanner(ScanContextPtr &scan_ctx);
 
+    CellListScanner *create_scanner_pseudo_table(ScanContextPtr &scan_ctx,
+                                                 const String &table_name);
+
     String start_row() {
       ScopedLock lock(m_mutex);
       return m_metalog_entity->spec.start_row;

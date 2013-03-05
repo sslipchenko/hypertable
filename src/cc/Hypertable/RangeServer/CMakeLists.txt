@@ -100,6 +100,7 @@ RequestHandlerDestroyScanner.cc
 RequestHandlerDoMaintenance.cc
 RequestHandlerDropRange.cc
 RequestHandlerDump.cc
+RequestHandlerDumpPseudoTable.cc
 RequestHandlerGetStatistics.cc
 RequestHandlerGroupCommit.cc
 RequestHandlerFetchScanblock.cc
