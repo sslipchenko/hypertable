@@ -3025,7 +3025,7 @@ RangeServer::dump_pseudo_table(ResponseCallback *cb, const TableIdentifier *tabl
   try {
     RangeDataVector range_data;
     TableInfoPtr table_info;
-    CellListScanner *scanner;
+    //CellListScanner *scanner;
     ScanContextPtr scan_ctx = new ScanContext();
 
     std::ofstream out(outfile);

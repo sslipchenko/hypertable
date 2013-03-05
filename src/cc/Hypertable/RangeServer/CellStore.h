@@ -32,6 +32,7 @@
 #include "Hypertable/Lib/Types.h"
 
 #include "CellList.h"
+#include "CellListScannerBuffer.h"
 #include "CellStoreTrailer.h"
 #include "KeyDecompressor.h"
 
@@ -70,6 +71,13 @@ namespace Hypertable {
     virtual void split_row_estimate_data(SplitRowDataMapT &split_row_data) {
       HT_FATAL("Not implemented!");
     }
+
+    /** Populates <code>scanner</code> with key/value pairs generated from
+     * CellStore index.
+     * @param scanner Reference to CellListScannerBuffer to receive key/value
+     * pairs
+     */
+    virtual void populate_index_pseudo_table_scanner(CellListScannerBuffer &scanner) { }
 
     virtual int64_t get_total_entries() = 0;
 

@@ -30,8 +30,9 @@ AccessGroupGarbageTracker.cc
 CellCache.cc
 CellCacheAllocator.cc
 CellCacheManager.cc
-CellStoreReleaseCallback.cc
 CellCacheScanner.cc
+CellListScannerBuffer.cc
+CellStoreReleaseCallback.cc
 CellStoreFactory.cc
 CellStoreScanner.cc
 CellStoreScannerIntervalBlockIndex.cc

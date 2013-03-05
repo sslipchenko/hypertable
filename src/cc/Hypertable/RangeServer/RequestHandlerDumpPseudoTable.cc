@@ -36,7 +36,6 @@ void RequestHandlerDumpPseudoTable::run() {
   size_t decode_remain = m_event->payload_len;
   const char *outfile = 0;
   const char *pseudo_table_name = 0;
-  bool nokeys;
 
   try {
     table.decode(&decode_ptr, &decode_remain);

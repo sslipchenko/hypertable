@@ -22,11 +22,15 @@
 /** @file
  * Declarations for CellListScannerBuffer.
  * This file contains the type declarations for CellListScannerBuffer, a
- * class used to hold a buffer of cells t
+ * class used to scan over a list of cells with no backing store (CellCache,
+ * CellStore)
  */
 
 #ifndef HYPERTABLE_CELLLISTSCANNERBUFFER_H
 #define HYPERTABLE_CELLLISTSCANNERBUFFER_H
+
+#include "Common/PageArena.h"
+#include "Common/StlAllocator.h"
 
 #include "CellListScanner.h"
 
@@ -43,13 +47,45 @@ namespace Hypertable {
    */
   class CellListScannerBuffer : public CellListScanner {
   public:
-    CellListScannerBuffer(ScanContextPtr &scan_ctx) : CellListScanner(scan_ctx);
+
+    /** Constructor.
+     * @param scan_ctx Reference to scan context
+     */
+    CellListScannerBuffer(ScanContextPtr &scan_ctx);
+
+    /** Destructor. */
     virtual ~CellListScannerBuffer() { return; }
+
+    /** Adds a key/value pair to the buffer.
+     * @param key Serialized key
+     * @param value ByteString pointer to value
+     */
+    void add(const SerializedKey key, const ByteString value);
 
     virtual void forward();
     virtual bool get(Key &key, ByteString &value);
+
   private:
-    
+
+    /** Sorts cells 
+     */
+    void initialize_for_scan();
+
+    typedef std::pair<SerializedKey, ByteString> KeyValueT;
+    typedef StlAllocator<KeyValueT> KeyValueAllocT;
+    typedef std::vector<KeyValueT, KeyValueAllocT> KeyValueVectorT;
+
+    /** STL Strict Weak Ordering for KeyValueT. */
+    struct LtKeyValueT {
+      bool operator()(const KeyValueT &kv1, const KeyValueT &kv2) const {
+        return kv1.first < kv2.first;
+      }
+    };
+
+    KeyValueVectorT m_cells;
+    KeyValueVectorT::iterator m_iter;
+    ByteArena m_arena;
+    bool m_initialized_for_scan;
   };
 
   /// Smart pointer to CellListScannerBuffer
