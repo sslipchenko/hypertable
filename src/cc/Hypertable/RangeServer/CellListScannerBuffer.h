@@ -65,6 +65,8 @@ namespace Hypertable {
     virtual void forward();
     virtual bool get(Key &key, ByteString &value);
 
+    virtual uint64_t get_disk_read() { return m_disk_read; }
+
   private:
 
     /** Sorts cells 

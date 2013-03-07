@@ -98,6 +98,7 @@ namespace Hypertable {
     virtual uint64_t disk_usage() { return m_disk_usage; }
     virtual float compression_ratio() { return m_trailer.compression_ratio; }
     virtual void split_row_estimate_data(SplitRowDataMapT &split_row_data);
+    virtual void populate_index_pseudo_table_scanner(CellListScannerBuffer *scanner);
     virtual int64_t get_total_entries() { return m_trailer.total_entries; }
     virtual std::string &get_filename() { return m_filename; }
     virtual int get_file_id() { return m_file_id; }

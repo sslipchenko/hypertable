@@ -74,10 +74,10 @@ namespace Hypertable {
 
     /** Populates <code>scanner</code> with key/value pairs generated from
      * CellStore index.
-     * @param scanner Reference to CellListScannerBuffer to receive key/value
+     * @param scanner Pointer to CellListScannerBuffer to receive key/value
      * pairs
      */
-    virtual void populate_index_pseudo_table_scanner(CellListScannerBuffer &scanner) { }
+    virtual void populate_index_pseudo_table_scanner(CellListScannerBuffer *scanner) { }
 
     virtual int64_t get_total_entries() = 0;
 

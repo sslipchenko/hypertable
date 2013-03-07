@@ -420,6 +420,29 @@ CellListScanner *Range::create_scanner(ScanContextPtr &scan_ctx) {
   return mscanner;
 }
 
+CellListScanner *Range::create_scanner_pseudo_table(ScanContextPtr &scan_ctx,
+                                                    const String &table_name) {
+  CellListScannerBuffer *scanner = new CellListScannerBuffer(scan_ctx);
+  AccessGroupVector ag_vector(0);
+
+  {
+    ScopedLock lock(m_schema_mutex);
+    ag_vector = m_access_group_vector;
+    m_scans++;
+  }
+
+  try {
+    foreach_ht (AccessGroupPtr &ag, ag_vector)
+      ag->populate_cellstore_index_pseudo_table_scanner(scanner);
+  }
+  catch (Exception &e) {
+    delete scanner;
+    HT_THROW2(e.code(), e, "");
+  }
+
+  return scanner;
+}
+
 
 uint64_t Range::disk_usage() {
   ScopedLock lock(m_schema_mutex);

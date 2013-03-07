@@ -3025,8 +3025,13 @@ RangeServer::dump_pseudo_table(ResponseCallback *cb, const TableIdentifier *tabl
   try {
     RangeDataVector range_data;
     TableInfoPtr table_info;
-    //CellListScanner *scanner;
+    CellListScanner *scanner;
     ScanContextPtr scan_ctx = new ScanContext();
+    Key key;
+    ByteString value;
+    Schema::ColumnFamily *cf;
+    const uint8_t *ptr;
+    size_t len;
 
     std::ofstream out(outfile);
 
@@ -3036,8 +3041,28 @@ RangeServer::dump_pseudo_table(ResponseCallback *cb, const TableIdentifier *tabl
     }
 
     table_info->get_range_data(range_data);
-    foreach_ht(RangeData &rd, range_data)
-      out << rd.range->get_name() << "\n";
+    foreach_ht(RangeData &rd, range_data) {
+      scanner = rd.range->create_scanner_pseudo_table(scan_ctx, pseudo_table);
+      while (scanner->get(key, value)) {
+        cf = Global::pseudo_tables->cellstore_index->get_column_family(key.column_family_code);
+        if (cf == 0) {
+          HT_ERRORF("Column family code %d not found in %s pseudo table schema",
+                    key.column_family_code, pseudo_table);
+        }
+        else {
+          out << key.row << "\t" << cf->name;
+          if (key.column_qualifier)
+            out << ":" << key.column_qualifier;
+          out << "\t";
+          ptr = value.ptr;
+          len = Serialization::decode_vi32(&ptr);
+          out.write((const char *)ptr, len);
+          out << "\n";
+        }
+        scanner->forward();
+      }
+      delete scanner;
+    }
 
     out << std::flush;
 

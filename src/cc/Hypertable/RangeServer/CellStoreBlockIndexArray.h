@@ -29,9 +29,11 @@
 #include "Common/StaticBuffer.h"
 
 #include "Hypertable/Lib/Key.h"
+#include "Hypertable/Lib/PseudoTables.h"
 #include "Hypertable/Lib/SerializedKey.h"
 
 #include "CellList.h"
+#include "CellListScannerBuffer.h"
 
 namespace Hypertable {
 
@@ -258,6 +260,83 @@ namespace Hypertable {
       }
     }
 
+    /**
+     *
+     */
+    void populate_pseudo_table_scanner(CellListScannerBuffer *scanner,
+                                       const String &filename,
+                                       int32_t keys_per_block,
+                                       float compression_ratio) {
+      Key key;
+      DynamicBuffer qualifier(filename.length() + 32);
+      DynamicBuffer serial_key_buf;
+      DynamicBuffer value_buf(32);
+      char buf[32];
+      char *offset_ptr;
+      const char *offset_format = (sizeof(OffsetT) == 4) ? "%08llX" : "%016llX";
+      double size;
+      OffsetT next_offset;
+
+      qualifier.add_unchecked(filename.c_str(), filename.length());
+      qualifier.add_unchecked(":", 1);
+      offset_ptr = (char *)qualifier.ptr;
+
+      for (size_t i=0; i<m_array.size(); i++) {
+
+        if (i < (m_array.size()-1))
+          next_offset = m_array[i+1].offset;
+        else
+          next_offset = m_end_of_last_block;
+
+        key.load(m_array[i].key);
+        sprintf(offset_ptr, offset_format, (long long)m_array[i].offset);
+
+        // Size key
+        serial_key_buf.clear();
+        create_key_and_append(serial_key_buf, FLAG_INSERT, key.row,
+                              PseudoTables::CELLSTORE_INDEX_SIZE,
+                              (const char *)qualifier.base, key.timestamp,
+                              key.revision);
+        // Size value
+        value_buf.clear();
+        size = (double)(next_offset - m_array[i].offset) / (double)compression_ratio;
+        sprintf(buf, "%lu", (unsigned long)size);
+        Serialization::encode_vi32(&value_buf.ptr, strlen(buf));
+        strcpy((char *)value_buf.ptr, buf);
+
+        scanner->add( SerializedKey(serial_key_buf.base), ByteString(value_buf.base) );
+
+        // CompressedSize key
+        serial_key_buf.clear();
+        create_key_and_append(serial_key_buf, FLAG_INSERT, key.row,
+                              PseudoTables::CELLSTORE_INDEX_COMPRESSED_SIZE,
+                              (const char *)qualifier.base, key.timestamp,
+                              key.revision);
+        // CompressedSize value
+        value_buf.clear();
+        sprintf(buf, "%lu", (unsigned long)(next_offset - m_array[i].offset));
+        Serialization::encode_vi32(&value_buf.ptr, strlen(buf));
+        strcpy((char *)value_buf.ptr, buf);
+
+        scanner->add( SerializedKey(serial_key_buf.base), ByteString(value_buf.base) );
+
+        // KeyCount key
+        serial_key_buf.clear();
+        create_key_and_append(serial_key_buf, FLAG_INSERT, key.row,
+                              PseudoTables::CELLSTORE_INDEX_KEY_COUNT,
+                              (const char *)qualifier.base, key.timestamp,
+                              key.revision);
+        // KeyCount value
+        value_buf.clear();
+        sprintf(buf, "%lu", (unsigned long)keys_per_block);
+        Serialization::encode_vi32(&value_buf.ptr, strlen(buf));
+        strcpy((char *)value_buf.ptr, buf);
+
+        scanner->add( SerializedKey(serial_key_buf.base), ByteString(value_buf.base) );
+
+      }
+    }
+
     size_t memory_used() {
       return m_keydata.size + (m_array.size() * (sizeof(ElementT)));
     }
@@ -299,8 +378,8 @@ namespace Hypertable {
     ArrayT m_array;
     StaticBuffer m_keydata;
     SerializedKey m_middle_key;
-    int64_t m_end_of_last_block;
-    int64_t m_disk_used;
+    OffsetT m_end_of_last_block;
+    OffsetT m_disk_used;
     float m_fraction_covered;
   };
 

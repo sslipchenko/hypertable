@@ -108,6 +108,8 @@ namespace Hypertable {
 
     void split_row_estimate_data_stored(SplitRowDataMapT &split_row_data);
 
+    void populate_cellstore_index_pseudo_table_scanner(CellListScannerBuffer *scanner);
+
     virtual int64_t get_total_entries() {
       boost::mutex::scoped_lock lock(m_mutex);
       int64_t total = m_cell_cache_manager->get_total_entries();
