@@ -206,7 +206,7 @@ namespace Hypertable {
    *   2. If the FETCH_RESULT request is received before the operation
    *      completes, the response delivery information is add to
    *      <code>m_context->m_context->delivery_list</code>.  As soon
-   *      as the operation completes and is added with a call to #add_operation,
+   *      as the operation completes and is added with a call to add_operation(),
    *      the operation results are sent back, the delivery record is removed
    *      from <code>m_context->delivery_list</code>, and the operation is
    *      removed.
@@ -224,8 +224,8 @@ namespace Hypertable {
      * expired and completed operations.  It waits on
      * <code>m_context->cond</code> for the next operation or delivery
      * information record to time out, or for completed operations to get added
-     * to <code>m_context->removal_queue</code> by either the #add_operation
-     * or #add_delivery_info method.  If an operation times out, it is
+     * to <code>m_context->removal_queue</code> by either the add_operation()
+     * or add_delivery_info() method.  If an operation times out, it is
      * removed from <code>m_context->expirable_ops</code> and is added to
      * <code>m_context->removal_queue</code>.  If a delivery information record
      * times out, it is removed from <code>m_context->delivery_list</code>.
@@ -248,7 +248,7 @@ namespace Hypertable {
      * not yet been added for <code>operation</code>, it is added to
      * <code>m_context->expirable_ops</code>, deferring the delivery of the
      * response message until the corresponding delivery information has been
-     * added with a call to #add_delivery_info.
+     * added with a call to add_delivery_info().
      * @param operation Completed operation ready for response delivery
      */
     void add_operation(OperationPtr &operation);
@@ -265,7 +265,7 @@ namespace Hypertable {
      * not yet been added to <code>m_context->expirable_ops</code>, an entry
      * containing <code>event</code> is added to
      * <code>m_context->delivery_list</code> so that at a later time, when
-     * the corresponding operation is added via #add_operation, the operation
+     * the corresponding operation is added via add_operation(), the operation
      * result can be sent back to the client at the delivery address contained
      * within <code>event</code>.
      * @param event Event representing a %COMMAND_FETCH_RESULT request
