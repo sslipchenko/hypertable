@@ -110,19 +110,23 @@ void Namespace::create_table(const String &table_name, const String &schema) {
   m_master_client->create_table(full_name, schema);
 }
 
-void Namespace::alter_table(const String &table_name, const String &alter_schema_str) {
+void Namespace::alter_table(const String &table_name,
+        const String &alter_schema_str, bool merge_schema) {
   String name = Filesystem::basename(table_name);
-  if (name.size() && name[0]=='^')
+
+  if (name.size() && name[0] == '^')
     HT_THROW(Error::SYNTAX_ERROR, (String)"Invalid table name character '^'");
 
   // Construct a new schema which is a merge of the existing schema
   // and the desired alterations.
   String full_name = get_full_name(table_name);
 
+  String final_schema_str;
+  SchemaPtr final_schema;
   Schema::AccessGroup *final_ag;
   Schema::ColumnFamily *final_cf;
-  String final_schema_str;
-  TablePtr table = open_table(table_name, Table::OPEN_FLAG_BYPASS_TABLE_CACHE);
+  TablePtr table = open_table(table_name,
+          Table::OPEN_FLAG_BYPASS_TABLE_CACHE);
 
   SchemaPtr schema = table->schema();
   SchemaPtr alter_schema = Schema::new_instance(alter_schema_str, 
@@ -130,7 +134,12 @@ void Namespace::alter_table(const String &table_name, const String &alter_schema
   if (!alter_schema->is_valid())
     HT_THROW(Error::BAD_SCHEMA, alter_schema->get_error_string());
 
-  SchemaPtr final_schema = new Schema(*(schema.get()));
+  if (merge_schema)
+    final_schema = new Schema(*(schema.get()));
+  else {
+    final_schema = new Schema();
+    final_schema->set_generation(schema->get_generation());
+  }
   final_schema->incr_generation();
 
   foreach_ht(Schema::AccessGroup *alter_ag, alter_schema->get_access_groups()) {
@@ -155,26 +164,27 @@ void Namespace::alter_table(const String &table_name, const String &alter_schema
 
   // go through each column family to be altered
   foreach_ht(Schema::ColumnFamily *alter_cf, alter_schema->get_column_families()) {
-    if (alter_cf->deleted) {
+    if (merge_schema && alter_cf->deleted) {
       if (!final_schema->drop_column_family(alter_cf->name))
         HT_THROW(Error::BAD_SCHEMA, final_schema->get_error_string());
     }
-    else if (alter_cf->renamed) {
+    else if (merge_schema && alter_cf->renamed) {
       if (!final_schema->rename_column_family(alter_cf->name, alter_cf->new_name))
         HT_THROW(Error::BAD_SCHEMA, final_schema->get_error_string());
     }
     else {
       // add column family
-      if(final_schema->get_max_column_family_id() >= Schema::ms_max_column_id)
-        HT_THROW(Error::TOO_MANY_COLUMNS,
-                 format("Attempting to add > %d column families to table",
-                        (int)Schema::ms_max_column_id));
+      if (merge_schema &&
+          final_schema->get_max_column_family_id() >= Schema::ms_max_column_id)
+        HT_THROW(Error::TOO_MANY_COLUMNS, (String)"Attempting to add > "
+                 + Schema::ms_max_column_id
+                 + (String) " column families to table");
       final_schema->incr_max_column_family_id();
       final_cf = new Schema::ColumnFamily(*alter_cf);
       final_cf->id = (uint32_t) final_schema->get_max_column_family_id();
       final_cf->generation = final_schema->get_generation();
 
-      if(!final_schema->add_column_family(final_cf)) {
+      if (!final_schema->add_column_family(final_cf)) {
         String error_msg = final_schema->get_error_string();
         delete final_cf;
         HT_THROW(Error::BAD_SCHEMA, error_msg);
@@ -182,10 +192,25 @@ void Namespace::alter_table(const String &table_name, const String &alter_schema
     }
   }
 
+  Schema::ReplicationClusterMap::const_iterator it;
+  for (it = alter_schema->get_replication_cluster().begin();
+      it != alter_schema->get_replication_cluster().end(); ++it) {
+    // if a cluster is deleted: make sure that it existed
+    if (it->second) {
+      if (!schema->has_replication_cluster(it->first))
+        HT_THROW(Error::BAD_SCHEMA, "Invalid or unknown replication cluster");
+      final_schema->remove_replication_cluster(it->first);
+    }
+    else {
+      if (m_name == "sys")
+        HT_THROW(Error::BAD_SCHEMA, "Unable to replicate /sys namespace");
+      final_schema->add_replication_cluster(it->first, it->second);
+    }
+  }
+
   final_schema->render(final_schema_str, true);
   m_master_client->alter_table(full_name, final_schema_str);
 }
-
 
 TablePtr Namespace::open_table(const String &table_name, int32_t flags) {
   Locker<TableCache> lock(*m_table_cache);
@@ -209,10 +234,10 @@ TablePtr Namespace::open_table(const String &table_name, int32_t flags) {
 TablePtr Namespace::_open_table(const String &full_name, int32_t flags) {
   TablePtr t;
   if (flags & Table::OPEN_FLAG_BYPASS_TABLE_CACHE)
-    t=new Table(m_props, m_range_locator, m_conn_manager, m_hyperspace,
+    t = new Table(m_props, m_range_locator, m_conn_manager, m_hyperspace,
                      m_app_queue, m_namemap, full_name, flags, m_timeout_ms);
   else
-    t=m_table_cache->get_unlocked(full_name, flags);
+    t = m_table_cache->get_unlocked(full_name, flags);
   t->set_namespace(this);
   return (t);
 }

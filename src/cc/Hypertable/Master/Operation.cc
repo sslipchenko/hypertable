@@ -372,6 +372,7 @@ namespace {
     { Hypertable::OperationState::COMMIT, "COMMIT" },
     { Hypertable::OperationState::PHANTOM_LOAD, "PHANTOM_LOAD" },
     { Hypertable::OperationState::REPLAY_FRAGMENTS, "REPLAY_FRAGMENTS" },
+    { Hypertable::OperationState::COM_EXTENSION_1, "COM_EXTENSION_1" },
     { 0, 0 }
   };
 
@@ -379,7 +380,7 @@ namespace {
 
   TextMap &build_text_map() {
     TextMap *map = new TextMap();
-    for (int i=0; state_info[i].text != 0; i++)
+    for (int i = 0; state_info[i].text != 0; i++)
       (*map)[state_info[i].code] = state_info[i].text;
     return *map;
   }

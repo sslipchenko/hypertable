@@ -1,0 +1,50 @@
+
+Welcome to the hypertable command interpreter.
+For information about Hypertable, visit http://hypertable.com
+
+Type 'help' for a list of commands, or 'help shell' for a
+list of shell meta commands.
+
+USE "/rep";
+GET LISTING;
+source	(namespace)
+USE "source";
+GET LISTING;
+Repl
+SHOW CREATE TABLE Repl;
+
+CREATE TABLE Repl (
+  c,
+  ACCESS GROUP default (c)
+)
+
+SELECT * FROM Repl;
+r00	c	value00
+r01	c	value01
+r02	c	value02
+r03	c	value03
+r04	c	value04
+r05	c	value05
+r06	c	value06
+r07	c	value07
+r08	c	value08
+r09	c	value09
+r10	c	value10
+r11	c	value11
+r12	c	value12
+r13	c	value13
+r14	c	value14
+r15	c	value15
+r16	c	value16
+r17	c	value17
+r18	c	value18
+r19	c	value19
+r20	c	value20
+r21	c	value21
+r22	c	value22
+r23	c	value23
+r24	c	value24
+r25	c	value25
+r26	c	value26
+r27	c	value27
+r29	c	value29

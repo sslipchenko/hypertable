@@ -1,0 +1,6 @@
+USE "/rep";
+GET LISTING;
+USE "source";
+GET LISTING;
+SHOW CREATE TABLE Repl;
+SELECT * FROM Repl;

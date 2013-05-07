@@ -405,6 +405,9 @@ void DefaultPolicy::init_options() {
         "Host of DFS Broker to use for Commit Log")
     ("Hypertable.RangeServer.CommitLog.DfsBroker.Port", i16(),
         "Port of DFS Broker to use for Commit Log")
+    ("Hypertable.RangeServer.CommitLog.FragmentRemoval.Disable",
+         boo()->default_value(false),
+        "Removes purged CommitLog fragments when they are no longer required")
     ("Hypertable.RangeServer.CommitLog.FragmentRemoval.RangeReferenceRequired", boo()->default_value(true),
         "Only remove linked log fragments if they're part of a transfer log referenced by a range")
     ("Hypertable.RangeServer.CommitLog.PruneThreshold.Min", i64()->default_value(1*G),
@@ -467,6 +470,25 @@ void DefaultPolicy::init_options() {
         "Number of milliseconds to wait before carrying out an update (TESTING)")
     ("Hypertable.RangeServer.ProxyName", str()->default_value(""),
         "Use this value for the proxy name (if set) instead of reading from run dir.")
+    ("Hypertable.Replication.Master.Port", i16()->default_value(38100),
+        "Default port of the Replication Masters")
+    ("Hypertable.Replication.Master.Interval", i32()->default_value(30000),
+        "Timer interval in milliseconds for retrieving the server state of the remote cluster")
+    ("Hypertable.Replication.Timer.Interval", i32()->default_value(10000),
+        "Timer interval in milliseconds till updates are sent to the remote cluster")
+    ("Hypertable.Replication.BaseNamespace", str()->default_value("/"),
+        "Other namespaces are created relative to this base namespace; only for testing")
+    ("Hypertable.Replication.TestMode", boo()->default_value(false),
+        "Do not send schema updates to the remote cluster, do not grab hyperspace lock on startup; only for testing")
+    ("Hypertable.Replication.Slave.Port", i16()->default_value(38101),
+        "Default port of the Replication Slaves")
+    ("Hypertable.Replication.Slave.MasterAddress", str()->default_value(""),
+        "Forces use of a cluster's Replication.Master address instead of "
+        "reading it from Hyperspace; only for testing")
+    ("Hypertable.Replication.Slave.ProxyName", str()->default_value(""),
+        "Use this value for the proxy name (if set) instead of reading from run dir.")
+    ("Hypertable.Replication.*", strs(),
+        "Address of Replication Master (hostname:port) of a cluster")
     ("ThriftBroker.Timeout", i32(), "Timeout (ms) for thrift broker")
     ("ThriftBroker.Port", i16()->default_value(38080), "Port number for "
         "thrift broker")
@@ -487,6 +509,7 @@ void DefaultPolicy::init_options() {
         "Hypertable.CommitLog.RollLimit");
   alias("Hypertable.RangeServer.CommitLog.Compressor",
         "Hypertable.CommitLog.Compressor");
+
   // add config file desc to cmdline hidden desc, so people can override
   // any config values on the command line
   cmdline_hidden_desc().add(file_desc());

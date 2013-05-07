@@ -1,0 +1,12 @@
+
+Welcome to the hypertable command interpreter.
+For information about Hypertable, visit http://hypertable.com
+
+Type 'help' for a list of commands, or 'help shell' for a
+list of shell meta commands.
+
+CREATE NAMESPACE "/rep";
+CREATE NAMESPACE "/source";
+USE "/source";
+CREATE TABLE Repl (c) REPLICATE TO "cluster";
+Error: MasterClient operation create_table('source/Repl') failed - HYPERTABLE induced failure

@@ -127,10 +127,15 @@ CommitLogReader::next_raw_block(CommitLogBlockInfo *infop,
     goto try_again;
   }
 
-  if (header->check_magic(CommitLog::MAGIC_LINK)) {
+  if (header->check_magic(CommitLog::MAGIC_LINK2)
+      || header->check_magic(CommitLog::MAGIC_LINK1)) {
     assert(header->get_compression_type() == BlockCompressionCodec::NONE);
     String log_dir = (const char *)(infop->block_ptr + header->length());
     boost::trim_right_if(log_dir, boost::is_any_of("/"));
+    if (m_verbose)
+      HT_INFOF("Commit log %s/%u links to %s",
+               (*fragment_queue_iter)->log_dir.c_str(),
+               (*fragment_queue_iter)->num, log_dir.c_str());
     load_fragments(log_dir, *fragment_queue_iter);
     m_linked_logs.insert(md5_hash(log_dir.c_str()));
     if (header->get_revision() > m_latest_revision)
@@ -140,9 +145,18 @@ CommitLogReader::next_raw_block(CommitLogBlockInfo *infop,
     goto try_again;
   }
 
+  if (header->check_magic(CommitLog::MAGIC_EOF)) {
+    HT_DEBUGF("Reached EOF of fragment %s/%u",
+          (*fragment_queue_iter)->log_dir.c_str(), (*fragment_queue_iter)->num);
+    goto try_again;
+  }
+
   if (m_verbose)
-    HT_INFOF("Replaying commit log fragment %s/%u", (*fragment_queue_iter)->log_dir.c_str(),
-             (*fragment_queue_iter)->num);
+    HT_INFOF("Replaying commit log fragment %s/%u (offset %u, file length %u)",
+             (*fragment_queue_iter)->log_dir.c_str(),
+             (*fragment_queue_iter)->num,
+             (unsigned)(*fragment_queue_iter)->block_stream->get_offset(), 
+             (unsigned)(*fragment_queue_iter)->block_stream->get_file_length());
 
   return true;
 }
@@ -174,7 +188,7 @@ CommitLogReader::next(const uint8_t **blockp, size_t *lenp,
       catch (Exception &e) {
         LogFragmentQueue::iterator iter = m_fragment_queue.begin() + m_fragment_queue_offset;
         HT_ERRORF("Inflate error in CommitLog fragment %s starting at "
-                  "postion %lld (block len = %lld) - %s",
+                  "position %lld (block len = %lld) - %s",
                   (*iter)->block_stream->get_fname().c_str(),
                   (Lld)binfo.start_offset, (Lld)(binfo.end_offset
                   - binfo.start_offset), Error::get_text(e.code()));
@@ -194,7 +208,7 @@ CommitLogReader::next(const uint8_t **blockp, size_t *lenp,
 
     LogFragmentQueue::iterator iter = m_fragment_queue.begin() + m_fragment_queue_offset;
     HT_WARNF("Corruption detected in CommitLog fragment %s starting at "
-             "postion %lld for %lld bytes - %s",
+             "position %lld for %lld bytes - %s",
              (*iter)->block_stream->get_fname().c_str(),
              (Lld)binfo.start_offset, (Lld)(binfo.end_offset
              - binfo.start_offset), Error::get_text(binfo.error));
@@ -239,6 +253,8 @@ void CommitLogReader::load_fragments(String log_dir, CommitLogFileInfo *parent) 
   for (size_t i = 0; i < listing.size(); i++) {
     if (boost::ends_with(listing[i], ".tmp"))
       continue;
+    if (boost::ends_with(listing[i], ".purged"))
+      continue;
 
     if (boost::ends_with(listing[i], ".mark")) {
       mark = atoi(listing[i].c_str());
@@ -261,8 +277,9 @@ void CommitLogReader::load_fragments(String log_dir, CommitLogFileInfo *parent) 
     }
 
     if (*endptr != 0) {
-      HT_WARNF("Invalid file '%s' found in commit log directory '%s'",
-               listing[i].c_str(), log_dir.c_str());
+      if (m_verbose)
+        HT_WARNF("Invalid file '%s' found in commit log directory '%s'",
+                 listing[i].c_str(), log_dir.c_str());
     }
     else {
       fi = new CommitLogFileInfo();

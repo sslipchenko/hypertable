@@ -44,6 +44,7 @@ extern "C" {
 
 #include "Hypertable/Lib/Config.h"
 #include "Hypertable/Lib/MetaLogReader.h"
+#include "Hypertable/Lib/ClusterIdManager.h"
 #include "DfsBroker/Lib/Client.h"
 
 #include "ConnectionHandler.h"
@@ -61,6 +62,7 @@ extern "C" {
 #include "ReferenceManager.h"
 #include "ResponseManager.h"
 #include "BalancePlanAuthority.h"
+#include "Extensions.h"
 
 using namespace Hypertable;
 using namespace Config;
@@ -176,6 +178,20 @@ int main(int argc, char **argv) {
       HT_INFOF("Unable to write state file %s", state_file.c_str());
 
     obtain_master_lock(context);
+
+    // Read and log cluster ID (assign new one if necessary)
+    {
+      ClusterIdManager idmgr(context->hyperspace, context->props);
+      uint64_t cluster_id;
+      if (!idmgr.load_from_hyperspace()) {
+        cluster_id = idmgr.assign_new_local_id();
+        HT_INFOF("Assigning new cluster id %llu", (Llu)cluster_id);
+      }
+      else {
+        cluster_id = idmgr.get_local_id();
+        HT_INFOF("Cluster id is %llu", (Llu)cluster_id);
+      }
+    }
 
     if (!FileUtils::unlink(state_file))
       HT_INFOF("Unable to delete state file %s", state_file.c_str());
@@ -351,6 +367,9 @@ int main(int argc, char **argv) {
     context->comm->listen(listen_addr, hf);
 
     write_master_address(context);
+
+    /* initialize extensions */
+    Extensions::initialize(context->props);
 
     context->op->join();
     context->mml_writer->close();

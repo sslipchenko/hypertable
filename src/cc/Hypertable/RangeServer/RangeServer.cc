@@ -44,6 +44,7 @@ extern "C" {
 #include <google/malloc_extension.h>
 #endif
 
+#include "Common/Config.h"
 #include "Common/FailureInducer.h"
 #include "Common/FileUtils.h"
 #include "Common/HashMap.h"
@@ -53,6 +54,7 @@ extern "C" {
 #include "Common/SystemInfo.h"
 #include "Common/ScopeGuard.h"
 
+#include "Hypertable/Lib/ClusterIdManager.h"
 #include "Hypertable/Lib/CommitLog.h"
 #include "Hypertable/Lib/Key.h"
 #include "Hypertable/Lib/MetaLogDefinition.h"
@@ -318,6 +320,24 @@ RangeServer::RangeServer(PropertiesPtr &props, ConnectionManagerPtr &conn_mgr,
   Global::master_client = m_master_client;
 
   Global::location_initializer->wait_for_handshake();
+
+  // read the cluster id
+  {
+    ClusterIdManager idmgr(Global::hyperspace, Hypertable::Config::properties);
+    Timer timer(timeout, true);
+    while (!timer.expired()) {
+      if (idmgr.load_from_hyperspace()) {
+        Global::cluster_id = idmgr.get_local_id();
+        break;
+      }
+      HT_INFOF("Unable to read 'cluster_id' attribute of %s/master Hyperspace "
+              "file, will retry in 10 seconds...",Global::toplevel_dir.c_str());
+      poll(0, 0, 10000);
+    }
+    if (Global::cluster_id == 0)
+      HT_FATAL("Unable to determine cluster ID");
+  }
+  HT_INFOF("Cluster id is %llu", (Llu)Global::cluster_id);
 
   initialize(props);
 
@@ -2586,7 +2606,8 @@ void RangeServer::update_commit() {
      * Commit ROOT mutations
      */
     if (uc->root_buf.ptr > uc->root_buf.mark) {
-      if ((error = Global::root_log->write(uc->root_buf, uc->last_revision)) != Error::OK) {
+      if ((error = Global::root_log->write(uc->root_buf,
+                      uc->last_revision, Global::cluster_id)) != Error::OK) {
         HT_FATALF("Problem writing %d bytes to ROOT commit log - %s",
                   (int)uc->root_buf.fill(), Error::get_text(error));
       }
@@ -2597,14 +2618,21 @@ void RangeServer::update_commit() {
       coalesce_amount += table_update->total_buffer_size;
 
       // Iterate through all of the ranges, committing any transferring updates
-      for (hash_map<Range *, RangeUpdateList *>::iterator iter = table_update->range_map.begin(); iter != table_update->range_map.end(); ++iter) {
+      for (hash_map<Range *, RangeUpdateList *>::iterator iter
+              = table_update->range_map.begin();
+              iter != table_update->range_map.end(); ++iter) {
         if ((*iter).second->transfer_buf.ptr > (*iter).second->transfer_buf.mark) {
-          committed_transfer_data += (*iter).second->transfer_buf.ptr - (*iter).second->transfer_buf.mark;
-          if ((error = (*iter).second->transfer_log->write((*iter).second->transfer_buf, (*iter).second->latest_transfer_revision)) != Error::OK) {
+          committed_transfer_data += (*iter).second->transfer_buf.ptr
+              - (*iter).second->transfer_buf.mark;
+          if ((error = (*iter).second->transfer_log->write(
+                          (*iter).second->transfer_buf,
+                          (*iter).second->latest_transfer_revision,
+                          Global::cluster_id)) != Error::OK) {
             table_update->error = error;
-            table_update->error_msg = format("Problem writing %d bytes to transfer log",
-                                             (int)(*iter).second->transfer_buf.fill());
-            HT_ERRORF("%s - %s", table_update->error_msg.c_str(), Error::get_text(error));
+            table_update->error_msg = format("Problem writing %d bytes to "
+                    "transfer log", (int)(*iter).second->transfer_buf.fill());
+            HT_ERRORF("%s - %s", table_update->error_msg.c_str(),
+                    Error::get_text(error));
             break;
           }
         }
@@ -2635,11 +2663,11 @@ void RangeServer::update_commit() {
           log = Global::system_log;
         }
 
-        if ((error = log->write(table_update->go_buf, uc->last_revision, sync)) != Error::OK) {
-          table_update->error_msg = format("Problem writing %d bytes to commit log (%s) - %s",
-                                           (int)table_update->go_buf.fill(),
-                                           log->get_log_dir().c_str(),
-                                           Error::get_text(error));
+        if ((error = log->write(table_update->go_buf, uc->last_revision,
+                        Global::cluster_id, sync)) != Error::OK) {
+          table_update->error_msg = format("Problem writing %d bytes to commit "
+                  "log (%s) - %s", (int)table_update->go_buf.fill(),
+                  log->get_log_dir().c_str(), Error::get_text(error));
           HT_ERRORF("%s", table_update->error_msg.c_str());
           table_update->error = error;
           continue;
@@ -2647,12 +2675,12 @@ void RangeServer::update_commit() {
       }
       else if (table_update->sync)
         user_log_needs_syncing = true;
-
     }
 
     bool do_sync = false;
     if (user_log_needs_syncing) {
-      if (m_update_commit_queue_count > 0 && coalesce_amount < m_update_coalesce_limit) {
+      if (m_update_commit_queue_count > 0
+          && coalesce_amount < m_update_coalesce_limit) {
         coalesce_queue.push_back(uc);
         continue;
       }
@@ -3408,7 +3436,8 @@ RangeServer::replay_update(ResponseCallback *cb, const uint8_t *data,
         dbuf.base = (uint8_t *)ptr;
         dbuf.ptr = dbuf.base + remaining;
 
-        if ((error = m_replay_log->write(dbuf, revision)) != Error::OK)
+        if ((error = m_replay_log->write(dbuf, revision, Global::cluster_id))
+                != Error::OK)
           HT_THROW(error, "");
       }
 

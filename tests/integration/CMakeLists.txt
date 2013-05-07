@@ -61,5 +61,49 @@ add_subdirectory(defects/issue895)
 add_subdirectory(defects/issue910)
 add_subdirectory(defects/issue921)
 add_subdirectory(defects/issue922)
+add_subdirectory(replication-hql-tests)
 add_subdirectory(rangeserver-failover-basic)
 add_subdirectory(rangeserver-failover-master)
+
+add_subdirectory(replication-scripts)
+add_subdirectory(replication-master-failover)
+add_subdirectory(replication-schema-shipping-1)
+add_subdirectory(replication-schema-shipping-2)
+add_subdirectory(replication-schema-shipping-3)
+
+# basic replication with 1 master/1 slave each
+add_subdirectory(replication-basic-1)
+
+# basic replication with 1 master/1 slave each
+add_subdirectory(replication-basic-2)
+
+# 2 rangeservers, 1 master/1 slave each
+add_subdirectory(replication-basic-3)
+
+# 2 rangeservers, 1 master/2 slaves each
+add_subdirectory(replication-basic-4)
+
+# 2 rangeservers, 1 master/2 slaves each; second local slave crashes after
+# transmitting the first fragment
+add_subdirectory(replication-basic-5)
+
+# 2 rangeservers, 1 master/2 slaves each; one of the remote slaves crashes
+# while receiving updates
+add_subdirectory(replication-basic-6)
+
+# 2 rangeservers, 2 masters/2 slaves each; one of the local masters crashes
+add_subdirectory(replication-basic-7)
+
+# 2 rangeservers, 2 masters/2 slaves each; they start up server by server,
+# all the while the user inserts data
+add_subdirectory(replication-basic-8)
+
+# 2 tables, both are replicated
+add_subdirectory(replication-basic-9)
+
+# Same as test -6, but both remote slaves crash; the local master moves all
+# failed fragments to /hypertable/servers/replicator/errors
+add_subdirectory(replication-basic-10)
+
+# 2 rangeservers, 1 master/2 slaves each; second local slave receives sigstop
+add_subdirectory(replication-sigstop)

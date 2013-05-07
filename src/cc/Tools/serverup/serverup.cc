@@ -22,6 +22,7 @@
 #include "Common/Compat.h"
 #include <cstdlib>
 #include <iostream>
+#include <map>
 
 #include <boost/algorithm/string.hpp>
 
@@ -50,12 +51,16 @@ extern "C" {
 #include "Hypertable/Lib/Config.h"
 #include "Hypertable/Lib/MasterClient.h"
 #include "Hypertable/Lib/RangeServerClient.h"
+#include "Hypertable/Lib/ReplicationMasterProtocol.h"
+#include "Hypertable/Lib/ReplicationSlaveProtocol.h"
 #include "Hypertable/Lib/Types.h"
 
 #ifdef HT_WITH_THRIFT
 # include "ThriftBroker/Config.h"
 # include "ThriftBroker/Client.h"
 #endif
+
+#include "serverup.h"
 
 using namespace Hypertable;
 using namespace Config;
@@ -67,12 +72,8 @@ namespace {
     "Usage: serverup [options] <server-name>\n\n"
     "Description:\n"
     "  This program checks to see if the server, specified by <server-name>\n"
-    "  is up. return 0 if true, 1 otherwise. <server-name> may be one of the\n"
-    "  following values: dfsbroker, hyperspace, master, global-master, \n"
-    "  rangeserver, thriftbroker\n\n"
-    "  master: checks for a master running on localhost\n"
-    "  global-master: checks for a master running in the cluster (address is\n"
-    "    fetched from hyperspace)\n"
+    "  is up. return 0 if true, 1 otherwise.\n"
+    "  Run `serverup list` to retrieve a list of all supported server names.\n"
     "Options";
 
   struct AppPolicy : Config::Policy {
@@ -103,17 +104,6 @@ namespace {
           MasterClientPolicy, RangeServerClientPolicy, DefaultCommPolicy>
           Policies;
 #endif
-
-  void
-  wait_for_connection(const char *server, ConnectionManagerPtr &conn_mgr,
-                      InetAddr &addr, int timeout_ms, int wait_ms) {
-    HT_DEBUG_OUT <<"Checking "<< server <<" at "<< addr << HT_END;
-
-    conn_mgr->add(addr, timeout_ms, server);
-
-    if (!conn_mgr->wait_for_connection(addr, wait_ms))
-      HT_THROWF(Error::REQUEST_TIMEOUT, "connecting to %s", server);
-  }
 
   void check_dfsbroker(ConnectionManagerPtr &conn_mgr, uint32_t wait_ms) {
     HT_DEBUG_OUT << "Checking dfsbroker at " << get_str("dfs-host")
@@ -302,64 +292,186 @@ namespace {
 #endif
   }
 
+  void
+  check_repmaster(ConnectionManagerPtr &conn_mgr, uint32_t wait_ms) {
+    if (properties->has("host"))
+      properties->set("repmaster-host",
+                      properties->get_str("host"));
+    else
+      properties->set("repmaster-host",
+                      String("localhost"));
+
+    if (properties->has("Hypertable.Replication.Master.Port"))
+      properties->set("repmaster-port",
+                      properties->get_i16("Hypertable.Replication.Master.Port"));
+    else
+      properties->set("repmaster-port",
+                      properties->get_i16("Hypertable.Replication.Master.Port"));
+
+    if (get_bool("display-address")) {
+      std::cout << get_str("repmaster-host") << ":"
+                << get_i16("repmaster-port") << std::endl;
+      _exit(0);
+    }
+
+    InetAddr addr(get_str("repmaster-host"), get_i16("repmaster-port"));
+
+    conn_mgr->add(addr, wait_ms, "Replication.Master");
+
+    DispatchHandlerSynchronizer sync_handler;
+    EventPtr event;
+    CommBufPtr cbp(ReplicationMasterProtocol::create_status_request());
+
+    int error;
+    if (!(error = Comm::instance()->send_request(addr, wait_ms, cbp,
+                                                 &sync_handler))) {
+      if (sync_handler.wait_for_reply(event))
+        return;
+    }
+
+    // if connection times out: check if the process is running; this might
+    // be a second master waiting to get its hyperspace lock
+    String pidstr;
+    String pid_file = System::install_dir + "/run/Replication.Master.pid";
+    if (FileUtils::read(pid_file, pidstr) <= 0)
+      HT_THROW(Error::REQUEST_TIMEOUT, "connecting to master");
+    pid_t pid = (pid_t)strtoul(pidstr.c_str(), 0, 0);
+    if (pid <= 0)
+      HT_THROW(Error::REQUEST_TIMEOUT, "connecting to master");
+    // (kill(pid, 0) does not send any signal but checks if the process exists
+    if (::kill(pid, 0) < 0)
+      HT_THROW(Error::REQUEST_TIMEOUT, "connecting to master");
+  }
+
+  void
+  check_repslave(ConnectionManagerPtr &conn_mgr, uint32_t wait_ms) {
+    if (properties->has("host"))
+      properties->set("repslave-host", properties->get_str("host"));
+    else
+      properties->set("repslave-host", String("localhost"));
+
+    if (properties->has("Hypertable.Replication.Slave.Port"))
+      properties->set("repslave-port",
+                      properties->get_i16("Hypertable.Replication.Slave.Port"));
+    else
+      properties->set("repslave-port",
+                      properties->get_i16("Hypertable.Replication.Slave.Port"));
+
+    if (get_bool("display-address")) {
+      std::cout << get_str("repslave-host") << ":"
+                << get_i16("repslave-port") << std::endl;
+      _exit(0);
+    }
+
+    InetAddr addr(get_str("repslave-host"), get_i16("repslave-port"));
+
+    wait_for_connection("replication slave", conn_mgr, addr, wait_ms, wait_ms);
+
+    DispatchHandlerSynchronizer sync_handler;
+    EventPtr event;
+    CommBufPtr cbp(ReplicationSlaveProtocol::create_status_request());
+
+    int error;
+    if ((error = Comm::instance()->send_request(addr, wait_ms, cbp,
+                                                &sync_handler)))
+      HT_THROW(error, String("Comm::send_request failure: ")
+               + Error::get_text(error));
+
+    if (!sync_handler.wait_for_reply(event))
+      HT_THROW((int)Protocol::response_code(event),
+               String("Replication.Slave status() failure: ")
+               + Protocol::string_format_message(event));
+  }
+
 } // local namespace
 
-#define CHECK_SERVER(_server_) do { \
-  try { check_##_server_(conn_mgr, wait_ms); } catch (Exception &e) { \
-    if (verbose) { \
-      HT_DEBUG_OUT << e << HT_END; \
-      cout << #_server_ <<" - down" << endl; \
-    } \
-    ++down; \
-    break; \
-  } \
-  if (verbose) cout << #_server_ <<" - up" << endl; \
-} while (0)
+namespace Hypertable {
 
+  void
+  wait_for_connection(const char *server, ConnectionManagerPtr &conn_mgr,
+                      InetAddr &addr, int timeout_ms, int wait_ms) {
+    HT_DEBUG_OUT << "Checking " << server << " at " << addr << HT_END;
+
+    conn_mgr->add(addr, timeout_ms, server);
+
+    if (!conn_mgr->wait_for_connection(addr, wait_ms))
+      HT_THROWF(Error::REQUEST_TIMEOUT, "connecting to %s", server);
+  }
+
+} // namespace Hypertable
+
+Hypertable::CheckerMap Hypertable::global_map;
+bool Hypertable::verbose = false;
+
+static bool
+is_down(const String &name, ConnectionManagerPtr &conn_mgr, uint32_t wait_ms) {
+  if (global_map.find(name) == global_map.end()) {
+    cout << name << " - unknown service" << endl;
+    return true;
+  }
+
+  try {
+    global_map[name](conn_mgr, wait_ms);
+  }
+  catch (Exception &e) {
+    if (verbose) {
+      HT_DEBUG_OUT << e << HT_END;
+      cout << name << " - down" << endl;
+    }
+    return true;
+  }
+  if (verbose)
+    cout << name << " - up" << endl;
+  return false;
+}
 
 int main(int argc, char **argv) {
-  int down = 0;
-
+  bool down = true;
   try {
     init_with_policies<Policies>(argc, argv);
 
     bool silent = get_bool("silent");
     uint32_t wait_ms = get_i32("wait");
     String server_name = get("server-name", String());
-    bool verbose = get_bool("verbose");
+    verbose = get("verbose", false);
+
+    global_map["dfsbroker"] = &check_dfsbroker;
+    global_map["hyperspace"] = &check_hyperspace;
+    global_map["global-master"] = &check_global_master;
+    global_map["global_master"] = &check_global_master;
+    global_map["master"] = &check_master;
+    global_map["rangeserver"] = &check_rangeserver;
+    global_map["thriftbroker"] = &check_thriftbroker;
+    global_map["Replication.Master"] = &check_repmaster;
+    global_map["repmaster"] = &check_repmaster;
+    global_map["Replication.Slave"] = &check_repslave;
+    global_map["repslave"] = &check_repslave;
+
+    if (server_name == "list") {
+      for (CheckerMap::iterator it = global_map.begin();
+              it != global_map.end(); ++it) {
+        cout << it->first << endl;
+      }
+      _exit(0);
+    }
 
     ConnectionManagerPtr conn_mgr = new ConnectionManager();
     conn_mgr->set_quiet_mode(silent);
 
     properties->set("DfsBroker.Timeout", (int32_t)wait_ms);
 
-    if (server_name == "dfsbroker") {
-      CHECK_SERVER(dfsbroker);
-    }
-    else if (server_name == "hyperspace") {
-      CHECK_SERVER(hyperspace);
-    }
-    else if (server_name == "global-master" || server_name == "global_master") {
-      CHECK_SERVER(global_master);
-    }
-    else if (server_name == "master") {
-      CHECK_SERVER(master);
-    }
-    else if (server_name == "rangeserver") {
-      CHECK_SERVER(rangeserver);
-    }
-    else if (server_name == "thriftbroker") {
-      CHECK_SERVER(thriftbroker);
+    if (!server_name.empty()) {
+      down = is_down(server_name, conn_mgr, wait_ms);
     }
     else {
-      CHECK_SERVER(dfsbroker);
-      CHECK_SERVER(hyperspace);
-      //CHECK_SERVER(master);
-      CHECK_SERVER(global_master);
-      CHECK_SERVER(rangeserver);
+      down = is_down("dfsbroker", conn_mgr, wait_ms)
+            | is_down("hyperspace", conn_mgr, wait_ms)
+            | is_down("global_master", conn_mgr, wait_ms)
+            | is_down("rangeserver", conn_mgr, wait_ms)
 #ifdef HT_WITH_THRIFT
-      CHECK_SERVER(thriftbroker);
+            | is_down("thriftbroker", conn_mgr, wait_ms)
 #endif
+            ;
     }
 
     if (!silent)
@@ -369,5 +481,6 @@ int main(int argc, char **argv) {
     HT_ERROR_OUT << e << HT_END;
     _exit(1);    // don't bother with global/static objects
   }
-  _exit(down);   // ditto
+
+  _exit(down ? 1 : 0);   // ditto
 }

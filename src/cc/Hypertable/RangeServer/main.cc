@@ -83,9 +83,7 @@ int main(int argc, char **argv) {
     int worker_count = get_i32("Hypertable.RangeServer.Workers");
     ApplicationQueuePtr app_queue = new ApplicationQueue(worker_count);
 
-    /**
-     * Connect to Hyperspace
-     */
+    // Connect to Hyperspace
     HyperspaceSessionHandler hs_handler;
     Global::hyperspace = new Hyperspace::Session(comm, properties);
     Global::hyperspace->add_callback(&hs_handler);
@@ -96,7 +94,7 @@ int main(int argc, char **argv) {
       _exit(1);
     }
 
-    RangeServerPtr range_server= new RangeServer(properties,
+    RangeServerPtr range_server = new RangeServer(properties,
         conn_manager, app_queue, Global::hyperspace);
 
     app_queue->join();

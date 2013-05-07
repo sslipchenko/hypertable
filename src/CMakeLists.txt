@@ -10,6 +10,7 @@ add_subdirectory(cc/Tools)
 add_subdirectory(cc/DfsBroker/Lib)
 add_subdirectory(cc/DfsBroker/local)
 add_subdirectory(cc/Benchmark)
+add_subdirectory(cc/Replication)
 
 add_subdirectory(rb/Monitoring)
 

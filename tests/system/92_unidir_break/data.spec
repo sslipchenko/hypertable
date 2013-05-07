@@ -1,0 +1,11 @@
+[rowkey]
+	component.0.order=ascending
+	component.0.type=integer
+	component.0.format="%09lld"
+	component.0.max=1000000000
+[Field1.value]
+	size=30
+[Field2.value]
+	size=300
+[Field3.value]
+	size=3000
