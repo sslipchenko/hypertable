@@ -1,4 +1,4 @@
- #
+#
 # Copyright (C) 2007-2012 Hypertable, Inc.
 #
 # This program is free software; you can redistribute it and/or
@@ -31,6 +31,7 @@ BlockCompressionHeader.cc
 BlockCompressionHeaderCommitLog.cc
 Cell.cc
 Client.cc
+ClusterIdManager.cc
 CommitLog.cc
 CommitLogBase.cc
 CommitLogBlockStream.cc
@@ -211,7 +212,6 @@ target_link_libraries(rangeserver_serialize_test Hypertable Hyperspace)
 # MetaLog test
 add_executable(metalog_test tests/metalog_test.cc)
 target_link_libraries(metalog_test HyperDfsBroker Hypertable)
-
 
 #
 # Copy test files

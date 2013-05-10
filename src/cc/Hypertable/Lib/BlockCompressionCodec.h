@@ -1,4 +1,4 @@
-/** -*- c++ -*-
+/*
  * Copyright (C) 2007-2012 Hypertable, Inc.
  *
  * This file is part of Hypertable.
@@ -19,6 +19,12 @@
  * 02110-1301, USA.
  */
 
+/** @file
+ * Type declarations for BlockCompressionCodec class.
+ * This file contains the type declarations for BlockCompressionCodec, an
+ * abstract base class for block compressor codecs.
+ */
+
 #ifndef HYPERTABLE_BLOCKCOMPRESSIONCODEC_H
 #define HYPERTABLE_BLOCKCOMPRESSIONCODEC_H
 
@@ -31,13 +37,18 @@
 
 namespace Hypertable {
 
+  /** @addtogroup libHypertable
+   * @{
+   */
+
   class DynamicBuffer;
 
-  /**
-   * Abstract base class for block compression codecs.
+  /** Abstract base class for block compression codecs.
    */
   class BlockCompressionCodec : public ReferenceCount {
   public:
+
+    /// Enumeration for compression types
     enum Type { UNKNOWN=-1, NONE=0, BMZ=1, ZLIB=2, LZO=3, QUICKLZ=4,
                 SNAPPY=5, COMPRESSION_TYPE_LIMIT=6 };
     typedef std::vector<String> Args;
@@ -59,8 +70,11 @@ namespace Hypertable {
 
     HT_THREAD_ID_DECL(m_creator_thread);
   };
+
+  /// Smart pointer to BlockCompressionCodec
   typedef boost::intrusive_ptr<BlockCompressionCodec> BlockCompressionCodecPtr;
 
+  /* @} */
 
 } // namespace Hypertable
 

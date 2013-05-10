@@ -38,9 +38,9 @@
 using namespace Hypertable;
 using namespace Serialization;
 
-int Filesystem::decode_response_open(EventPtr &event_ptr) {
-  const uint8_t *decode_ptr = event_ptr->payload;
-  size_t decode_remain = event_ptr->payload_len;
+int Filesystem::decode_response_open(EventPtr &event) {
+  const uint8_t *decode_ptr = event->payload;
+  size_t decode_remain = event->payload_len;
   int error = decode_i32(&decode_ptr, &decode_remain);
 
   if (error != Error::OK)
@@ -50,15 +50,15 @@ int Filesystem::decode_response_open(EventPtr &event_ptr) {
 }
 
 
-int Filesystem::decode_response_create(EventPtr &event_ptr) {
-  return decode_response_open(event_ptr);
+int Filesystem::decode_response_create(EventPtr &event) {
+  return decode_response_open(event);
 }
 
 
 size_t
-Filesystem::decode_response_read(EventPtr &event_ptr, void *dst, size_t len) {
-  const uint8_t *decode_ptr = event_ptr->payload;
-  size_t decode_remain = event_ptr->payload_len;
+Filesystem::decode_response_read(EventPtr &event, void *dst, size_t len) {
+  const uint8_t *decode_ptr = event->payload;
+  size_t decode_remain = event->payload_len;
 
   int error = decode_i32(&decode_ptr, &decode_remain);
 
@@ -86,10 +86,10 @@ Filesystem::decode_response_read(EventPtr &event_ptr, void *dst, size_t len) {
 /**
  */
 size_t
-Filesystem::decode_response_read_header(EventPtr &event_ptr, uint64_t *offsetp,
+Filesystem::decode_response_read_header(EventPtr &event, uint64_t *offsetp,
                                         uint8_t **dstp) {
-  const uint8_t *decode_ptr = event_ptr->payload;
-  size_t decode_remain = event_ptr->payload_len;
+  const uint8_t *decode_ptr = event->payload;
+  size_t decode_remain = event->payload_len;
 
   int error = decode_i32(&decode_ptr, &decode_remain);
 
@@ -107,15 +107,15 @@ Filesystem::decode_response_read_header(EventPtr &event_ptr, uint64_t *offsetp,
 
 
 size_t
-Filesystem::decode_response_pread(EventPtr &event_ptr, void *dst, size_t len) {
-  return decode_response_read(event_ptr, dst, len);
+Filesystem::decode_response_pread(EventPtr &event, void *dst, size_t len) {
+  return decode_response_read(event, dst, len);
 }
 
 
 size_t
-Filesystem::decode_response_append(EventPtr &event_ptr, uint64_t *offsetp) {
-  const uint8_t *decode_ptr = event_ptr->payload;
-  size_t decode_remain = event_ptr->payload_len;
+Filesystem::decode_response_append(EventPtr &event, uint64_t *offsetp) {
+  const uint8_t *decode_ptr = event->payload;
+  size_t decode_remain = event->payload_len;
 
   int error = decode_i32(&decode_ptr, &decode_remain);
 
@@ -129,9 +129,9 @@ Filesystem::decode_response_append(EventPtr &event_ptr, uint64_t *offsetp) {
 
 
 int64_t
-Filesystem::decode_response_length(EventPtr &event_ptr) {
-  const uint8_t *decode_ptr = event_ptr->payload;
-  size_t decode_remain = event_ptr->payload_len;
+Filesystem::decode_response_length(EventPtr &event) {
+  const uint8_t *decode_ptr = event->payload;
+  size_t decode_remain = event->payload_len;
 
   int error = decode_i32(&decode_ptr, &decode_remain);
 
@@ -143,10 +143,10 @@ Filesystem::decode_response_length(EventPtr &event_ptr) {
 
 
 void
-Filesystem::decode_response_readdir(EventPtr &event_ptr,
+Filesystem::decode_response_readdir(EventPtr &event,
                                     std::vector<String> &listing) {
-  const uint8_t *decode_ptr = event_ptr->payload;
-  size_t decode_remain = event_ptr->payload_len;
+  const uint8_t *decode_ptr = event->payload;
+  size_t decode_remain = event->payload_len;
 
   int error = decode_i32(&decode_ptr, &decode_remain);
 
@@ -164,11 +164,36 @@ Filesystem::decode_response_readdir(EventPtr &event_ptr,
   }
 }
 
+void
+Filesystem::decode_response_posix_readdir(EventPtr &event,
+        std::vector<DirectoryEntry> &listing) {
+  const uint8_t *decode_ptr = event->payload;
+  size_t decode_remain = event->payload_len;
+
+  int error = decode_i32(&decode_ptr, &decode_remain);
+
+  if (error != Error::OK)
+    HT_THROW(error, "");
+
+  listing.clear();
+
+  uint32_t len = decode_i32(&decode_ptr, &decode_remain);
+  uint16_t slen;
+
+  for (uint32_t i = 0; i < len; i++) {
+    DirectoryEntry dirent;
+    dirent.name = decode_str16(&decode_ptr, &decode_remain, &slen);
+    dirent.flags = decode_i32(&decode_ptr, &decode_remain);
+    dirent.length = decode_i32(&decode_ptr, &decode_remain);
+    listing.push_back(dirent);
+  }
+}
+
 
 bool
-Filesystem::decode_response_exists(EventPtr &event_ptr) {
-  const uint8_t *decode_ptr = event_ptr->payload;
-  size_t decode_remain = event_ptr->payload_len;
+Filesystem::decode_response_exists(EventPtr &event) {
+  const uint8_t *decode_ptr = event->payload;
+  size_t decode_remain = event->payload_len;
 
   int error = decode_i32(&decode_ptr, &decode_remain);
 
@@ -180,9 +205,9 @@ Filesystem::decode_response_exists(EventPtr &event_ptr) {
 
 
 int
-Filesystem::decode_response(EventPtr &event_ptr) {
-  const uint8_t *decode_ptr = event_ptr->payload;
-  size_t decode_remain = event_ptr->payload_len;
+Filesystem::decode_response(EventPtr &event) {
+  const uint8_t *decode_ptr = event->payload;
+  size_t decode_remain = event->payload_len;
 
   return decode_i32(&decode_ptr, &decode_remain);
 }

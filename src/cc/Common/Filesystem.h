@@ -112,10 +112,10 @@ namespace Hypertable {
 
     /** Decodes the response from an open request
      *
-     * @param event_ptr reference to response event
+     * @param event reference to response event
      * @return file descriptor
      */
-    static int decode_response_open(EventPtr &event_ptr);
+    static int decode_response_open(EventPtr &event);
 
     /** Creates a file asynchronously.  Issues a create file request with
      * various create mode parameters. The caller will get notified of
@@ -147,10 +147,10 @@ namespace Hypertable {
 
     /** Decodes the response from a create request
      *
-     * @param event_ptr Reference to the response event
+     * @param event Reference to the response event
      * @return The new file handle
      */
-    static int decode_response_create(EventPtr &event_ptr);
+    static int decode_response_create(EventPtr &event);
 
     /** Closes a file asynchronously.  Issues a close file request.
      * The caller will get notified of successful completion or error via
@@ -199,22 +199,22 @@ namespace Hypertable {
 
     /** Decodes the response from a read request
      *
-     * @param event_ptr The reference to the response event
+     * @param event The reference to the response event
      * @param dst The destination buffer for read data
      * @param len The destination buffer size
      * @return The amount read (in bytes)
      */
-    static size_t decode_response_read(EventPtr &event_ptr,
+    static size_t decode_response_read(EventPtr &event,
             void *dst, size_t len);
 
     /** Decodes the header from the response from a read request
      *
-     * @param event_ptr The reference to a response event
+     * @param event The reference to a response event
      * @param offsetp The address of variable offset of data read.
      * @param dstp The address of pointer to hold pointer to data read
      * @return The amount read (in bytes)
      */
-    static size_t decode_response_read_header(EventPtr &event_ptr,
+    static size_t decode_response_read_header(EventPtr &event,
             uint64_t *offsetp, uint8_t **dstp = 0);
 
     /** Appends data to a file asynchronously.  Issues an append request.
@@ -244,11 +244,11 @@ namespace Hypertable {
 
     /** Decodes the response from an append request
      *
-     * @param event_ptr A reference to the response event
+     * @param event A reference to the response event
      * @param offsetp The address of variable to hold offset
      * @return The amount appended (in bytes)
      */
-    static size_t decode_response_append(EventPtr &event_ptr,
+    static size_t decode_response_append(EventPtr &event,
             uint64_t *offsetp);
 
     /** Seeks current file position asynchronously.  Issues a seek request.
@@ -312,10 +312,10 @@ namespace Hypertable {
 
     /** Decodes the response from a length request
      *
-     * @param event_ptr Reference to response event
+     * @param event Reference to response event
      * @return length of the file, in bytes
      */
-    static int64_t decode_response_length(EventPtr &event_ptr);
+    static int64_t decode_response_length(EventPtr &event);
 
     /** Reads data from a file at the specified position asynchronously.
      * Issues a pread request.  The caller will get notified of successful
@@ -349,12 +349,12 @@ namespace Hypertable {
 
     /** Decodes the response from a pread request
      *
-     * @param event_ptr A reference to the response event
+     * @param event A reference to the response event
      * @param dst The destination buffer for read data
      * @param len The destination buffer size
      * @return The amount of data read
      */
-    static size_t decode_response_pread(EventPtr &event_ptr, void *dst,
+    static size_t decode_response_pread(EventPtr &event, void *dst,
             size_t len);
 
     /** Creates a directory asynchronously.  Issues a mkdirs request which
@@ -410,12 +410,40 @@ namespace Hypertable {
 
     /** Decodes the response from a readdir request
      *
-     * @param event_ptr A reference to the response event
+     * @param event A reference to the response event
      * @param listing Reference to a vector of entry names; will be filled with
      *      the data returned from the DfsBroker
      */
-    static void decode_response_readdir(EventPtr &event_ptr,
+    static void decode_response_readdir(EventPtr &event,
             std::vector<String> &listing);
+
+    /** Directory entry information for the posix_readdir request */
+    struct DirectoryEntry {
+      String name;
+      uint32_t flags;
+      uint32_t length;
+    };
+
+    /** DirectoryEntry is a directory */
+    static const int DIRENT_DIRECTORY = 1;
+
+    /** Obtains a listing of all files in a directory, including additional
+     * information for each file. Issues a posix_readdir request
+     * and waits for it to complete.
+     *
+     * @param name Absolute pathname of directory
+     * @param listing Reference to vector of directory entries
+     */
+    virtual void posix_readdir(const String &name,
+            std::vector<DirectoryEntry> &listing) = 0;
+
+    /** Decodes the response from a posix-style readdir request
+     *
+     * @param event Reference to response event
+     * @param listing Reference to vector of DirectoryEntries
+     */
+    static void decode_response_posix_readdir(EventPtr &event,
+                                        std::vector<DirectoryEntry> &listing);
 
     /** Flushes a file asynchronously.  Isues a flush command which causes all
      * buffered writes to get persisted to disk.  The caller will get notified
@@ -455,10 +483,10 @@ namespace Hypertable {
 
     /** Decodes the response from an exists request.
      *
-     * @param event_ptr A reference to the response event
+     * @param event A reference to the response event
      * @return true if the file exists, otherwise false
      */
-    static bool decode_response_exists(EventPtr &event_ptr);
+    static bool decode_response_exists(EventPtr &event);
 
     /** Rename a path asynchronously
      *
@@ -478,10 +506,10 @@ namespace Hypertable {
 
     /** Decodes the response from an request that only returns an error code
      *
-     * @param event_ptr A reference to the response event
+     * @param event A reference to the response event
      * @return The error code
      */
-    static int decode_response(EventPtr &event_ptr);
+    static int decode_response(EventPtr &event);
 
     /** Invokes debug request asynchronously
      *
@@ -507,9 +535,9 @@ namespace Hypertable {
      *     /usr/bin/ -> /usr
      *     stdio.h   -> .
      *
-     * @param name The directory name
-     * @param separator The path separator
-     * @return The stripped directory
+     * @param name Directory name
+     * @param separator Path separator
+     * @return Stripped directory
      */
     static String dirname(String name, char separator = '/');
 
@@ -519,8 +547,8 @@ namespace Hypertable {
      *
      *    /usr/bin/sort -> sort
      *
-     * @param name The directory name
-     * @param separator The path separator
+     * @param name Directory name
+     * @param separator Path separator
      * @return The basename
      */
     static String basename(String name, char separator = '/');

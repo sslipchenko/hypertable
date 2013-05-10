@@ -1,0 +1,7 @@
+/** @defgroup DfsBroker DfsBroker
+ * Distributed File System Broker.
+ * The DfsBroker module contains definitions for distributed filesystem broker
+ * clients and servers.  The DfsBroker servers and client library are how the
+ *  %Hypertable servers access the underlying filesystem and provides a layer
+ *  of abstraction that allows %Hypertable to run on top of any filesystem.
+ */

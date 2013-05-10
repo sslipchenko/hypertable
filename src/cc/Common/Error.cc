@@ -292,15 +292,17 @@ namespace {
     { Error::THRIFTBROKER_BAD_MUTATOR_ID, "THRIFT BROKER bad mutator id" },
     { Error::THRIFTBROKER_BAD_NAMESPACE_ID, "THRIFT BROKER bad namespace id" },
     { Error::THRIFTBROKER_BAD_FUTURE_ID,    "THRIFT BROKER bad future id" },
+    { Error::REPLICATION_CLUSTER_NOT_FOUND, "REPLICATION cluster not found" },
     { 0, 0 }
   };
 
-  typedef hash_map<int, const char *>  TextMap;
+  typedef hash_map<int, const char *> TextMap;
 
   TextMap &build_text_map() {
     TextMap *map = new TextMap();
-    for (int i=0; error_info[i].text != 0; i++)
+    for (int i = 0; error_info[i].text != 0; i++)
       (*map)[error_info[i].code] = error_info[i].text;
+
     return *map;
   }
 
