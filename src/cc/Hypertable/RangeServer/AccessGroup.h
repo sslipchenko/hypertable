@@ -204,7 +204,7 @@ namespace Hypertable {
 
     const char *get_full_name() { return m_full_name.c_str(); }
 
-    void shrink(String &split_row, bool drop_high);
+    void shrink(String &split_row, bool drop_high, Hints *hints);
 
     void get_file_data(String &file_list, int64_t *block_countp, bool include_blocked) {
       m_file_tracker.get_file_data(file_list, block_countp, include_blocked);
