@@ -889,6 +889,69 @@ void MasterClient::balance(BalancePlan &plan, Timer *timer) {
 
 }
 
+
+void MasterClient::set(const std::vector<SystemVariable::Spec> &specs,
+                       DispatchHandler *handler, Timer *timer) {
+
+  Timer tmp_timer(m_timeout_ms);
+  CommBufPtr cbp;
+  EventPtr event;
+  int64_t id = 0;
+  String label = "set";
+
+  initialize(timer, tmp_timer);
+
+  while (!timer->expired()) {
+    cbp = MasterProtocol::create_set_request(specs);
+    if (!send_message(cbp, timer, event, label))
+      continue;
+    const uint8_t *ptr = event->payload + 4;
+    size_t remain = event->payload_len - 4;
+    id = decode_i64(&ptr, &remain);
+    cbp = MasterProtocol::create_fetch_result_request(id);
+    send_message_async(cbp, handler, timer, label);
+    return;
+  }
+
+  {
+    ScopedLock lock(m_mutex);
+    HT_THROWF(Error::REQUEST_TIMEOUT,
+              "MasterClient operation %s to master %s failed", label.c_str(),
+              m_master_addr.format().c_str());
+  }
+
+}
+
+void MasterClient::set(const std::vector<SystemVariable::Spec> &specs,
+                       Timer *timer) {
+  Timer tmp_timer(m_timeout_ms);
+  CommBufPtr cbp;
+  EventPtr event;
+  int64_t id = 0;
+  String label = "set";
+
+  initialize(timer, tmp_timer);
+
+  while (!timer->expired()) {
+    cbp = MasterProtocol::create_set_request(specs);
+    if (!send_message(cbp, timer, event, label))
+      continue;
+    const uint8_t *ptr = event->payload + 4;
+    size_t remain = event->payload_len - 4;
+    id = decode_i64(&ptr, &remain);
+    fetch_result(id, timer, event, label);
+    return;
+  }
+
+  {
+    ScopedLock lock(m_mutex);
+    HT_THROWF(Error::REQUEST_TIMEOUT,
+              "MasterClient operation %s to master %s failed", label.c_str(),
+              m_master_addr.format().c_str());
+  }
+}
+
+
 void
 MasterClient::stop(const String &rsname, bool recover, Timer *timer)
 {

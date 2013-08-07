@@ -94,6 +94,17 @@ namespace Hypertable {
     return cbuf;
   }
 
+  CommBuf *
+  MasterProtocol::create_set_request(const std::vector<SystemVariable::Spec> &specs) {
+    CommHeader header(COMMAND_SET);
+    CommBuf *cbuf = new CommBuf(header, 4 + (specs.size()*5));
+    cbuf->append_i32(specs.size());
+    foreach_ht (const SystemVariable::Spec &spec, specs) {
+      cbuf->append_i32(spec.code);
+      cbuf->append_bool(spec.value);
+    }
+    return cbuf;
+  }
 
   CommBuf *MasterProtocol::create_get_schema_request(const String &tablename) {
     CommHeader header(COMMAND_GET_SCHEMA);

@@ -49,6 +49,7 @@ OperationRecoverRanges.cc
 OperationRegisterServer.cc
 OperationRelinquishAcknowledge.cc
 OperationRenameTable.cc
+OperationSetVariables.cc
 OperationStatus.cc
 OperationSystemUpgrade.cc
 OperationTimedBarrier.cc
@@ -60,6 +61,7 @@ ReferenceManager.cc
 ResponseManager.cc
 Utility.cc
 ServerMetrics.cc
+SystemState.cc
 RangeMetrics.cc
 RSMetrics.cc
 )

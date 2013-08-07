@@ -29,8 +29,9 @@
 #include "AsyncComm/Event.h"
 #include "AsyncComm/Protocol.h"
 
-#include "Hypertable/Lib/BalancePlan.h"
-#include "Hypertable/Lib/Types.h"
+#include "BalancePlan.h"
+#include "SystemVariable.h"
+#include "Types.h"
 
 
 namespace Hypertable {
@@ -60,7 +61,8 @@ namespace Hypertable {
     static const uint64_t COMMAND_STOP                        = 18;
     static const uint64_t COMMAND_REPLAY_STATUS               = 19;
     static const uint64_t COMMAND_COMPACT                     = 20;
-    static const uint64_t COMMAND_MAX                         = 21;
+    static const uint64_t COMMAND_SET                         = 21;
+    static const uint64_t COMMAND_MAX                         = 22;
 
     static const char *m_command_strings[];
 
@@ -75,6 +77,8 @@ namespace Hypertable {
     static CommBuf *
     create_compact_request(const String &tablename, const String &row,
                            uint32_t range_types);
+    static CommBuf *
+    create_set_request(const std::vector<SystemVariable::Spec> &specs);
 
     static CommBuf *create_get_schema_request(const String &tablename);
 

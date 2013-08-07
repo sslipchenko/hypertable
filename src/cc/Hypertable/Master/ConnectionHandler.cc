@@ -1,5 +1,5 @@
-/** -*- c++ -*-
- * Copyright (C) 2007-2012 Hypertable, Inc.
+/*
+ * Copyright (C) 2007-2013 Hypertable, Inc.
  *
  * This file is part of Hypertable.
  *
@@ -49,6 +49,7 @@
 #include "OperationRegisterServer.h"
 #include "OperationRelinquishAcknowledge.h"
 #include "OperationRenameTable.h"
+#include "OperationSetVariables.h"
 #include "OperationStatus.h"
 #include "OperationStop.h"
 #include "OperationTimedBarrier.h"
@@ -137,6 +138,9 @@ void ConnectionHandler::handle(EventPtr &event) {
         break;
       case MasterProtocol::COMMAND_BALANCE:
         operation = new OperationBalance(m_context, event);
+        break;
+      case MasterProtocol::COMMAND_SET:
+        operation = new OperationSetVariables(m_context, event);
         break;
       case MasterProtocol::COMMAND_STOP:
         operation = new OperationStop(m_context, event);

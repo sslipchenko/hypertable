@@ -37,8 +37,9 @@
 #include "Hyperspace/HandleCallback.h"
 #include "Hyperspace/Session.h"
 
-#include "Hypertable/Lib/BalancePlan.h"
-#include "Hypertable/Lib/Types.h"
+#include "BalancePlan.h"
+#include "MasterProtocol.h"
+#include "Types.h"
 
 
 namespace Hypertable {
@@ -135,6 +136,11 @@ namespace Hypertable {
                  Timer *timer = 0);
 
     void balance(BalancePlan &plan, Timer *timer = 0);
+
+    void set(const std::vector<SystemVariable::Spec> &specs,
+             DispatchHandler *handler, Timer *timer = 0);
+    void set(const std::vector<SystemVariable::Spec> &specs,
+             Timer *timer = 0);
 
     void stop(const String &rsname, bool recover, Timer *timer = 0);
 
