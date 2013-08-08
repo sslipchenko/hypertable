@@ -214,7 +214,7 @@ void CephBroker::read(ResponseCallbackRead *cb, uint32_t fd, uint32_t amount) {
     return;
   }
 
-  if ((nread = ceph_read(cmount, fdata->fd, (char *)buf.base, amount, 0)) < 0 ) {
+  if ((nread = ceph_read(cmount, fdata->fd, (char *)buf.base, amount, -1)) < 0 ) {
     HT_ERRORF("read failed: fd=%d ceph_fd=%d amount=%d", fd, fdata->fd, amount);
     report_error(cb, -nread);
     return;
@@ -249,7 +249,7 @@ void CephBroker::append(ResponseCallbackAppend *cb, uint32_t fd,
     return;
   }
 
-  if ((nwritten = ceph_write(cmount, fdata->fd, (const char *)data, amount, 0)) < 0) {
+  if ((nwritten = ceph_write(cmount, fdata->fd, (const char *)data, amount, -1)) < 0) {
     std::string errs(cpp_strerror(nwritten));
     HT_ERRORF("write failed: fd=%d ceph_fd=%d amount=%d - %s",
 	      fd, fdata->fd, amount, errs.c_str());
